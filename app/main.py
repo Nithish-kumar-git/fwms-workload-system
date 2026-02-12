@@ -6,6 +6,9 @@ Spec reference: BACKEND_STRUCTURE.md Section 2
 from fastapi import FastAPI
 from app.core.logging_config import setup_logging
 from app.health import router as health_router
+from app.auth import router as auth_router
+from app.selection import router as selection_router
+from app.coordinator import router as coordinator_router
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,12 +24,13 @@ def create_app() -> FastAPI:
     
     # Include routers
     app.include_router(health_router.router)
+    app.include_router(auth_router.router)
+    app.include_router(selection_router.router)
+    app.include_router(coordinator_router.router)
     
     # TODO: Include additional routers when implemented:
-    # app.include_router(auth_router.router)
     # app.include_router(staff_router.router)
-    # app.include_router(selection_router.router)
-    # app.include_router(coordinator_router.router)
+    # app.include_router(audit_router.router)
     
     return app
 
