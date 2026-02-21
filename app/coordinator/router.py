@@ -4,20 +4,28 @@ Spec reference: BACKEND_STRUCTURE.md Section 3.1, FSB_v1.1.md Section 4
 
 This module handles HTTP requests for coordinator overrides and delegates
 to the transaction layer. No SQL or business logic is allowed here.
+
+PRODUCTION BUILD:
+- SQLSTATE-to-HTTP error mapping
+- Correlation ID in error responses
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from app.coordinator.transactions import override_subject_transaction
 from app.coordinator.schemas import OverrideSubjectRequest, OverrideSubjectResponse
 from app.auth.dependencies import get_current_coordinator_id
+from app.utils.error_mapper import raise_http_from_db_error
+import logging
 
 router = APIRouter(prefix="/api/coordinator", tags=["coordinator"])
+logger = logging.getLogger(__name__)
 
 
 
 @router.post("/override", response_model=OverrideSubjectResponse)
 async def override_subject(
-    request: OverrideSubjectRequest,
+    request_body: OverrideSubjectRequest,
+    request: Request,
     coordinator_staff_id: int = Depends(get_current_coordinator_id)
 ):
     """
@@ -29,27 +37,36 @@ async def override_subject(
     - 404: Subject no longer selected
     - 409: Deadlock, lock timeout
     """
+    correlation_id = getattr(request.state, "correlation_id", None)
     
-    # Call transaction layer
-    result = override_subject_transaction(
-        coordinator_staff_id=coordinator_staff_id,
-        subject_id=request.subject_id
-    )
-    
-    # Map transaction result to HTTP response
-    if not result["success"]:
-        # Determine HTTP status code based on message
-        if result["message"] == "Subject no longer selected":
-            status_code = 404
-        else:
-            # Fallback for unexpected errors
-            status_code = 500
+    try:
+        # Call transaction layer
+        result = override_subject_transaction(
+            coordinator_staff_id=coordinator_staff_id,
+            subject_id=request_body.subject_id
+        )
         
-        raise HTTPException(status_code=status_code, detail=result["message"])
+        # Map transaction result to HTTP response
+        if not result["success"]:
+            # Determine HTTP status code based on message
+            if result["message"] == "Subject no longer selected":
+                status_code = 404
+            else:
+                # Fallback for unexpected errors
+                status_code = 500
+            
+            raise HTTPException(status_code=status_code, detail=result["message"])
+        
+        # Success response
+        return OverrideSubjectResponse(
+            success=True,
+            message=result["message"],
+            affected_staff_id=result["affected_staff_id"]
+        )
     
-    # Success response
-    return OverrideSubjectResponse(
-        success=True,
-        message=result["message"],
-        affected_staff_id=result["affected_staff_id"]
-    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Map database errors to HTTP (SQLSTATE mapping)
+        logger.error(f"Override transaction error: {e}", exc_info=True)
+        raise_http_from_db_error(e, correlation_id)

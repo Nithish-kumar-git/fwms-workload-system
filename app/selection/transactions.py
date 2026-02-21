@@ -35,158 +35,196 @@ def select_subject_transaction(
         Exception: Re-raises database exceptions for proper HTTP error mapping
     """
     
-    with get_transaction(isolation_level="READ COMMITTED") as session:
+    try:
+        with get_transaction(isolation_level="READ COMMITTED") as session:
+            
+            # Set lock timeout per FSB v1.3 §3.5
+            session.execute(text("SET LOCAL lock_timeout = '5s'"))
+            
+            # Step 1 — Window Validation (FOR SHARE)
+            # Updated per window_lifecycle_design.md:
+            # - status = 'OPEN' (replaces is_active)
+            # - batch_id scoping (CRITICAL)
+            # - specialization_id scoping (CRITICAL)
+            # - LIMIT 1 (defensive: partial unique index guarantees at most 1 row)
+            #
+            # LOCK ORDERING (FROZEN):
+            # 1. FOR SHARE (window validation) ← YOU ARE HERE
+            # 2. pg_advisory_xact_lock(staff_id, window_id)
+            # 3. FOR UPDATE (quota, slot)
+            # 4. INSERT/DELETE
+            window_result = session.execute(
+                text("""
+                    SELECT id, max_subjects_per_staff
+                    FROM selection_window
+                    WHERE status = 'OPEN'
+                      AND batch_id = :batch_id
+                      AND specialization_id = :specialization_id
+                      AND now() BETWEEN start_time AND end_time
+                    FOR SHARE
+                    LIMIT 1
+                """),
+                {"batch_id": batch_id, "specialization_id": specialization_id}
+            ).fetchone()
+            
+            if not window_result:
+                return {
+                    "success": False,
+                    "message": "Window closed",
+                    "selection_id": None
+                }
+            
+            window_id = window_result[0]
+            max_subjects_per_staff = window_result[1]
+            
+            # Step 1.5 — Eligibility Verification (FOR SHARE)
+            eligibility_result = session.execute(
+                text("""
+                    SELECT sa.id
+                    FROM staff_assignment sa
+                    JOIN subject s
+                      ON s.batch_id = sa.batch_id
+                     AND s.specialization_id = sa.specialization_id
+                    WHERE sa.staff_id = :staff_id
+                      AND s.id = :subject_id
+                    FOR SHARE
+                """),
+                {"staff_id": staff_id, "subject_id": subject_id}
+            ).fetchone()
+            
+            if not eligibility_result:
+                return {
+                    "success": False,
+                    "message": "Not eligible for this subject",
+                    "selection_id": None
+                }
+            
+            # Step 1.75a — Staff-level Advisory Lock (serializes slot computation per staff)
+            session.execute(
+                text("SELECT pg_advisory_xact_lock(:staff_id)"),
+                {"staff_id": staff_id}
+            )
+            
+            # Step 1.75b — Staff+Window Advisory Lock (FSB v1.3 Rule 2)
+            # MUST be acquired AFTER window/eligibility validation
+            # MUST be acquired BEFORE quota check, slot assignment, INSERT/DELETE
+            session.execute(
+                text("SELECT pg_advisory_xact_lock(:staff_id, :window_id)"),
+                {"staff_id": staff_id, "window_id": window_id}
+            )
+            
+            # Step 2 — Lock Quota (FOR UPDATE)
+            # Cannot use COUNT(*) with FOR UPDATE, must fetch rows and count
+            quota_rows = session.execute(
+                text("""
+                    SELECT id
+                    FROM subject_selection
+                    WHERE staff_id = :staff_id
+                      AND window_id = :window_id
+                      AND status = 'SELECTED'
+                    FOR UPDATE
+                """),
+                {"staff_id": staff_id, "window_id": window_id}
+            ).fetchall()
+            
+            current_count = len(quota_rows)
+            
+            if current_count >= max_subjects_per_staff:
+                return {
+                    "success": False,
+                    "message": "Quota exceeded",
+                    "selection_id": None
+                }
+            
+            # Step 3 — Assign staff_slot_number (FOR UPDATE)
+            # Cannot use MAX() with FOR UPDATE, must fetch rows and compute max
+            slot_rows = session.execute(
+                text("""
+                    SELECT staff_slot_number
+                    FROM subject_selection
+                    WHERE staff_id = :staff_id
+                      AND window_id = :window_id
+                      AND status = 'SELECTED'
+                    FOR UPDATE
+                """),
+                {"staff_id": staff_id, "window_id": window_id}
+            ).fetchall()
+            
+            staff_slot_number = max([row[0] for row in slot_rows], default=0) + 1
+            
+            # Step 4 — FCFS Claim (ONLY arbiter)
+            insert_result = session.execute(
+                text("""
+                    INSERT INTO subject_selection
+                      (subject_id, staff_id, batch_id, specialization_id,
+                       window_id, staff_slot_number, status, selected_at)
+                    VALUES (:subject_id, :staff_id, :batch_id, :specialization_id,
+                            :window_id, :staff_slot_number, 'SELECTED', now())
+                    ON CONFLICT (subject_id) WHERE status = 'SELECTED'
+                    DO NOTHING
+                    RETURNING id
+                """),
+                {
+                    "subject_id": subject_id,
+                    "staff_id": staff_id,
+                    "batch_id": batch_id,
+                    "specialization_id": specialization_id,
+                    "window_id": window_id,
+                    "staff_slot_number": staff_slot_number
+                }
+            ).fetchone()
+            
+            if not insert_result:
+                return {
+                    "success": False,
+                    "message": "Subject already selected",
+                    "selection_id": None
+                }
+            
+            selection_id = insert_result[0]
+            
+            # Step 5 — Audit Log
+            session.execute(
+                text("""
+                    INSERT INTO audit_log
+                      (actor_staff_id, action_type, subject_id, affected_staff_id, details, created_at)
+                    VALUES (:actor_staff_id, 'SELECT', :subject_id, :affected_staff_id, '{}'::jsonb, now())
+                """),
+                {
+                    "actor_staff_id": staff_id,
+                    "subject_id": subject_id,
+                    "affected_staff_id": staff_id
+                }
+            )
+            
+            # COMMIT (automatic via context manager)
+            return {
+                "success": True,
+                "message": "Subject selected successfully",
+                "selection_id": selection_id
+            }
+    
+    except Exception as e:
+        error_msg = str(e)
         
-        # Set lock timeout per FSB v1.3 §3.5
-        session.execute(text("SET LOCAL lock_timeout = '5s'"))
-        
-        # Step 1 — Window Validation (FOR SHARE)
-        window_result = session.execute(
-            text("""
-                SELECT id, max_subjects_per_staff
-                FROM selection_window
-                WHERE is_active = true
-                  AND now() BETWEEN start_time AND end_time
-                FOR SHARE
-            """)
-        ).fetchone()
-        
-        if not window_result:
+        # FSB v1.3 §3.5: Deadlock handling (SQLSTATE 40P01)
+        if "40P01" in error_msg or "deadlock" in error_msg.lower():
             return {
                 "success": False,
-                "message": "Window closed",
+                "message": "Concurrent change detected, please try again",
                 "selection_id": None
             }
         
-        window_id = window_result[0]
-        max_subjects_per_staff = window_result[1]
-        
-        # Step 1.5 — Eligibility Verification (FOR SHARE)
-        eligibility_result = session.execute(
-            text("""
-                SELECT sa.id
-                FROM staff_assignment sa
-                JOIN subject s
-                  ON s.batch_id = sa.batch_id
-                 AND s.specialization_id = sa.specialization_id
-                WHERE sa.staff_id = :staff_id
-                  AND s.id = :subject_id
-                FOR SHARE
-            """),
-            {"staff_id": staff_id, "subject_id": subject_id}
-        ).fetchone()
-        
-        if not eligibility_result:
+        # Lock timeout handling (SQLSTATE 55P03)
+        if "55P03" in error_msg or "lock timeout" in error_msg.lower():
             return {
                 "success": False,
-                "message": "Not eligible for this subject",
+                "message": "Concurrent change detected, please try again",
                 "selection_id": None
             }
         
-        # Step 1.75a — Staff-level Advisory Lock (serializes slot computation per staff)
-        session.execute(
-            text("SELECT pg_advisory_xact_lock(:staff_id)"),
-            {"staff_id": staff_id}
-        )
-        
-        # Step 1.75b — Staff+Window Advisory Lock (FSB v1.3 Rule 2)
-        # MUST be acquired AFTER window/eligibility validation
-        # MUST be acquired BEFORE quota check, slot assignment, INSERT/DELETE
-        session.execute(
-            text("SELECT pg_advisory_xact_lock(:staff_id, :window_id)"),
-            {"staff_id": staff_id, "window_id": window_id}
-        )
-        
-        # Step 2 — Lock Quota (FOR UPDATE)
-        # Cannot use COUNT(*) with FOR UPDATE, must fetch rows and count
-        quota_rows = session.execute(
-            text("""
-                SELECT id
-                FROM subject_selection
-                WHERE staff_id = :staff_id
-                  AND window_id = :window_id
-                  AND status = 'SELECTED'
-                FOR UPDATE
-            """),
-            {"staff_id": staff_id, "window_id": window_id}
-        ).fetchall()
-        
-        current_count = len(quota_rows)
-        
-        if current_count >= max_subjects_per_staff:
-            return {
-                "success": False,
-                "message": "Quota exceeded",
-                "selection_id": None
-            }
-        
-        # Step 3 — Assign staff_slot_number (FOR UPDATE)
-        # Cannot use MAX() with FOR UPDATE, must fetch rows and compute max
-        slot_rows = session.execute(
-            text("""
-                SELECT staff_slot_number
-                FROM subject_selection
-                WHERE staff_id = :staff_id
-                  AND window_id = :window_id
-                  AND status = 'SELECTED'
-                FOR UPDATE
-            """),
-            {"staff_id": staff_id, "window_id": window_id}
-        ).fetchall()
-        
-        staff_slot_number = max([row[0] for row in slot_rows], default=0) + 1
-        
-        # Step 4 — FCFS Claim (ONLY arbiter)
-        insert_result = session.execute(
-            text("""
-                INSERT INTO subject_selection
-                  (subject_id, staff_id, batch_id, specialization_id,
-                   window_id, staff_slot_number, status, selected_at)
-                VALUES (:subject_id, :staff_id, :batch_id, :specialization_id,
-                        :window_id, :staff_slot_number, 'SELECTED', now())
-                ON CONFLICT (subject_id) WHERE status = 'SELECTED'
-                DO NOTHING
-                RETURNING id
-            """),
-            {
-                "subject_id": subject_id,
-                "staff_id": staff_id,
-                "batch_id": batch_id,
-                "specialization_id": specialization_id,
-                "window_id": window_id,
-                "staff_slot_number": staff_slot_number
-            }
-        ).fetchone()
-        
-        if not insert_result:
-            return {
-                "success": False,
-                "message": "Subject already selected",
-                "selection_id": None
-            }
-        
-        selection_id = insert_result[0]
-        
-        # Step 5 — Audit Log
-        session.execute(
-            text("""
-                INSERT INTO audit_log
-                  (actor_staff_id, action_type, subject_id, affected_staff_id, details, created_at)
-                VALUES (:actor_staff_id, 'SELECT', :subject_id, :affected_staff_id, '{}'::jsonb, now())
-            """),
-            {
-                "actor_staff_id": staff_id,
-                "subject_id": subject_id,
-                "affected_staff_id": staff_id
-            }
-        )
-        
-        # COMMIT (automatic via context manager)
-        return {
-            "success": True,
-            "message": "Subject selected successfully",
-            "selection_id": selection_id
-        }
+        # Re-raise other exceptions for proper HTTP error mapping
+        raise
 
 
 def change_subject_transaction(
@@ -216,14 +254,29 @@ def change_subject_transaction(
             session.execute(text("SET LOCAL lock_timeout = '5s'"))
             
             # Step 1 — Window Validation (FOR SHARE)
+            # Updated per window_lifecycle_design.md:
+            # - status = 'OPEN' (replaces is_active)
+            # - batch_id scoping (CRITICAL)
+            # - specialization_id scoping (CRITICAL)
+            # - LIMIT 1 (defensive: partial unique index guarantees at most 1 row)
+            #
+            # LOCK ORDERING (FROZEN):
+            # 1. FOR SHARE (window validation) ← YOU ARE HERE
+            # 2. pg_advisory_xact_lock(staff_id, window_id)
+            # 3. FOR UPDATE (old selection row)
+            # 4. UPDATE
             window_result = session.execute(
                 text("""
                     SELECT id, max_subjects_per_staff
                     FROM selection_window
-                    WHERE is_active = true
+                    WHERE status = 'OPEN'
+                      AND batch_id = :batch_id
+                      AND specialization_id = :specialization_id
                       AND now() BETWEEN start_time AND end_time
                     FOR SHARE
-                """)
+                    LIMIT 1
+                """),
+                {"batch_id": batch_id, "specialization_id": specialization_id}
             ).fetchone()
             
             if not window_result:

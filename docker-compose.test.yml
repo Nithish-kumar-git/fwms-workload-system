@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # PostgreSQL Test Database
+  # ============================================================================
+  test_db:
+    image: postgres:16
+    container_name: faculty_selection_test_db
+    environment:
+      POSTGRES_DB: faculty_selection_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432" # Different port to avoid conflict with dev DB
+    tmpfs:
+      # Use tmpfs for faster test execution (in-memory database)
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 3s
+      timeout: 2s
+      retries: 5
+
+  # ============================================================================
+  # Test Runner
+  # ============================================================================
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: faculty_selection_test
+    depends_on:
+      test_db:
+        condition: service_healthy
+    environment:
+      # Test Database
+      DATABASE_URL: postgresql://postgres:postgres@test_db:5432/faculty_selection_test
+
+      # Environment
+      ENV: test
+
+      # Logging
+      LOG_LEVEL: WARNING
+
+      # Session (in-memory for tests)
+      SESSION_BACKEND: memory
+
+      # OAuth (mock for tests)
+      GOOGLE_CLIENT_ID: test-client-id
+      GOOGLE_CLIENT_SECRET: test-client-secret
+      GOOGLE_REDIRECT_URI: http://localhost:8000/auth/callback
+
+      # Security
+      SECRET_KEY: test-secret-key
+
+    volumes:
+      # Mount source code and tests
+      - ./app:/app/app
+      - ./tests:/app/tests
+      - ./migrations:/app/migrations
+    command: >
+      sh -c "
+        echo 'Waiting for test database to be ready...' &&
+        sleep 3 &&
+        echo 'Running schema migration on test DB...' &&
+        psql $$DATABASE_URL -f migrations/schema.sql &&
+        echo 'Running window lifecycle migration on test DB...' &&
+        psql $$DATABASE_URL -f migrations/002_window_lifecycle.sql &&
+        echo 'Running pytest...' &&
+        pytest tests/ -v --tb=short --color=yes
+      "

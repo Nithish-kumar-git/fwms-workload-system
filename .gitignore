@@ -14,3 +14,10 @@ logs/
 # OS artifacts
 .DS_Store
 Thumbs.db
+
+.env
+.env.*
+.env.production
+logs/
+__pycache__/
+*.pyc

@@ -1,0 +1,151 @@
+version: '3.8'
+
+# =============================================================================
+# PRODUCTION DEPLOYMENT - Faculty Subject Selection System
+# Usage: docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # PostgreSQL 16 (Production)
+  # ===========================================================================
+  db:
+    image: postgres:16
+    container_name: faculty_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-faculty_selection}
+      POSTGRES_USER: ${POSTGRES_USER:-faculty_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+      - ./migrations/002_window_lifecycle.sql:/docker-entrypoint-initdb.d/002_window_lifecycle.sql:ro
+      - ./migrations/003_seed_minimal.sql:/docker-entrypoint-initdb.d/003_seed.sql:ro
+    networks:
+      - backend
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-faculty_user} -d ${POSTGRES_DB:-faculty_selection}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Do NOT expose port 5432 externally in production
+
+    # ===========================================================================
+    # Redis 7 (Sessions + Rate Limiting)
+    # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: faculty_redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    # Do NOT expose port 6379 externally in production
+
+    # ===========================================================================
+    # FastAPI Application (Production)
+    # ===========================================================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: faculty_app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Core
+      ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-faculty_user}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-faculty_selection}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required (min 32 chars)}
+
+      # OAuth
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID is required}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?GOOGLE_CLIENT_SECRET is required}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:?GOOGLE_REDIRECT_URI is required}
+      ALLOWED_EMAIL_DOMAIN: ${ALLOWED_EMAIL_DOMAIN:-hindustanuniv.ac.in}
+
+      # Session (Redis-backed in production)
+      SESSION_BACKEND: redis
+      REDIS_URL: redis://redis:6379/0
+      SESSION_EXPIRATION_HOURS: ${SESSION_EXPIRATION_HOURS:-4}
+
+      # Security
+      SESSION_COOKIE_SECURE: "true"
+      SESSION_COOKIE_HTTPONLY: "true"
+      SESSION_COOKIE_SAMESITE: "lax"
+      DEV_AUTH_BYPASS: "false"
+
+      # Rate limiting (Redis-backed)
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_BACKEND: redis
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+    networks:
+      - backend
+    expose:
+      - "8000"
+    # Do NOT publish port 8000 — Nginx handles external traffic
+    command: >
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --log-level info --access-log
+    healthcheck:
+      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ===========================================================================
+  # Nginx Reverse Proxy (HTTPS termination)
+  # ===========================================================================
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: faculty_nginx
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+    networks:
+      - backend
+
+  # ===========================================================================
+  # Certbot (Let's Encrypt SSL)
+  # ===========================================================================
+  certbot:
+    image: certbot/certbot:latest
+    container_name: faculty_certbot
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  backend:
+    driver: bridge

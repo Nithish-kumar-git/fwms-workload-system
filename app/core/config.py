@@ -44,13 +44,70 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str
     
+    # Session cookies
+    SESSION_COOKIE_NAME: str = "faculty_session"
+    SESSION_COOKIE_SECURE: bool = True  # HTTPS only in production
+    SESSION_COOKIE_HTTPONLY: bool = True  # Prevent XSS
+    SESSION_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
+    
     # Rate limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_BACKEND: Literal["redis", "memory"] = "memory"
+    RATE_LIMIT_SELECT_MAX_REQUESTS: int = 10  # Max requests per window
+    RATE_LIMIT_SELECT_WINDOW_SECONDS: int = 60  # Window duration
+    
+    # Correlation ID
+    CORRELATION_ID_HEADER: str = "X-Correlation-ID"
+    
+    # Development auth bypass (NEVER enable in production)
+    DEV_AUTH_BYPASS: bool = False
+    
     
     class Config:
         env_file = ".env"
         case_sensitive = True
+    
+    def model_post_init(self, __context):
+        """
+        Validate configuration on startup (PRODUCTION HARDENING).
+        
+        Per implementation plan Phase 7:
+        - Validate required fields
+        - Validate SECRET_KEY length (min 32 chars)
+        - Validate DATABASE_URL format
+        - Environment-specific validation
+        """
+        # Validate SECRET_KEY length
+        if len(self.SECRET_KEY) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 characters")
+        
+        # Validate DATABASE_URL format
+        if not self.DATABASE_URL.startswith("postgresql://"):
+            raise ValueError("DATABASE_URL must be a PostgreSQL connection string")
+        
+        # Production-specific validation
+        if self.ENV == "production":
+            # Enforce HTTPS cookies in production
+            if not self.SESSION_COOKIE_SECURE:
+                raise ValueError("SESSION_COOKIE_SECURE must be True in production")
+            
+            # Require OAuth credentials
+            if not self.GOOGLE_CLIENT_ID or self.GOOGLE_CLIENT_ID == "your-client-id.apps.googleusercontent.com":
+                raise ValueError("GOOGLE_CLIENT_ID must be configured in production")
+            
+            if not self.GOOGLE_CLIENT_SECRET or self.GOOGLE_CLIENT_SECRET == "your-secret":
+                raise ValueError("GOOGLE_CLIENT_SECRET must be configured in production")
+            
+            # Require Redis for sessions in production
+            if self.SESSION_BACKEND == "memory":
+                raise ValueError("SESSION_BACKEND must be 'redis' in production (memory backend loses sessions on restart)")
+            
+            # Block development auth bypass in production — FAIL CLOSED
+            if self.DEV_AUTH_BYPASS:
+                raise RuntimeError(
+                    "FATAL: DEV_AUTH_BYPASS=true is FORBIDDEN in production. "
+                    "Application will not start. Set DEV_AUTH_BYPASS=false."
+                )
 
 
 settings = Settings()

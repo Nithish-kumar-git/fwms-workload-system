@@ -1,18 +1,32 @@
 """
-Pydantic schemas for authentication endpoints.
-Spec reference: BACKEND_STRUCTURE.md Section 3.1
-
-This module defines request and response models for authentication.
-No business logic is allowed here.
+Authentication schemas (request/response models).
+Spec reference: FSB_v1.3.md Section 1, BACKEND_STRUCTURE.md Section 3.1
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr
+from typing import Optional
+
+
+class LoginResponse(BaseModel):
+    """Response for login endpoint (redirect URL)."""
+    authorization_url: str
+
+
+class OAuthCallbackRequest(BaseModel):
+    """OAuth callback query parameters."""
+    code: str
+    state: Optional[str] = None
 
 
 class StaffInfoResponse(BaseModel):
-    """Response model for GET /api/auth/me"""
-    
-    staff_id: int = Field(..., description="Staff member ID")
-    email: str = Field(..., description="Staff email address")
-    name: str = Field(..., description="Staff member name")
-    is_coordinator: bool = Field(..., description="Whether staff member is a coordinator")
+    """Current user information."""
+    staff_id: int
+    email: EmailStr
+    name: str
+    is_coordinator: bool
+
+
+class LogoutResponse(BaseModel):
+    """Logout confirmation."""
+    success: bool
+    message: str

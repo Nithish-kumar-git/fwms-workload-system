@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # PostgreSQL Database (Development)
+  # ============================================================================
+  db:
+    image: postgres:16
+    container_name: faculty_selection_db
+    environment:
+      POSTGRES_DB: faculty_selection
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ============================================================================
+  # FastAPI Application (Development)
+  # ============================================================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: faculty_selection_app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Database
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/faculty_selection
+
+      # Environment
+      ENV: development
+
+      # Logging
+      LOG_LEVEL: INFO
+
+      # Session (using in-memory for development)
+      SESSION_BACKEND: memory
+
+      # OAuth (placeholder - set in .env for real usage)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-placeholder}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-placeholder}
+      GOOGLE_REDIRECT_URI: http://localhost:8000/auth/callback
+
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount source code for hot reload in development
+      - ./app:/app/app
+      - ./migrations:/app/migrations
+      - ./logs:/app/logs
+    command: >
+      sh -c "
+        echo 'Waiting for database to be ready...' &&
+        sleep 5 &&
+        echo 'Running schema migration...' &&
+        psql $$DATABASE_URL -f migrations/schema.sql &&
+        echo 'Running window lifecycle migration...' &&
+        psql $$DATABASE_URL -f migrations/002_window_lifecycle.sql &&
+        echo 'Starting FastAPI application...' &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  postgres_data:
+    driver: local
