@@ -8,7 +8,7 @@
 -- TABLE: staff
 -- ============================================================================
 
-CREATE TABLE staff (
+CREATE TABLE IF NOT EXISTS staff (
     id BIGSERIAL PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
     name VARCHAR(255) NOT NULL,
@@ -19,14 +19,14 @@ CREATE TABLE staff (
     CONSTRAINT chk_staff_email_format CHECK (email ~* '^[^@]+@[^@]+\.[^@]+$')
 );
 
-CREATE INDEX idx_staff_email ON staff(email);
-CREATE INDEX idx_staff_is_coordinator ON staff(is_coordinator);
+CREATE INDEX IF NOT EXISTS idx_staff_email ON staff(email);
+CREATE INDEX IF NOT EXISTS idx_staff_is_coordinator ON staff(is_coordinator);
 
 -- ============================================================================
 -- TABLE: selection_window
 -- ============================================================================
 
-CREATE TABLE selection_window (
+CREATE TABLE IF NOT EXISTS selection_window (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     start_time TIMESTAMPTZ NOT NULL,
@@ -39,14 +39,14 @@ CREATE TABLE selection_window (
     CONSTRAINT chk_window_max_subjects_positive CHECK (max_subjects_per_staff > 0)
 );
 
-CREATE INDEX idx_selection_window_active ON selection_window(is_active);
-CREATE INDEX idx_selection_window_time_range ON selection_window(start_time, end_time);
+CREATE INDEX IF NOT EXISTS idx_selection_window_active ON selection_window(is_active);
+CREATE INDEX IF NOT EXISTS idx_selection_window_time_range ON selection_window(start_time, end_time);
 
 -- ============================================================================
 -- TABLE: batch
 -- ============================================================================
 
-CREATE TABLE batch (
+CREATE TABLE IF NOT EXISTS batch (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
     is_active BOOLEAN NOT NULL DEFAULT true,
@@ -57,7 +57,7 @@ CREATE TABLE batch (
 -- TABLE: specialization
 -- ============================================================================
 
-CREATE TABLE specialization (
+CREATE TABLE IF NOT EXISTS specialization (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
     is_active BOOLEAN NOT NULL DEFAULT true,
@@ -68,7 +68,7 @@ CREATE TABLE specialization (
 -- TABLE: staff_assignment
 -- ============================================================================
 
-CREATE TABLE staff_assignment (
+CREATE TABLE IF NOT EXISTS staff_assignment (
     id BIGSERIAL PRIMARY KEY,
     staff_id BIGINT NOT NULL,
     batch_id BIGINT NOT NULL,
@@ -80,14 +80,14 @@ CREATE TABLE staff_assignment (
     CONSTRAINT uq_staff_assignment UNIQUE (staff_id, batch_id, specialization_id)
 );
 
-CREATE INDEX idx_staff_assignment_staff ON staff_assignment(staff_id);
-CREATE INDEX idx_staff_assignment_batch_spec ON staff_assignment(batch_id, specialization_id);
+CREATE INDEX IF NOT EXISTS idx_staff_assignment_staff ON staff_assignment(staff_id);
+CREATE INDEX IF NOT EXISTS idx_staff_assignment_batch_spec ON staff_assignment(batch_id, specialization_id);
 
 -- ============================================================================
 -- TABLE: subject
 -- ============================================================================
 
-CREATE TABLE subject (
+CREATE TABLE IF NOT EXISTS subject (
     id BIGSERIAL PRIMARY KEY,
     code VARCHAR(50) NOT NULL UNIQUE,
     name VARCHAR(255) NOT NULL,
@@ -101,15 +101,15 @@ CREATE TABLE subject (
     CONSTRAINT uq_subject_batch_spec UNIQUE (id, batch_id, specialization_id)
 );
 
-CREATE INDEX idx_subject_code ON subject(code);
-CREATE INDEX idx_subject_batch_spec ON subject(batch_id, specialization_id);
-CREATE INDEX idx_subject_is_active ON subject(is_active);
+CREATE INDEX IF NOT EXISTS idx_subject_code ON subject(code);
+CREATE INDEX IF NOT EXISTS idx_subject_batch_spec ON subject(batch_id, specialization_id);
+CREATE INDEX IF NOT EXISTS idx_subject_is_active ON subject(is_active);
 
 -- ============================================================================
 -- TABLE: subject_selection
 -- ============================================================================
 
-CREATE TABLE subject_selection (
+CREATE TABLE IF NOT EXISTS subject_selection (
     id BIGSERIAL PRIMARY KEY,
     subject_id BIGINT NOT NULL,
     staff_id BIGINT NOT NULL,
@@ -133,31 +133,31 @@ CREATE TABLE subject_selection (
 );
 
 -- FCFS Guarantee: Only one SELECTED status per subject
-CREATE UNIQUE INDEX uq_subject_selected 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_subject_selected 
 ON subject_selection(subject_id) 
 WHERE status = 'SELECTED';
 
 COMMENT ON INDEX uq_subject_selected IS 'CRITICAL DO NOT DROP: Enforces FCFS guarantee - only one SELECTED status per subject';
 
 -- Slot Integrity: Unique slot per staff per window
-CREATE UNIQUE INDEX uq_staff_slot_per_window 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_staff_slot_per_window 
 ON subject_selection(staff_id, window_id, staff_slot_number) 
 WHERE status = 'SELECTED';
 
 COMMENT ON INDEX uq_staff_slot_per_window IS 'CRITICAL DO NOT DROP: Enforces slot integrity - unique staff_slot_number per staff per window';
 
 -- Performance indexes
-CREATE INDEX idx_subject_selection_window ON subject_selection(window_id);
-CREATE INDEX idx_subject_selection_staff ON subject_selection(staff_id);
-CREATE INDEX idx_subject_selection_status ON subject_selection(status);
-CREATE INDEX idx_subject_selection_subject ON subject_selection(subject_id);
-CREATE INDEX idx_subject_selection_staff_window ON subject_selection(staff_id, window_id);
+CREATE INDEX IF NOT EXISTS idx_subject_selection_window ON subject_selection(window_id);
+CREATE INDEX IF NOT EXISTS idx_subject_selection_staff ON subject_selection(staff_id);
+CREATE INDEX IF NOT EXISTS idx_subject_selection_status ON subject_selection(status);
+CREATE INDEX IF NOT EXISTS idx_subject_selection_subject ON subject_selection(subject_id);
+CREATE INDEX IF NOT EXISTS idx_subject_selection_staff_window ON subject_selection(staff_id, window_id);
 
 -- ============================================================================
 -- TABLE: audit_log
 -- ============================================================================
 
-CREATE TABLE audit_log (
+CREATE TABLE IF NOT EXISTS audit_log (
     id BIGSERIAL PRIMARY KEY,
     actor_staff_id BIGINT,
     action_type VARCHAR(50) NOT NULL,
@@ -171,10 +171,10 @@ CREATE TABLE audit_log (
     CONSTRAINT chk_audit_log_action_type CHECK (action_type IN ('SELECT', 'CHANGE', 'OVERRIDE', 'WINDOW_OPEN', 'WINDOW_CLOSE'))
 );
 
-CREATE INDEX idx_audit_log_created_at ON audit_log(created_at);
-CREATE INDEX idx_audit_log_actor ON audit_log(actor_staff_id);
-CREATE INDEX idx_audit_log_action_type ON audit_log(action_type);
-CREATE INDEX idx_audit_log_subject ON audit_log(subject_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(actor_staff_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_action_type ON audit_log(action_type);
+CREATE INDEX IF NOT EXISTS idx_audit_log_subject ON audit_log(subject_id);
 
 -- ============================================================================
 -- AUDIT LOG IMMUTABILITY ENFORCEMENT

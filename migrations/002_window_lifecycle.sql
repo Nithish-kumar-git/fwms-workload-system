@@ -51,7 +51,7 @@ BEGIN
 END $$;
 
 -- Step 6: Create partial unique index (single OPEN window per batch/spec)
-CREATE UNIQUE INDEX uq_one_open_window_per_batch_spec
+CREATE UNIQUE INDEX IF NOT EXISTS uq_one_open_window_per_batch_spec
 ON selection_window(batch_id, specialization_id)
 WHERE status = 'OPEN';
 
@@ -99,10 +99,10 @@ ADD CONSTRAINT chk_audit_log_action_type
   ));
 
 -- Step 9: Add index on window status for performance
-CREATE INDEX idx_selection_window_status ON selection_window(status);
+CREATE INDEX IF NOT EXISTS idx_selection_window_status ON selection_window(status);
 
 -- Step 10: Add composite index for batch/spec lookups
-CREATE INDEX idx_selection_window_batch_spec 
+CREATE INDEX IF NOT EXISTS idx_selection_window_batch_spec 
 ON selection_window(batch_id, specialization_id);
 
 -- ============================================================================

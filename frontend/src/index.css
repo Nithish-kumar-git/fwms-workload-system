@@ -1,0 +1,514 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+
+  /* Modern rounded corners (16-24px feel) */
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+
+  /* macOS soft blue accent */
+  --color-primary: #007aff;
+  --color-primary-hover: #0062cc;
+}
+
+/* ─── Global Reset & Base ─── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: #f5f5f7;
+  /* Apple soft gray */
+  color: #1d1d1f;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  background-image: radial-gradient(circle at top center, rgba(255, 255, 255, 0.8) 0%, rgba(245, 245, 247, 0) 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #1e1e1e;
+    /* macOS dark */
+    color: #f5f5f7;
+    background-image: radial-gradient(circle at top center, rgba(60, 60, 67, 0.3) 0%, rgba(30, 30, 30, 0) 100%);
+  }
+}
+
+.dark body {
+  background-color: #1e1e1e;
+  color: #f5f5f7;
+  background-image: radial-gradient(circle at top center, rgba(60, 60, 67, 0.3) 0%, rgba(30, 30, 30, 0) 100%);
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* ─── Glass Panels & Cards ─── */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  /* Soft depth shadow */
+  border-radius: 1rem;
+  /* 16px */
+}
+
+.dark .glass-panel {
+  background: rgba(30, 30, 30, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.glass-card {
+  /* Re-use panel styles for backwards compatibility */
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  border-radius: 1rem;
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.3s ease;
+}
+
+.dark .glass-card {
+  background: rgba(30, 30, 30, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* ─── Buttons ─── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 9999px;
+  /* Pill buttons */
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.25);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.35);
+}
+
+.btn-danger {
+  background: #ff3b30;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #d70015;
+}
+
+.btn-success {
+  background: #34c759;
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: #248a3d;
+}
+
+.btn-outline {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: #1d1d1f;
+}
+
+.dark .btn-outline {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f5f5f7;
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+.dark .btn-outline:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ─── Table ─── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.data-table thead th {
+  color: #86868b;
+  font-weight: 500;
+  text-transform: capitalize;
+  letter-spacing: normal;
+  padding: 0.75rem 1.25rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  font-size: 0.8125rem;
+}
+
+.dark .data-table thead th {
+  color: #98989d;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.data-table tbody td {
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  vertical-align: middle;
+}
+
+.dark .data-table tbody td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.data-table tbody tr {
+  transition: background 0.2s ease;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody tr:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.dark .data-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* ─── Status Badges ─── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.badge-success {
+  background: rgba(52, 199, 89, 0.15);
+  color: #248a3d;
+}
+
+.dark .badge-success {
+  background: rgba(48, 209, 88, 0.15);
+  color: #30d158;
+}
+
+.badge-danger {
+  background: rgba(255, 59, 48, 0.1);
+  color: #d70015;
+}
+
+.dark .badge-danger {
+  background: rgba(255, 69, 58, 0.15);
+  color: #ff453a;
+}
+
+.badge-warning {
+  background: rgba(255, 149, 0, 0.15);
+  color: #b25000;
+}
+
+.dark .badge-warning {
+  background: rgba(255, 159, 10, 0.15);
+  color: #ff9f0a;
+}
+
+.badge-info {
+  background: rgba(0, 122, 255, 0.15);
+  color: #0056b3;
+}
+
+.dark .badge-info {
+  background: rgba(10, 132, 255, 0.15);
+  color: #0a84ff;
+}
+
+/* ─── Select / Input ─── */
+.form-select,
+.form-input {
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 0.75rem;
+  color: #1d1d1f;
+  padding: 0.625rem 1rem;
+  font-size: 0.9375rem;
+  transition: all 0.2s ease;
+}
+
+.dark .form-select,
+.dark .form-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f5f5f7;
+}
+
+.form-select:focus,
+.form-input:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.8);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+.dark .form-select:focus,
+.dark .form-input:focus {
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3);
+}
+
+/* ─── Page Layout ─── */
+.page-container {
+  padding: 2.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  animation: fadeIn 0.4s ease-out;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 2.5rem;
+}
+
+.page-title {
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.page-subtitle {
+  color: #86868b;
+  font-size: 0.9375rem;
+  margin-top: 0.375rem;
+}
+
+.dark .page-subtitle {
+  color: #98989d;
+}
+
+/* ─── Stat Cards ─── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.stat-card {
+  padding: 1.5rem;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+.dark .stat-card:hover {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.stat-value {
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-size: 0.8125rem;
+  color: #86868b;
+  font-weight: 500;
+  margin-top: 0.5rem;
+}
+
+.dark .stat-label {
+  color: #98989d;
+}
+
+/* ─── Modal ─── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeInOverlay 0.3s ease-out;
+}
+
+.modal-content {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 1.5rem;
+  padding: 2.5rem;
+  min-width: 420px;
+  max-width: 90vw;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2);
+  animation: scaleInModal 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark .modal-content {
+  background: rgba(30, 30, 30, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+
+.modal-title {
+  font-size: 1.375rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.01em;
+}
+
+@keyframes fadeInOverlay {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleInModal {
+  from {
+    transform: scale(0.95) translateY(10px);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─── Preference Selector ─── */
+.pref-selector {
+  display: inline-flex;
+  gap: 0.375rem;
+}
+
+.pref-btn {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.5);
+  color: #1d1d1f;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dark .pref-btn {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f5f5f7;
+}
+
+.pref-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.dark .pref-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.pref-btn.active {
+  background: var(--color-primary);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.dark .pref-btn.active {
+  background: #0a84ff;
+  box-shadow: 0 4px 12px rgba(10, 132, 255, 0.4);
+}
+
+.pref-btn.used {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.05);
+  color: #86868b;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.dark .pref-btn.used {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.05);
+  color: #98989d;
+}

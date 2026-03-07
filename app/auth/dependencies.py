@@ -1,18 +1,20 @@
 """
-Authentication dependencies for FastAPI.
+Authentication dependencies for FastAPI (PRODUCTION).
 Spec reference: FSB_v1.3.md Section 1.5, BACKEND_STRUCTURE.md Section 3.1
 
-This module provides FastAPI dependencies for:
-- Session validation
-- Role-based access control (Staff / Coordinator)
-- Fresh DB role check on EVERY request (per FSB Section 1.4)
+Supports dual authentication:
+- Session cookie (faculty_session) — set by OAuth callback
+- JWT Bearer token (Authorization: Bearer <token>) — returned by callback
+
+Role is ALWAYS read fresh from DB on every request.
 """
 
-from fastapi import Cookie, HTTPException, Depends
+from fastapi import Cookie, HTTPException, Depends, Header
 from sqlalchemy import text
 from typing import Optional
 import logging
 from app.auth.session_manager import session_manager
+from app.auth.jwt_utils import verify_jwt
 from app.db.session import get_transaction
 
 logger = logging.getLogger(__name__)
@@ -21,79 +23,100 @@ logger = logging.getLogger(__name__)
 class UserInfo:
     """User information from session + database."""
     
-    def __init__(self, staff_id: int, email: str, name: str, is_coordinator: bool):
+    def __init__(self, staff_id: int, email: str, name: str, is_coordinator: bool, role: str = "faculty"):
         self.staff_id = staff_id
         self.email = email
         self.name = name
         self.is_coordinator = is_coordinator
+        self.role = role
 
 
 async def get_current_user(
-    faculty_session: Optional[str] = Cookie(None)
+    faculty_session: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
 ) -> UserInfo:
     """
     Get current authenticated user.
     
-    DEVELOPMENT MODE: Auto-authenticates as staff_id=1 (coordinator)
-    PRODUCTION MODE: Requires valid session + OAuth
+    Checks in order:
+    1. JWT Bearer token from Authorization header
+    2. Session cookie
     
-    Validates session and queries database for fresh user info.
-    Role (is_coordinator) is ALWAYS read from DB, never cached (per FSB Section 1.4).
+    Role is ALWAYS read from DB (never trust cached/token role alone).
     
-    Args:
-        faculty_session: Session ID from cookie
-        
-    Returns:
-        UserInfo with staff_id, email, name, is_coordinator
-        
     Raises:
-        HTTPException 401: If session is invalid or user not found
+        HTTPException 401: If no valid auth found
     """
     from app.core.config import settings
     
-    # DEVELOPMENT-ONLY AUTH BYPASS
-    # Explicit opt-in via DEV_AUTH_BYPASS=true (blocked in production by config validation)
+    # DEV AUTH BYPASS (blocked in production by config validation)
     if settings.DEV_AUTH_BYPASS:
-        logger.warning("🚨 DEV_AUTH_BYPASS ACTIVE: Auto-authenticating as staff_id=1 (coordinator)")
+        logger.warning("🚨 DEV_AUTH_BYPASS ACTIVE: Auto-authenticating as staff_id=1")
         return UserInfo(
             staff_id=1,
             email="dev@example.com",
             name="Development User",
-            is_coordinator=True
+            is_coordinator=True,
+            role="coordinator"
         )
     
-    # PRODUCTION AUTH PATH
-    # Validate session exists
-    if not faculty_session:
+    staff_id = None
+    
+    # PATH 1: JWT Bearer token
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+        payload = verify_jwt(token)
+        if payload and "sub" in payload:
+            staff_id = int(payload["sub"])
+    
+    # PATH 2: Session cookie
+    if staff_id is None and faculty_session:
+        staff_id = session_manager.get_staff_id(faculty_session)
+    
+    # No valid auth
+    if staff_id is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    # Get staff_id from session
-    staff_id = session_manager.get_staff_id(faculty_session)
-    if staff_id is None:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-    
-    # Query database for fresh user info (CRITICAL: role must be fresh)
+    # Fresh DB lookup (role is NEVER cached)
     try:
         with get_transaction() as session:
             result = session.execute(
                 text("""
-                    SELECT id, email, name, is_coordinator
-                    FROM staff
-                    WHERE id = :staff_id
+                    SELECT s.id, s.email, s.name, s.is_coordinator
+                    FROM staff s
+                    WHERE s.id = :staff_id AND s.is_active = true
                 """),
                 {"staff_id": staff_id}
             ).fetchone()
             
             if result is None:
-                # Staff was deleted after session creation
-                logger.warning(f"Staff {staff_id} not found in database (orphaned session)")
+                logger.warning(f"Staff {staff_id} not found (orphaned session)")
                 raise HTTPException(status_code=401, detail="User not found")
+            
+            is_coordinator = result[3]
+            
+            # Resolve full role
+            role = "faculty"
+            if is_coordinator:
+                role = "coordinator"
+            else:
+                role_row = session.execute(
+                    text("""
+                        SELECT role_name FROM faculty_role
+                        WHERE staff_id = :sid AND role_name = 'HOD'
+                        LIMIT 1
+                    """),
+                    {"sid": result[0]}
+                ).fetchone()
+                if role_row:
+                    role = "hod"
             
             return UserInfo(
                 staff_id=result[0],
                 email=result[1],
                 name=result[2],
-                is_coordinator=result[3]
+                is_coordinator=is_coordinator,
+                role=role
             )
     
     except HTTPException:
@@ -106,15 +129,7 @@ async def get_current_user(
 async def get_current_staff_id(
     user: UserInfo = Depends(get_current_user)
 ) -> int:
-    """
-    Get current staff ID (for staff endpoints).
-    
-    Args:
-        user: Current user from get_current_user dependency
-        
-    Returns:
-        Staff ID
-    """
+    """Get current staff ID (for staff endpoints)."""
     return user.staff_id
 
 
@@ -123,17 +138,7 @@ async def get_current_coordinator_id(
 ) -> int:
     """
     Get current coordinator staff ID (for coordinator endpoints).
-    
-    Enforces is_coordinator=true from database (per FSB Section 1.5).
-    
-    Args:
-        user: Current user from get_current_user dependency
-        
-    Returns:
-        Staff ID (coordinator only)
-        
-    Raises:
-        HTTPException 403: If user is not a coordinator
+    Enforces is_coordinator=true from database.
     """
     if not user.is_coordinator:
         logger.warning(f"Access denied: staff_id={user.staff_id} attempted coordinator action")
@@ -141,5 +146,4 @@ async def get_current_coordinator_id(
             status_code=403, 
             detail="Coordinator access required"
         )
-    
     return user.staff_id

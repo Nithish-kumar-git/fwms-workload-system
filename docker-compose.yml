@@ -32,6 +32,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       # Database
       DATABASE_URL: postgresql://postgres:postgres@db:5432/faculty_selection
@@ -44,14 +46,6 @@ services:
 
       # Session (using in-memory for development)
       SESSION_BACKEND: memory
-
-      # OAuth (placeholder - set in .env for real usage)
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-placeholder}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-placeholder}
-      GOOGLE_REDIRECT_URI: http://localhost:8000/auth/callback
-
-      # Security
-      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
 
     ports:
       - "8000:8000"
@@ -72,11 +66,12 @@ services:
         uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
       "
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
+      test: [ "CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')\"" ]
       interval: 10s
-      timeout: 3s
-      retries: 3
+      timeout: 5s
+      retries: 5
       start_period: 10s
+  # Frontend runs locally: cd frontend && npm run dev
 
 volumes:
   postgres_data:

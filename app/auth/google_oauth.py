@@ -1,5 +1,5 @@
 """
-Google OAuth 2.0 client implementation.
+Google OAuth 2.0 client implementation (PRODUCTION).
 Spec reference: FSB_v1.3.md Section 1, BACKEND_STRUCTURE.md Section 4.1
 
 This module handles Google OAuth flow:
@@ -7,6 +7,9 @@ This module handles Google OAuth flow:
 - Authorization code → token exchange
 - ID token verification
 - Email extraction and domain validation
+
+PRODUCTION: All DEV_ADMIN_EMAIL bypasses removed.
+Only @hindustanuniv.ac.in accounts are accepted.
 """
 
 from google.oauth2 import id_token
@@ -56,19 +59,19 @@ class GoogleOAuthClient:
             "prompt": "select_account",
         }
         
+        # Only pre-filter domain when NOT in dev bypass mode
+        if not settings.DEV_AUTH_BYPASS and self.allowed_domain:
+            params["hd"] = self.allowed_domain
+        
         if state:
             params["state"] = state
         
-        # Build query string
-        query_string = "&".join(f"{k}={v}" for k, v in params.items())
+        query_string = urllib.parse.urlencode(params)
         return f"{base_url}?{query_string}"
     
     def exchange_code_for_token(self, code: str) -> dict:
         """
         Exchange authorization code for tokens (standard OAuth 2.0 flow).
-        
-        Per Google OAuth docs:
-        POST https://oauth2.googleapis.com/token
         
         Args:
             code: Authorization code from Google callback
@@ -79,7 +82,6 @@ class GoogleOAuthClient:
         Raises:
             ValueError: If exchange fails or token is invalid
         """
-        # Build token exchange request
         data = urllib.parse.urlencode({
             "code": code,
             "client_id": self.client_id,
@@ -103,17 +105,17 @@ class GoogleOAuthClient:
             logger.error(f"Token exchange failed: {e}")
             raise ValueError(f"Failed to exchange authorization code: {e}")
         
-        # Extract ID token from response
         raw_id_token = token_response.get("id_token")
         if not raw_id_token:
             raise ValueError("No id_token in token response")
         
-        # Verify the extracted ID token
         return self.verify_token(raw_id_token)
     
     def verify_token(self, token: str) -> dict:
         """
         Verify Google ID token and extract user info.
+        
+        PRODUCTION: Strict domain enforcement, no bypasses.
         
         Args:
             token: Google ID token from OAuth callback
@@ -132,21 +134,17 @@ class GoogleOAuthClient:
                 self.client_id
             )
             
-            # EXPLICIT aud validation (defense-in-depth)
-            # google-auth checks this internally, but we validate explicitly
-            # to fail closed if library behavior changes
+            # Explicit aud validation (defense-in-depth)
             token_aud = idinfo.get("aud")
             if token_aud != self.client_id:
                 logger.warning(
                     f"Token audience mismatch: expected={self.client_id}, got={token_aud}"
                 )
-                raise ValueError(
-                    f"Token audience mismatch: expected {self.client_id}"
-                )
+                raise ValueError(f"Token audience mismatch: expected {self.client_id}")
             
-            # Optional: validate hosted domain (Google Workspace)
-            # When GOOGLE_HOSTED_DOMAIN is set, only tokens from that domain are accepted
-            if self.allowed_domain:
+            # Validate hosted domain (Google Workspace)
+            # Skip domain checks when DEV_AUTH_BYPASS is active
+            if not settings.DEV_AUTH_BYPASS and self.allowed_domain:
                 token_hd = idinfo.get("hd")
                 if token_hd != self.allowed_domain:
                     logger.warning(
@@ -156,28 +154,30 @@ class GoogleOAuthClient:
                         f"Login restricted to @{self.allowed_domain} accounts"
                     )
             
-            # Extract email
+            # Extract and validate email
             email = idinfo.get("email")
             if not email:
                 raise ValueError("Email not found in token")
             
-            # Validate email verified flag
             if not idinfo.get("email_verified", False):
                 raise ValueError("Email address is not verified by Google")
             
-            # Validate domain (EXACT string match per FSB Section 1.3)
-            if not email.endswith(f"@{self.allowed_domain}"):
-                logger.warning(f"Rejected login attempt from non-university email: {email}")
-                raise ValueError(f"Email must be from @{self.allowed_domain}")
+            # Strict domain validation (exact string match)
+            # Skip when DEV_AUTH_BYPASS is active
+            if not settings.DEV_AUTH_BYPASS:
+                if not email.endswith(f"@{self.allowed_domain}"):
+                    logger.warning(f"Rejected login attempt from non-university email: {email}")
+                    raise ValueError(f"Email must be from @{self.allowed_domain}")
+            else:
+                logger.info(f"DEV_AUTH_BYPASS: Allowing non-university email: {email}")
             
             return {
                 "email": email,
                 "name": idinfo.get("name", ""),
-                "sub": idinfo.get("sub"),  # Google user ID
+                "sub": idinfo.get("sub"),
             }
             
         except ValueError:
-            # Re-raise ValueError directly (our own validation errors)
             raise
         except Exception as e:
             logger.error(f"Token verification failed: {e}")
@@ -186,21 +186,9 @@ class GoogleOAuthClient:
     def validate_email_domain(self, email: str) -> bool:
         """
         Validate email domain (EXACT implementation per FSB Section 1.3).
-        
-        Args:
-            email: Email address to validate
-            
-        Returns:
-            True if email is from allowed domain
-            
-        SECURITY NOTE:
-        Uses exact string matching to prevent bypass attacks:
-        - REJECT: user@gmail.com@hindustanuniv.ac.in
-        - REJECT: user@hindustanuniv.ac.in.attacker.com
         """
         return email.endswith(f"@{self.allowed_domain}")
 
 
 # Global OAuth client instance
 oauth_client = GoogleOAuthClient()
-

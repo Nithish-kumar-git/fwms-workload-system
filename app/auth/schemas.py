@@ -19,11 +19,12 @@ class OAuthCallbackRequest(BaseModel):
 
 
 class StaffInfoResponse(BaseModel):
-    """Current user information."""
+    """Current user information with role."""
     staff_id: int
     email: EmailStr
     name: str
     is_coordinator: bool
+    role: str = "faculty"  # coordinator / hod / faculty
 
 
 class LogoutResponse(BaseModel):

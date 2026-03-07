@@ -1,0 +1,25 @@
+-- Migration 009: Add WINDOW_OPENED and WINDOW_CLOSED to audit_log action types
+-- Phase 9 — Preference Window Management
+
+ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS chk_audit_log_action_type;
+
+ALTER TABLE audit_log ADD CONSTRAINT chk_audit_log_action_type
+CHECK (action_type IN (
+    'SUBJECT_SELECTED',
+    'SUBJECT_DESELECTED',
+    'SELECTION_LOCKED',
+    'SELECTION_UNLOCKED',
+    'COORDINATOR_OVERRIDE',
+    'WINDOW_CREATED',
+    'WINDOW_SCHEDULED',
+    'WINDOW_OPENED',
+    'WINDOW_CLOSED',
+    'WINDOW_ARCHIVED',
+    'PREFERENCE_SUBMITTED',
+    'PREFERENCE_CLEARED',
+    'ALLOCATION_RUN',
+    'ALLOCATION_OVERRIDE',
+    'ALLOCATION_REASSIGN',
+    'ALLOCATION_FREEZE',
+    'ALLOCATION_UNFREEZE'
+));
