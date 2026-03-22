@@ -26,6 +26,9 @@ def validate_preference(staff_id: int, subject_offering_id: int, preference_numb
     """
     Validate a preference submission against all 5 institutional rules.
     
+    HARDENING: Prevents duplicate preferences after reopening.
+    Since reopening clears all preferences, this validation ensures fresh data integrity.
+    
     Returns:
         dict with keys: valid (bool), error (str or None), rule (str or None)
     """
@@ -206,9 +209,24 @@ def submit_preference(staff_id: int, subject_offering_id: int, preference_number
     """
     Submit a faculty preference after validation.
     
+    HARDENING: Strict state enforcement - preferences can ONLY be submitted when semester is OPEN.
+    Blocks submission in CLOSED, ALLOCATED, and FROZEN states.
+    
     Returns:
         dict with keys: success (bool), message (str), preference_id (int or None)
     """
+    # Cycle lock guard: block all writes after HOD approval
+    from app.reports.cycle_guard import require_cycle_unlocked
+    try:
+        require_cycle_unlocked()
+    except RuntimeError as e:
+        return {
+            "success": False,
+            "message": str(e),
+            "preference_id": None,
+            "rule": "CYCLE-LOCKED"
+        }
+
     # Window guard: preferences only allowed when window is OPEN
     from app.preference.window_service import is_window_open
     if not is_window_open():
@@ -218,6 +236,52 @@ def submit_preference(staff_id: int, subject_offering_id: int, preference_number
             "preference_id": None,
             "rule": "WINDOW-CLOSED"
         }
+    
+    # HARDENING: Strict semester state guard - ONLY allow when semester is OPEN
+    with get_transaction() as session:
+        semester_state_row = session.execute(
+            text("""
+                SELECT sem.id, sem.state
+                FROM subject_offering so
+                JOIN semester sem ON sem.id = so.semester_id
+                WHERE so.id = :offering_id
+            """),
+            {"offering_id": subject_offering_id}
+        ).fetchone()
+        
+        if not semester_state_row:
+            return {
+                "success": False,
+                "message": "Subject offering not found",
+                "preference_id": None,
+                "rule": "DATA"
+            }
+        
+        semester_id, semester_state = semester_state_row
+        
+        # STRICT: Only OPEN state allowed
+        if semester_state != "OPEN":
+            return {
+                "success": False,
+                "message": f"Preferences can ONLY be submitted when semester is OPEN (currently {semester_state})",
+                "preference_id": None,
+                "rule": "SEMESTER-NOT-OPEN"
+            }
+    
+    # Query active cycle_id
+    with get_transaction() as session:
+        cycle_result = session.execute(
+            text("SELECT id FROM academic_cycle WHERE is_active = true LIMIT 1")
+        )
+        cycle_row = cycle_result.fetchone()
+        if not cycle_row:
+            return {
+                "success": False,
+                "message": "No active academic cycle found",
+                "preference_id": None,
+                "rule": "NO-ACTIVE-CYCLE"
+            }
+        active_cycle_id = cycle_row[0]
     
     # Validate first
     validation = validate_preference(staff_id, subject_offering_id, preference_number)
@@ -233,14 +297,15 @@ def submit_preference(staff_id: int, subject_offering_id: int, preference_number
     with get_transaction() as session:
         result = session.execute(
             text("""
-                INSERT INTO faculty_preference (staff_id, subject_offering_id, preference_number)
-                VALUES (:staff_id, :offering_id, :pref_num)
+                INSERT INTO faculty_preference (staff_id, subject_offering_id, preference_number, academic_cycle_id)
+                VALUES (:staff_id, :offering_id, :pref_num, :cycle_id)
                 RETURNING id
             """),
             {
                 "staff_id": staff_id,
                 "offering_id": subject_offering_id,
-                "pref_num": preference_number
+                "pref_num": preference_number,
+                "cycle_id": active_cycle_id
             }
         )
         preference_id = result.scalar()
@@ -329,22 +394,36 @@ def delete_preference(staff_id: int, preference_id: int) -> dict:
     """
     Delete a preference by ID (only if it belongs to the staff member).
     
+    HARDENING: Strict state enforcement - preferences can ONLY be deleted when semester is OPEN.
+    Blocks deletion in CLOSED, ALLOCATED, and FROZEN states.
+    
     Returns:
         dict with keys: success (bool), message (str)
     """
     with get_transaction() as session:
-        # Verify ownership
+        # Verify ownership and get semester info
         row = session.execute(
             text("""
-                SELECT id, subject_offering_id, preference_number
-                FROM faculty_preference
-                WHERE id = :pref_id AND staff_id = :staff_id
+                SELECT fp.id, fp.subject_offering_id, fp.preference_number,
+                       sem.id AS semester_id, sem.state AS semester_state
+                FROM faculty_preference fp
+                JOIN subject_offering so ON so.id = fp.subject_offering_id
+                JOIN semester sem ON sem.id = so.semester_id
+                WHERE fp.id = :pref_id AND fp.staff_id = :staff_id
             """),
             {"pref_id": preference_id, "staff_id": staff_id}
         ).fetchone()
         
         if row is None:
             return {"success": False, "message": "Preference not found or not owned by you"}
+        
+        # HARDENING: Strict state check - ONLY allow deletion when OPEN
+        semester_state = row[4]
+        if semester_state != "OPEN":
+            return {
+                "success": False,
+                "message": f"Preferences can ONLY be deleted when semester is OPEN (currently {semester_state})"
+            }
         
         # Delete
         session.execute(

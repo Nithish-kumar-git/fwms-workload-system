@@ -67,7 +67,8 @@ def override_subject_transaction(
             }
         )
         
-        # COMMIT (automatic via context manager)
+        # Explicit commit — transaction boundary
+        session.commit()
         return {
             "success": True,
             "message": "Subject override successful",

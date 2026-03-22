@@ -97,6 +97,7 @@ def create_window_transaction(
         
         logger.info(f"Window created: id={window_id}, batch={batch_id}, spec={specialization_id}")
         
+        session.commit()
         return {
             "success": True,
             "message": "Window created successfully",
@@ -251,6 +252,7 @@ def schedule_window_transaction(
         
         logger.info(f"Window scheduled: id={window_id}, start={start_time}, end={end_time}")
         
+        session.commit()
         return {
             "success": True,
             "message": "Window scheduled successfully",
@@ -267,6 +269,8 @@ def open_window_transaction(
     
     PRECONDITION: now() >= start_time
     CONSTRAINT: Only ONE OPEN window per (batch_id, specialization_id)
+    
+    CRITICAL: Also transitions semester state to OPEN to enable preferences.
     
     Args:
         coordinator_id: Staff ID of coordinator
@@ -303,6 +307,8 @@ def open_window_transaction(
             
             current_status = window[1]
             start_time = window[2]
+            batch_id = window[3]
+            spec_id = window[4]
             
             # Validate state transition (ONLY SCHEDULED → OPEN allowed)
             if current_status != 'SCHEDULED':
@@ -325,7 +331,22 @@ def open_window_transaction(
                     "window_id": None
                 }
             
-            # Perform transition
+            # CRITICAL FIX: Get semester_id from subject_offering for this batch/spec
+            # This connects the window system to the semester state system
+            semester_row = session.execute(
+                text("""
+                    SELECT DISTINCT semester_id
+                    FROM subject_offering
+                    WHERE program_id IN (
+                        SELECT id FROM program WHERE name IN ('MCA', 'BCA')
+                    )
+                    LIMIT 1
+                """)
+            ).fetchone()
+            
+            semester_id = semester_row[0] if semester_row else None
+            
+            # Perform window transition
             # Partial unique index will enforce single OPEN window per batch/spec
             session.execute(
                 text("""
@@ -336,25 +357,43 @@ def open_window_transaction(
                 {"window_id": window_id}
             )
             
+            # CRITICAL FIX: Also transition semester state to OPEN
+            # This enables faculty to browse subjects and submit preferences
+            from datetime import datetime
+            session.execute(
+                text("""
+                    UPDATE semester
+                    SET state = 'OPEN',
+                        opened_at = :now,
+                        closed_at = NULL,
+                        allocated_at = NULL
+                    WHERE id IN (SELECT id FROM semester)
+                """),
+                {"now": datetime.utcnow()}
+            )
+            logger.info(f"All semesters state transitioned to OPEN (triggered by window {window_id})")
+            
             # Audit log
             session.execute(
                 text("""
                     INSERT INTO audit_log
                       (actor_staff_id, action_type, details)
                     VALUES (:coordinator_id, 'WINDOW_OPENED',
-                            jsonb_build_object('window_id', :window_id))
+                            jsonb_build_object('window_id', :window_id, 'semester_id', :semester_id))
                 """),
                 {
                     "coordinator_id": coordinator_id,
-                    "window_id": window_id
+                    "window_id": window_id,
+                    "semester_id": semester_id
                 }
             )
             
-            logger.info(f"Window opened: id={window_id}")
+            logger.info(f"Window opened: id={window_id}, semester_id={semester_id}")
             
+            session.commit()
             return {
                 "success": True,
-                "message": "Window opened successfully",
+                "message": "Window opened successfully (semester state updated to OPEN)",
                 "window_id": window_id
             }
     
@@ -377,6 +416,8 @@ def close_window_transaction(
     Transition window from OPEN to CLOSED.
     
     Can be called early (before end_time) or after expiration.
+    
+    CRITICAL: Also transitions semester state to CLOSED to lock preferences.
     
     Args:
         coordinator_id: Staff ID of coordinator
@@ -417,7 +458,22 @@ def close_window_transaction(
                 "window_id": None
             }
         
-        # Perform transition
+        # CRITICAL FIX: Get semester_id from subject_offering for this window
+        # This connects the window system to the semester state system
+        semester_row = session.execute(
+            text("""
+                SELECT DISTINCT semester_id
+                FROM subject_offering
+                WHERE program_id IN (
+                    SELECT id FROM program WHERE name IN ('MCA', 'BCA')
+                )
+                LIMIT 1
+            """)
+        ).fetchone()
+        
+        semester_id = semester_row[0] if semester_row else None
+        
+        # Perform window transition
         session.execute(
             text("""
                 UPDATE selection_window
@@ -427,25 +483,39 @@ def close_window_transaction(
             {"window_id": window_id}
         )
         
+        # CRITICAL FIX: Also transition semester state to CLOSED
+        # This locks preferences and prepares for allocation
+        from datetime import datetime
+        session.execute(
+            text("""
+                UPDATE semester
+                SET state = 'CLOSED',
+                    closed_at = now()
+            """)
+        )
+        logger.info(f"All semesters state transitioned to CLOSED (triggered by window {window_id})")
+        
         # Audit log
         session.execute(
             text("""
                 INSERT INTO audit_log
                   (actor_staff_id, action_type, details)
                 VALUES (:coordinator_id, 'WINDOW_CLOSED',
-                        jsonb_build_object('window_id', :window_id))
+                        jsonb_build_object('window_id', :window_id, 'semester_id', :semester_id))
             """),
             {
                 "coordinator_id": coordinator_id,
-                "window_id": window_id
+                "window_id": window_id,
+                "semester_id": semester_id
             }
         )
         
-        logger.info(f"Window closed: id={window_id}")
+        logger.info(f"Window closed: id={window_id}, semester_id={semester_id}")
         
+        session.commit()
         return {
             "success": True,
-            "message": "Window closed successfully",
+            "message": "Window closed successfully (semester state updated to CLOSED)",
             "window_id": window_id
         }
 
@@ -522,6 +592,7 @@ def archive_window_transaction(
         
         logger.info(f"Window archived: id={window_id}")
         
+        session.commit()
         return {
             "success": True,
             "message": "Window archived successfully",

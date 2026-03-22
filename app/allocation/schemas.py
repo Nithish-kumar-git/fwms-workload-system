@@ -45,7 +45,7 @@ class FacultyWorkloadSummary(BaseModel):
     staff_id: int
     emp_code: str
     name: str
-    designation: str
+    designation: str = "Unknown"
     tch_norm: int
     tch_assigned: int
     deviation: int
@@ -56,6 +56,8 @@ class AllocationRunResponse(BaseModel):
     """Response model for POST /api/allocation/run"""
     success: bool
     message: str
+    semester_id: int | None = Field(None, description="Semester ID that was allocated")
+    semester_label: str | None = Field(None, description="Semester label (e.g., 'I', 'II')")
     subjects_total: int = Field(..., description="Total subject offerings considered")
     subjects_assigned: int = Field(..., description="Successfully assigned")
     subjects_unassigned: int = Field(..., description="Could not be assigned")

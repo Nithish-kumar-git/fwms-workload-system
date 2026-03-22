@@ -43,6 +43,7 @@ class FacultyWorkloadResponse(BaseModel):
 
 class SubjectSummaryRecord(BaseModel):
     """One row in the subject-wise report."""
+    subject_offering_id: int
     course_code: str
     course_name: str
     program: str

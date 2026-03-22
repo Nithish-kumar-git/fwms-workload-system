@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getFacultyWorkload, downloadExcel, downloadPdf, getActiveCycle } from '../api/client';
+import { getFacultyWorkload, downloadExcel, downloadPdf, downloadMasterWorkload, getActiveCycle } from '../api/client';
 import { useToast } from '../hooks/useToast';
 import ToastContainer from '../components/ToastContainer';
 import { FileSpreadsheet, FileText, AlertCircle, RefreshCw } from 'lucide-react';
@@ -31,7 +31,6 @@ export default function ReportsPage() {
     const { toasts, addToast, removeToast } = useToast();
 
     const [error, setError] = useState('');
-
     const [cyclePrefix, setCyclePrefix] = useState('');
 
     const loadData = () => {
@@ -47,9 +46,7 @@ export default function ReportsPage() {
             .finally(() => setLoading(false));
 
         getActiveCycle()
-            .then(r => {
-                setCyclePrefix(`${r.data.academic_year}_${r.data.semester_type}_`);
-            })
+            .then(r => { setCyclePrefix(`${r.data.academic_year}_${r.data.semester_type}_`); })
             .catch(err => console.error('No active cycle', err));
     };
 
@@ -73,6 +70,24 @@ export default function ReportsPage() {
         }
     };
 
+    const handleMasterDownload = async () => {
+        setDownloading('master');
+        try {
+            const res = await downloadMasterWorkload();
+            const url = URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${cyclePrefix}master_workload.xlsx`;
+            link.click();
+            URL.revokeObjectURL(url);
+            addToast('Master Workload Excel downloaded', 'success');
+        } catch {
+            addToast('Master Workload download failed', 'error');
+        } finally {
+            setDownloading('');
+        }
+    };
+
     const getDeviationBadge = (dev: number) => {
         if (dev > 0) return <span className="badge badge-danger">+{dev}</span>;
         if (dev < -2) return <span className="badge badge-warning">{dev}</span>;
@@ -81,7 +96,7 @@ export default function ReportsPage() {
 
     if (loading) return (
         <div className="page-container">
-            <p style={{ color: 'var(--color-text-muted)', textAlign: 'center', padding: '3rem' }}>Loading report data...</p>
+            <p style={{ color: '#6b7280', textAlign: 'center', padding: '3rem' }}>Loading report data...</p>
         </div>
     );
 
@@ -89,8 +104,8 @@ export default function ReportsPage() {
         <div className="page-container">
             <ToastContainer toasts={toasts} onRemove={removeToast} />
             <div className="glass-card" style={{ padding: '2rem', textAlign: 'center' }}>
-                <AlertCircle size={32} style={{ color: '#f87171', marginBottom: '0.75rem' }} />
-                <p style={{ color: '#f87171', fontWeight: 600, marginBottom: '0.5rem' }}>{error}</p>
+                <AlertCircle size={32} style={{ color: '#dc2626', marginBottom: '0.75rem' }} />
+                <p style={{ color: '#dc2626', fontWeight: 600, marginBottom: '0.5rem' }}>{error}</p>
                 <button onClick={loadData} className="btn btn-primary" style={{ marginTop: '0.5rem' }}>
                     <RefreshCw size={16} /> Retry
                 </button>
@@ -108,6 +123,11 @@ export default function ReportsPage() {
                     <p className="page-subtitle">Faculty workload reports and export</p>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button onClick={handleMasterDownload} className="btn btn-primary" disabled={!!downloading}
+                        style={{ background: 'linear-gradient(135deg, #7c3aed, #2563eb)', border: 'none' }}>
+                        <FileSpreadsheet size={16} />
+                        {downloading === 'master' ? 'Generating...' : 'Master Workload Excel'}
+                    </button>
                     <button onClick={() => handleDownload('excel')} className="btn btn-success" disabled={!!downloading}>
                         <FileSpreadsheet size={16} />
                         {downloading === 'excel' ? 'Downloading...' : 'Excel'}
@@ -123,17 +143,17 @@ export default function ReportsPage() {
                 <div key={fac.staff_id} className="glass-card" style={{ marginBottom: '1rem', overflow: 'hidden' }}>
                     <div style={{
                         padding: '1rem 1.25rem',
-                        borderBottom: '1px solid var(--color-border)',
+                        borderBottom: '1px solid #e5e7eb',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     }}>
                         <div>
-                            <span style={{ fontWeight: 700 }}>{fac.name}</span>
-                            <span style={{ color: 'var(--color-text-muted)', marginLeft: '0.75rem', fontSize: '0.8125rem' }}>
+                            <span style={{ fontWeight: 700, color: '#111827' }}>{fac.name}</span>
+                            <span style={{ color: '#6b7280', marginLeft: '0.75rem', fontSize: '0.8125rem' }}>
                                 {fac.emp_code} · {fac.designation}
                             </span>
                         </div>
                         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', fontSize: '0.8125rem' }}>
-                            <span>TCH: <strong>{fac.assigned_tch}</strong>/{fac.tch_norm}</span>
+                            <span style={{ color: '#374151' }}>TCH: <strong>{fac.assigned_tch}</strong>/{fac.tch_norm}</span>
                             {getDeviationBadge(fac.deviation_hours)}
                         </div>
                     </div>
@@ -148,7 +168,7 @@ export default function ReportsPage() {
                             <tbody>
                                 {fac.subjects_assigned.map((s, i) => (
                                     <tr key={i}>
-                                        <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{s.course_code}</td>
+                                        <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#111827' }}>{s.course_code}</td>
                                         <td>{s.course_name}</td>
                                         <td>{s.program}</td>
                                         <td>{s.semester}</td>

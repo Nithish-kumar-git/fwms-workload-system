@@ -115,11 +115,20 @@ async def unfreeze_allocation(
 @router.get("/workload-summary", response_model=WorkloadSummaryResponse)
 async def get_workload_summary(
     coordinator_id: int = Depends(get_current_coordinator_id),
+    academic_year: str | None = None,
+    semester_type: str | None = None,
 ):
     """
     Get workload summary for all faculty.
     Used for the final workload report (deviation analysis).
+    
+    Query parameters:
+    - academic_year: Optional, defaults to active cycle
+    - semester_type: Optional, defaults to active cycle
     """
-    result = admin_service.get_workload_summary()
+    result = admin_service.get_workload_summary(
+        academic_year=academic_year,
+        semester_type=semester_type
+    )
     result["records"] = [WorkloadSummaryRecord(**r) for r in result["records"]]
     return WorkloadSummaryResponse(**result)

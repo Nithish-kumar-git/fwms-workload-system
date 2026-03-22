@@ -197,7 +197,8 @@ def select_subject_transaction(
                 }
             )
             
-            # COMMIT (automatic via context manager)
+            # Explicit commit — transaction boundary
+            session.commit()
             return {
                 "success": True,
                 "message": "Subject selected successfully",
@@ -392,7 +393,8 @@ def change_subject_transaction(
                 }
             )
             
-            # COMMIT (automatic via context manager)
+            # Explicit commit — transaction boundary
+            session.commit()
             return {
                 "success": True,
                 "message": "Subject changed successfully",

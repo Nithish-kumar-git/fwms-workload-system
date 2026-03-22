@@ -6,9 +6,11 @@ PRODUCTION BUILD - Integrated middleware:
 - Correlation ID tracking
 - Structured logging
 - Error handling
+- CORS for frontend access
 """
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.core.logging_config import configure_logging
 from app.core.correlation_middleware import CorrelationIDMiddleware
 from app.health import router as health_router
@@ -16,6 +18,7 @@ from app.auth import router as auth_router
 from app.selection import router as selection_router
 from app.coordinator import router as coordinator_router
 from app.coordinator import window_router
+from app.coordinator import semester_state_router
 from app.preference import router as preference_router
 from app.preference import window_router as pref_window_router
 from app.allocation import router as allocation_router
@@ -25,6 +28,7 @@ from app.admin import staff_router
 from app.reports import router as reports_router
 from app.core.config import settings
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +41,20 @@ def create_app() -> FastAPI:
         version="1.0.0"
     )
     
+    # CORS middleware - allow frontend access
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            'http://localhost:5173',
+            'http://localhost:3000',
+            frontend_url
+        ],
+        allow_credentials=True,
+        allow_methods=['*'],
+        allow_headers=['*']
+    )
+    
     # Add middleware (order matters: last added = first executed)
     app.add_middleware(CorrelationIDMiddleware)
     
@@ -46,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(selection_router.router)
     app.include_router(coordinator_router.router)
     app.include_router(window_router.router, prefix="/api")
+    app.include_router(semester_state_router.router)
     app.include_router(preference_router.router)
     app.include_router(pref_window_router.router)
     app.include_router(allocation_router.router)

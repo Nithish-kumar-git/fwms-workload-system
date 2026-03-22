@@ -1,15 +1,11 @@
 """
-Authentication dependencies for FastAPI (PRODUCTION).
-Spec reference: FSB_v1.3.md Section 1.5, BACKEND_STRUCTURE.md Section 3.1
+Authentication dependencies for FastAPI.
 
-Supports dual authentication:
-- Session cookie (faculty_session) — set by OAuth callback
-- JWT Bearer token (Authorization: Bearer <token>) — returned by callback
-
+3-Role System: faculty / tt_coordinator / hod
 Role is ALWAYS read fresh from DB on every request.
 """
 
-from fastapi import Cookie, HTTPException, Depends, Header
+from fastapi import Cookie, HTTPException, Depends, Header, Request
 from sqlalchemy import text
 from typing import Optional
 import logging
@@ -22,128 +18,132 @@ logger = logging.getLogger(__name__)
 
 class UserInfo:
     """User information from session + database."""
-    
-    def __init__(self, staff_id: int, email: str, name: str, is_coordinator: bool, role: str = "faculty"):
+
+    def __init__(self, staff_id: int, email: str, name: str, role: str):
         self.staff_id = staff_id
         self.email = email
         self.name = name
-        self.is_coordinator = is_coordinator
         self.role = role
+        # Derived convenience flags
+        self.is_hod = role == "hod"
+        self.is_coordinator = role in ("tt_coordinator", "hod")
+        self.is_faculty = role == "faculty"
+
+
+def _lookup_staff_by_id(staff_id: int) -> UserInfo:
+    """Fresh DB lookup for a staff member by ID. Returns UserInfo with role from DB."""
+    with get_transaction() as session:
+        row = session.execute(
+            text("SELECT id, email, name, role FROM staff WHERE id = :id"),
+            {"id": staff_id}
+        ).fetchone()
+
+        if row is None:
+            raise HTTPException(status_code=401, detail=f"Staff {staff_id} not found")
+
+        return UserInfo(
+            staff_id=row[0],
+            email=row[1],
+            name=row[2],
+            role=row[3] or "faculty"
+        )
 
 
 async def get_current_user(
+    request: Request,
     faculty_session: Optional[str] = Cookie(None),
     authorization: Optional[str] = Header(None),
 ) -> UserInfo:
     """
     Get current authenticated user.
-    
-    Checks in order:
-    1. JWT Bearer token from Authorization header
-    2. Session cookie
-    
-    Role is ALWAYS read from DB (never trust cached/token role alone).
-    
-    Raises:
-        HTTPException 401: If no valid auth found
+
+    DEV_AUTH_BYPASS: Allows login without token, but respects JWT if present.
+    Production: JWT Bearer token or session cookie required.
+    Role is ALWAYS read fresh from DB.
     """
     from app.core.config import settings
-    
-    # DEV AUTH BYPASS (blocked in production by config validation)
-    if settings.DEV_AUTH_BYPASS:
-        logger.warning("🚨 DEV_AUTH_BYPASS ACTIVE: Auto-authenticating as staff_id=1")
-        return UserInfo(
-            staff_id=1,
-            email="dev@example.com",
-            name="Development User",
-            is_coordinator=True,
-            role="coordinator"
-        )
-    
+
     staff_id = None
-    
-    # PATH 1: JWT Bearer token
+
+    # PATH 1: JWT Bearer token (check first, even in dev mode)
     if authorization and authorization.startswith("Bearer "):
-        token = authorization[7:]
-        payload = verify_jwt(token)
+        payload = verify_jwt(authorization[7:])
         if payload and "sub" in payload:
             staff_id = int(payload["sub"])
-    
+            logger.info(f"JWT auth: staff_id={staff_id}")
+
     # PATH 2: Session cookie
     if staff_id is None and faculty_session:
         staff_id = session_manager.get_staff_id(faculty_session)
-    
-    # No valid auth
+        if staff_id:
+            logger.info(f"Session auth: staff_id={staff_id}")
+
+    # PATH 3: DEV AUTH BYPASS (only if no token provided)
+    if staff_id is None and settings.DEV_AUTH_BYPASS:
+        logger.warning("DEV_AUTH_BYPASS: No token provided, returning mock coordinator user")
+        return UserInfo(
+            staff_id=1,
+            email="dev@example.com",
+            name="Dev User",
+            role="tt_coordinator"
+        )
+
+    # No authentication found
     if staff_id is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    # Fresh DB lookup (role is NEVER cached)
-    try:
-        with get_transaction() as session:
-            result = session.execute(
-                text("""
-                    SELECT s.id, s.email, s.name, s.is_coordinator
-                    FROM staff s
-                    WHERE s.id = :staff_id AND s.is_active = true
-                """),
-                {"staff_id": staff_id}
-            ).fetchone()
-            
-            if result is None:
-                logger.warning(f"Staff {staff_id} not found (orphaned session)")
-                raise HTTPException(status_code=401, detail="User not found")
-            
-            is_coordinator = result[3]
-            
-            # Resolve full role
-            role = "faculty"
-            if is_coordinator:
-                role = "coordinator"
-            else:
-                role_row = session.execute(
-                    text("""
-                        SELECT role_name FROM faculty_role
-                        WHERE staff_id = :sid AND role_name = 'HOD'
-                        LIMIT 1
-                    """),
-                    {"sid": result[0]}
-                ).fetchone()
-                if role_row:
-                    role = "hod"
-            
-            return UserInfo(
-                staff_id=result[0],
-                email=result[1],
-                name=result[2],
-                is_coordinator=is_coordinator,
-                role=role
-            )
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Database error in get_current_user: {e}")
-        raise HTTPException(status_code=500, detail="Authentication error")
+
+    return _lookup_staff_by_id(staff_id)
+
+
+# ─── Permission Guards ───
 
 
 async def get_current_staff_id(
     user: UserInfo = Depends(get_current_user)
 ) -> int:
-    """Get current staff ID (for staff endpoints)."""
+    """Get current staff ID (any authenticated user)."""
     return user.staff_id
+
+
+async def get_current_hod(
+    user: UserInfo = Depends(get_current_user)
+) -> UserInfo:
+    """Require HOD role. Returns full UserInfo."""
+    if user.role != "hod":
+        logger.warning(f"HOD access denied: staff_id={user.staff_id}, role={user.role}")
+        raise HTTPException(status_code=403, detail="HOD access required")
+    return user
+
+
+async def get_current_hod_id(
+    user: UserInfo = Depends(get_current_hod)
+) -> int:
+    """Require HOD role. Returns staff_id."""
+    return user.staff_id
+
+
+async def get_current_coordinator(
+    user: UserInfo = Depends(get_current_user)
+) -> UserInfo:
+    """Require coordinator or HOD role. Returns full UserInfo."""
+    if user.role not in ("tt_coordinator", "hod"):
+        logger.warning(f"Coordinator access denied: staff_id={user.staff_id}, role={user.role}")
+        raise HTTPException(status_code=403, detail="Coordinator access required")
+    return user
 
 
 async def get_current_coordinator_id(
-    user: UserInfo = Depends(get_current_user)
+    user: UserInfo = Depends(get_current_coordinator)
 ) -> int:
-    """
-    Get current coordinator staff ID (for coordinator endpoints).
-    Enforces is_coordinator=true from database.
-    """
-    if not user.is_coordinator:
-        logger.warning(f"Access denied: staff_id={user.staff_id} attempted coordinator action")
-        raise HTTPException(
-            status_code=403, 
-            detail="Coordinator access required"
-        )
+    """Require coordinator or HOD role. Returns staff_id."""
     return user.staff_id
+
+
+async def get_current_faculty(
+    user: UserInfo = Depends(get_current_user)
+) -> UserInfo:
+    """Require faculty role. Returns full UserInfo."""
+    if user.role != "faculty":
+        logger.warning(f"Faculty access denied: staff_id={user.staff_id}, role={user.role}")
+        raise HTTPException(status_code=403, detail="Faculty access required")
+    return user

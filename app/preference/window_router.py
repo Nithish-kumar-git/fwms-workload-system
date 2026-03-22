@@ -42,6 +42,7 @@ class WindowResponse(BaseModel):
 
 class WindowStatusResponse(BaseModel):
     is_open: bool
+    status: str = 'CLOSED'  # 'OPEN', 'CLOSED', 'SCHEDULED'
     window_id: int | None = None
     start_time: str | None = None
     end_time: str | None = None

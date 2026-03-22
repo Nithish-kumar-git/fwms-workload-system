@@ -9,12 +9,10 @@ export default function WindowPage() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const { toasts, addToast, removeToast } = useToast();
-
     const [year, setYear] = useState('2025-2026');
     const [semType, setSemType] = useState('EVEN');
     const [startTime, setStartTime] = useState('');
     const [endTime, setEndTime] = useState('');
-
     const [error, setError] = useState('');
 
     const loadStatus = () => {
@@ -32,7 +30,6 @@ export default function WindowPage() {
 
     useEffect(() => { loadStatus(); }, []);
 
-    // Live countdown
     useEffect(() => {
         if (!status?.is_open || status.remaining_seconds <= 0) return;
         const interval = setInterval(() => {
@@ -54,8 +51,7 @@ export default function WindowPage() {
         setSubmitting(true);
         try {
             await openPrefWindow({
-                academic_year: year,
-                semester_type: semType,
+                academic_year: year, semester_type: semType,
                 start_time: new Date(startTime).toISOString(),
                 end_time: new Date(endTime).toISOString(),
             });
@@ -63,9 +59,7 @@ export default function WindowPage() {
             loadStatus();
         } catch (err: any) {
             addToast(err.response?.data?.detail || 'Failed to open window', 'error');
-        } finally {
-            setSubmitting(false);
-        }
+        } finally { setSubmitting(false); }
     };
 
     const handleClose = async () => {
@@ -76,22 +70,20 @@ export default function WindowPage() {
             loadStatus();
         } catch (err: any) {
             addToast(err.response?.data?.detail || 'Failed to close', 'error');
-        } finally {
-            setSubmitting(false);
-        }
+        } finally { setSubmitting(false); }
     };
 
     if (loading) return (
         <div className="page-container">
-            <p style={{ color: 'var(--color-text-muted)', textAlign: 'center', padding: '3rem' }}>Loading window status...</p>
+            <p style={{ color: '#6b7280', textAlign: 'center', padding: '3rem' }}>Loading window status...</p>
         </div>
     );
 
     if (error) return (
         <div className="page-container">
             <div className="glass-card" style={{ padding: '2rem', textAlign: 'center' }}>
-                <AlertCircle size={32} style={{ color: '#f87171', marginBottom: '0.75rem' }} />
-                <p style={{ color: '#f87171', fontWeight: 600, marginBottom: '0.5rem' }}>{error}</p>
+                <AlertCircle size={32} style={{ color: '#dc2626', marginBottom: '0.75rem' }} />
+                <p style={{ color: '#dc2626', fontWeight: 600, marginBottom: '0.5rem' }}>{error}</p>
                 <button onClick={loadStatus} className="btn btn-primary" style={{ marginTop: '0.5rem' }}>
                     <RefreshCw size={16} /> Retry
                 </button>
@@ -102,7 +94,6 @@ export default function WindowPage() {
     return (
         <div className="page-container">
             <ToastContainer toasts={toasts} onRemove={removeToast} />
-
             <div className="page-header">
                 <div>
                     <h1 className="page-title">Preference Window</h1>
@@ -112,55 +103,45 @@ export default function WindowPage() {
             </div>
 
             {/* Current Status Card */}
-            <div className="glass-panel p-8 mb-8">
+            <div className="glass-card" style={{ padding: '2rem', marginBottom: '1.5rem' }}>
                 <div className="flex items-center gap-4 mb-6">
                     {status?.is_open ? (
                         <>
-                            <div className="p-3 bg-emerald-500/10 dark:bg-emerald-500/20 rounded-full text-emerald-500">
+                            <div className="p-3 bg-green-50 rounded-full text-green-600">
                                 <DoorOpen size={28} strokeWidth={2.5} />
                             </div>
-                            <div>
-                                <span className="badge badge-success px-4 py-1.5 text-sm shadow-sm">
-                                    WINDOW OPEN
-                                </span>
-                            </div>
+                            <span className="badge badge-success px-4 py-1.5 text-sm">WINDOW OPEN</span>
                         </>
                     ) : (
                         <>
-                            <div className="p-3 bg-red-500/10 dark:bg-red-500/20 rounded-full text-red-500">
+                            <div className="p-3 bg-red-50 rounded-full text-red-600">
                                 <DoorClosed size={28} strokeWidth={2.5} />
                             </div>
-                            <div>
-                                <span className="badge badge-danger px-4 py-1.5 text-sm shadow-sm">
-                                    WINDOW CLOSED
-                                </span>
-                            </div>
+                            <span className="badge badge-danger px-4 py-1.5 text-sm">WINDOW CLOSED</span>
                         </>
                     )}
                 </div>
 
                 {status?.is_open && (
-                    <div className="stat-grid mb-6">
-                        <div className="stat-card glass-panel flex flex-col justify-center relative overflow-hidden">
+                    <div className="stat-grid" style={{ marginBottom: '1.5rem' }}>
+                        <div className="stat-card glass-card flex flex-col justify-center">
                             <div className="flex items-center gap-2 mb-2">
-                                <Clock size={16} className="text-blue-500" strokeWidth={2.5} />
+                                <Clock size={16} className="text-blue-600" strokeWidth={2.5} />
                                 <div className="stat-label !mt-0 !text-[13px]">Remaining</div>
                             </div>
-                            <div className="stat-value text-blue-600 dark:text-blue-400 font-mono tracking-tight">
-                                {formatTime(status.remaining_seconds)}
-                            </div>
+                            <div className="stat-value text-blue-600 font-mono tracking-tight">{formatTime(status.remaining_seconds)}</div>
                         </div>
-                        <div className="stat-card glass-panel flex flex-col justify-center">
+                        <div className="stat-card glass-card flex flex-col justify-center">
                             <div className="stat-label mb-1">Start Time</div>
-                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{status.start_time}</div>
+                            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: '#111827' }}>{status.start_time}</div>
                         </div>
-                        <div className="stat-card glass-panel flex flex-col justify-center">
+                        <div className="stat-card glass-card flex flex-col justify-center">
                             <div className="stat-label mb-1">End Time</div>
-                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{status.end_time}</div>
+                            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: '#111827' }}>{status.end_time}</div>
                         </div>
-                        <div className="stat-card glass-panel flex flex-col justify-center">
+                        <div className="stat-card glass-card flex flex-col justify-center">
                             <div className="stat-label mb-1">Year / Semester</div>
-                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{status.academic_year} / {status.semester_type}</div>
+                            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: '#111827' }}>{status.academic_year} / {status.semester_type}</div>
                         </div>
                     </div>
                 )}
@@ -175,42 +156,33 @@ export default function WindowPage() {
 
             {/* Open Window Form */}
             {!status?.is_open && (
-                <div className="glass-panel p-8">
-                    <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                        <Settings size={18} className="text-gray-400" />
-                        Open New Window
+                <div className="glass-card" style={{ padding: '2rem' }}>
+                    <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#111827' }}>
+                        <Settings size={18} style={{ color: '#9ca3af' }} /> Open New Window
                     </h3>
                     <form onSubmit={handleOpen} className="flex flex-col gap-6">
                         <div className="flex gap-6 flex-wrap">
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-[13px] font-medium text-gray-500 dark:text-gray-400 pl-1">
-                                    Academic Year
-                                </label>
+                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>Academic Year</label>
                                 <input className="form-input w-40" value={year} onChange={(e) => setYear(e.target.value)} />
                             </div>
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-[13px] font-medium text-gray-500 dark:text-gray-400 pl-1">
-                                    Semester Type
-                                </label>
+                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>Semester Type</label>
                                 <select className="form-select w-32" value={semType} onChange={(e) => setSemType(e.target.value)}>
                                     <option value="EVEN">EVEN</option>
                                     <option value="ODD">ODD</option>
                                 </select>
                             </div>
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-[13px] font-medium text-gray-500 dark:text-gray-400 pl-1">
-                                    Start Time
-                                </label>
+                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>Start Time</label>
                                 <input type="datetime-local" className="form-input" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
                             </div>
                             <div className="flex flex-col gap-1.5">
-                                <label className="text-[13px] font-medium text-gray-500 dark:text-gray-400 pl-1">
-                                    End Time
-                                </label>
+                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>End Time</label>
                                 <input type="datetime-local" className="form-input" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
                             </div>
                         </div>
-                        <div className="pt-2 border-t border-black/5 dark:border-white/5">
+                        <div className="pt-2 border-t border-gray-100">
                             <button type="submit" className="btn btn-primary mt-4" disabled={submitting || !startTime || !endTime}>
                                 <DoorOpen size={16} />
                                 {submitting ? 'Opening...' : 'Open Window'}

@@ -27,7 +27,7 @@ def open_preference_window(
 ) -> dict:
     """
     Open a preference submission window.
-    Creates a selection_window record with status=OPEN.
+    Follows the frozen lifecycle: DRAFT → SCHEDULED → OPEN.
     Only one OPEN window allowed per academic_year + semester_type.
     """
     with get_transaction() as session:
@@ -73,7 +73,7 @@ def open_preference_window(
             else:
                 return {"success": False, "message": "Failed to resolve academic cycle scope"}
                 
-        # Insert new window as OPEN
+        # ---- LIFECYCLE STEP 1: Insert as DRAFT ----
         result = session.execute(
             text("""
                 INSERT INTO selection_window
@@ -82,7 +82,7 @@ def open_preference_window(
                      allocation_locked)
                 VALUES (
                     :name, 1, 1, :start_time, :end_time,
-                    'OPEN', 5, :cycle_id, false
+                    'DRAFT', 5, :cycle_id, false
                 )
                 RETURNING id
             """),
@@ -95,7 +95,59 @@ def open_preference_window(
         )
         window_id = result.scalar()
 
-        # Audit log
+        # Audit: WINDOW_CREATED
+        session.execute(
+            text("""
+                INSERT INTO audit_log (actor_staff_id, action_type, details)
+                VALUES (:actor, 'WINDOW_CREATED', :details)
+            """),
+            {
+                "actor": coordinator_id,
+                "details": (
+                    f'{{"window_id": {window_id}, '
+                    f'"academic_year": "{academic_year}", '
+                    f'"semester_type": "{semester_type}"}}'
+                ),
+            },
+        )
+
+        # ---- LIFECYCLE STEP 2: Transition DRAFT → SCHEDULED ----
+        session.execute(
+            text("""
+                UPDATE selection_window
+                SET status = 'SCHEDULED', updated_at = now()
+                WHERE id = :id
+            """),
+            {"id": window_id},
+        )
+
+        # Audit: WINDOW_SCHEDULED
+        session.execute(
+            text("""
+                INSERT INTO audit_log (actor_staff_id, action_type, details)
+                VALUES (:actor, 'WINDOW_SCHEDULED', :details)
+            """),
+            {
+                "actor": coordinator_id,
+                "details": (
+                    f'{{"window_id": {window_id}, '
+                    f'"start_time": "{start_time}", '
+                    f'"end_time": "{end_time}"}}'
+                ),
+            },
+        )
+
+        # ---- LIFECYCLE STEP 3: Transition SCHEDULED → OPEN ----
+        session.execute(
+            text("""
+                UPDATE selection_window
+                SET status = 'OPEN', updated_at = now()
+                WHERE id = :id
+            """),
+            {"id": window_id},
+        )
+
+        # Audit: WINDOW_OPENED
         session.execute(
             text("""
                 INSERT INTO audit_log (actor_staff_id, action_type, details)
@@ -115,7 +167,7 @@ def open_preference_window(
 
         session.commit()
 
-    logger.info(f"Preference window opened: id={window_id}")
+    logger.info(f"Preference window opened: id={window_id} (DRAFT→SCHEDULED→OPEN)")
     return {
         "success": True,
         "message": "Preference window opened",
@@ -176,6 +228,7 @@ def get_window_status() -> dict:
     if row is None:
         return {
             "is_open": False,
+            "status": "CLOSED",
             "window_id": None,
             "start_time": None,
             "end_time": None,
@@ -193,6 +246,7 @@ def get_window_status() -> dict:
 
     return {
         "is_open": True,
+        "status": row[1],  # 'OPEN', 'CLOSED', 'SCHEDULED'
         "window_id": row[0],
         "start_time": str(row[2]),
         "end_time": str(row[3]),

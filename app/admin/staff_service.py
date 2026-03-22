@@ -51,7 +51,8 @@ def create_staff(
     email: str,
     designation: str = "Assistant Professor",
     shift: str = "SHIFT1",
-    tch_norm: int = 16,
+    tch_norm: int = 40,
+    role: str = "faculty",
     is_coordinator: bool = False,
     is_class_teacher: bool = False,
     ct_program: str | None = None,
@@ -84,17 +85,17 @@ def create_staff(
         result = session.execute(
             text("""
                 INSERT INTO staff (emp_code, name, email, designation, shift,
-                    tch_norm, is_coordinator, is_active,
+                    tch_norm, role, is_coordinator, is_active,
                     is_class_teacher, ct_program, ct_section, ct_semester, ct_shift)
                 VALUES (:emp_code, :name, :email, :designation, :shift,
-                    :tch_norm, :is_coordinator, true,
+                    :tch_norm, :role, :is_coordinator, true,
                     :is_ct, :ct_prog, :ct_sec, :ct_sem, :ct_shift)
                 RETURNING id
             """),
             {
                 "emp_code": emp_code, "name": name, "email": email,
                 "designation": designation, "shift": shift, "tch_norm": tch_norm,
-                "is_coordinator": is_coordinator,
+                "role": role, "is_coordinator": is_coordinator,
                 "is_ct": is_class_teacher, "ct_prog": ct_program,
                 "ct_sec": ct_section, "ct_sem": ct_semester, "ct_shift": ct_shift,
             },

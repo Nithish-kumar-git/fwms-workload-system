@@ -12,6 +12,8 @@ Provides:
 All read-only queries, no mutations.
 """
 
+from __future__ import annotations
+from typing import Optional
 from sqlalchemy import text
 from app.db.session import get_transaction
 import logging
@@ -20,8 +22,30 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-ACADEMIC_YEAR = "2025-2026"
-SEMESTER_TYPE = "EVEN"
+
+def _resolve_active_cycle(session) -> tuple[str, str]:
+    """
+    Resolve academic_year and semester_type from the active academic cycle.
+
+    Returns:
+        (academic_year, semester_type) from academic_cycle WHERE is_active = true
+
+    Raises:
+        RuntimeError: if no active academic cycle exists
+    """
+    row = session.execute(
+        text("""
+            SELECT academic_year, semester_type
+            FROM academic_cycle
+            WHERE is_active = true
+            LIMIT 1
+        """)
+    ).fetchone()
+
+    if not row:
+        raise RuntimeError("No active academic cycle found. Activate a cycle before generating reports.")
+
+    return row[0], row[1]
 
 
 # ============================================================================
@@ -29,15 +53,17 @@ SEMESTER_TYPE = "EVEN"
 # ============================================================================
 
 def get_faculty_workload(
-    academic_year: str = ACADEMIC_YEAR, semester_type: str = SEMESTER_TYPE
+    academic_year: Optional[str] = None, semester_type: Optional[str] = None
 ) -> dict:
     """Per-faculty workload report with assigned subjects."""
     with get_transaction() as session:
+        if academic_year is None or semester_type is None:
+            academic_year, semester_type = _resolve_active_cycle(session)
         # Get all faculty with their norms
         faculty_rows = session.execute(
             text("""
                 SELECT s.id, s.emp_code, s.name, s.designation,
-                       COALESCE(s.tch_norm, 16) AS tch_norm
+                       COALESCE(s.tch_norm, 40) AS tch_norm
                 FROM staff s
                 WHERE s.emp_code IS NOT NULL AND s.is_active = true
                 ORDER BY s.designation, s.name
@@ -97,13 +123,15 @@ def get_faculty_workload(
 # ============================================================================
 
 def get_subject_summary(
-    academic_year: str = ACADEMIC_YEAR, semester_type: str = SEMESTER_TYPE
+    academic_year: Optional[str] = None, semester_type: Optional[str] = None
 ) -> dict:
     """Per-subject-offering report showing assigned faculty."""
     with get_transaction() as session:
+        if academic_year is None or semester_type is None:
+            academic_year, semester_type = _resolve_active_cycle(session)
         rows = session.execute(
             text("""
-                SELECT sub.code, sub.name, p.name AS program,
+                SELECT so.id, sub.code, sub.name, p.name AS program,
                        sem.label AS semester, sec.label AS section,
                        s.name AS faculty_name, s.emp_code,
                        COALESCE(sub.tch, 0) AS tch,
@@ -123,10 +151,11 @@ def get_subject_summary(
 
     records = [
         {
-            "course_code": r[0], "course_name": r[1], "program": r[2],
-            "semester": r[3], "section": r[4],
-            "faculty_name": r[5], "faculty_emp_code": r[6],
-            "tch": r[7], "allocated": r[8],
+            "subject_offering_id": r[0],
+            "course_code": r[1], "course_name": r[2], "program": r[3],
+            "semester": r[4], "section": r[5],
+            "faculty_name": r[6], "faculty_emp_code": r[7],
+            "tch": r[8], "allocated": r[9],
         }
         for r in rows
     ]
@@ -138,10 +167,12 @@ def get_subject_summary(
 # ============================================================================
 
 def get_department_summary(
-    academic_year: str = ACADEMIC_YEAR, semester_type: str = SEMESTER_TYPE
+    academic_year: Optional[str] = None, semester_type: Optional[str] = None
 ) -> dict:
     """Aggregate department statistics."""
     with get_transaction() as session:
+        if academic_year is None or semester_type is None:
+            academic_year, semester_type = _resolve_active_cycle(session)
         total_offerings = session.execute(
             text("""
                 SELECT count(*) FROM subject_offering
@@ -212,9 +243,21 @@ def get_department_summary(
 # ============================================================================
 
 def generate_excel_report(
-    academic_year: str = ACADEMIC_YEAR, semester_type: str = SEMESTER_TYPE
+    academic_year: Optional[str] = None, semester_type: Optional[str] = None
 ) -> bytes:
-    """Generate Excel workbook with 3 sheets. Returns bytes."""
+    """Generate Excel workbook with 3 sheets. Returns bytes. Never raises."""
+    # Resolve active cycle if not provided — graceful fallback
+    no_cycle = False
+    if academic_year is None or semester_type is None:
+        try:
+            with get_transaction() as session:
+                academic_year, semester_type = _resolve_active_cycle(session)
+        except Exception as e:
+            logger.warning(f"No active academic cycle: {e}")
+            academic_year = "N/A"
+            semester_type = "N/A"
+            no_cycle = True
+
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -231,6 +274,7 @@ def generate_excel_report(
         left=Side(style="thin"), right=Side(style="thin"),
         top=Side(style="thin"), bottom=Side(style="thin"),
     )
+    warn_font = Font(bold=True, size=11, color="CC0000")
 
     def style_header(ws, row=1):
         for cell in ws[row]:
@@ -242,93 +286,125 @@ def generate_excel_report(
     data_font = Font(size=10)
     data_align = Alignment(vertical="center", wrap_text=True)
 
-    def style_data(ws):
-        for row in ws.iter_rows(min_row=2):
+    def style_data(ws, start_row=2):
+        for row in ws.iter_rows(min_row=start_row):
             for cell in row:
                 cell.font = data_font
                 cell.alignment = data_align
                 cell.border = thin_border
 
+    def auto_size_columns(ws):
+        for col in ws.columns:
+            max_len = max((len(str(c.value or "")) for c in col), default=0)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 40)
+
+    def add_note_row(ws):
+        """Insert a warning row if no active cycle was found."""
+        if no_cycle:
+            ws.append(["No active academic cycle found — showing empty report"])
+            ws.cell(row=ws.max_row, column=1).font = warn_font
+
+    # ---- Fetch data (safe — empty dicts if query fails) ----
+    try:
+        faculty_data = get_faculty_workload(academic_year, semester_type)
+    except Exception as e:
+        logger.warning(f"Faculty workload query failed: {e}")
+        faculty_data = {"total_faculty": 0, "records": []}
+
+    try:
+        subj_data = get_subject_summary(academic_year, semester_type)
+    except Exception as e:
+        logger.warning(f"Subject summary query failed: {e}")
+        subj_data = {"total": 0, "records": []}
+
+
+    # Row offset: if no_cycle, row 1 = warning, row 2 = header
+    header_row = 2 if no_cycle else 1
+    data_start = header_row + 1
+
     # ---- Sheet 1: Faculty Workload ----
     ws1 = wb.active
     ws1.title = "Faculty Workload"
-    ws1.append(["Emp Code", "Name", "Designation", "TCH Norm",
-                "Assigned TCH", "Deviation", "Course Code", "Course Name",
-                "Program", "Semester", "Section", "L", "T", "P", "TCH"])
-    style_header(ws1)
+    add_note_row(ws1)
+    ws1.append([
+        "Emp Code", "Name", "Designation", "TCH Norm",
+        "Assigned TCH", "Deviation", "Course Code", "Course Name",
+        "Program", "Semester", "Section", "L", "T", "P", "TCH",
+    ])
+    style_header(ws1, row=header_row)
 
-    faculty_data = get_faculty_workload(academic_year, semester_type)
-    for fac in faculty_data["records"]:
-        if fac["subjects_assigned"]:
-            for i, subj in enumerate(fac["subjects_assigned"]):
-                row = [
-                    fac["emp_code"] if i == 0 else "",
-                    fac["name"] if i == 0 else "",
-                    fac["designation"] if i == 0 else "",
-                    fac["tch_norm"] if i == 0 else "",
-                    fac["assigned_tch"] if i == 0 else "",
-                    fac["deviation_hours"] if i == 0 else "",
-                    subj["course_code"], subj["course_name"],
-                    subj["program"], subj["semester"], subj["section"],
-                    subj["l"], subj["t"], subj["p"], subj["tch"],
-                ]
-                ws1.append(row)
-        else:
-            ws1.append([
-                fac["emp_code"], fac["name"], fac["designation"],
-                fac["tch_norm"], 0, -fac["tch_norm"],
-                "", "", "", "", "", "", "", "", "",
-            ])
+    if faculty_data["records"]:
+        for fac in faculty_data["records"]:
+            if fac["subjects_assigned"]:
+                for i, subj in enumerate(fac["subjects_assigned"]):
+                    ws1.append([
+                        fac["emp_code"] if i == 0 else "",
+                        fac["name"] if i == 0 else "",
+                        fac["designation"] if i == 0 else "",
+                        fac["tch_norm"] if i == 0 else "",
+                        fac["assigned_tch"] if i == 0 else "",
+                        fac["deviation_hours"] if i == 0 else "",
+                        subj["course_code"], subj["course_name"],
+                        subj["program"], subj["semester"], subj["section"],
+                        subj["l"], subj["t"], subj["p"], subj["tch"],
+                    ])
+            else:
+                ws1.append([
+                    fac["emp_code"], fac["name"], fac["designation"],
+                    fac["tch_norm"], 0, -fac["tch_norm"],
+                    "", "", "", "", "", "", "", "", "",
+                ])
 
-    for col in ws1.columns:
-        max_len = max(len(str(c.value or "")) for c in col)
-        ws1.column_dimensions[col[0].column_letter].width = min(max_len + 3, 40)
-    style_data(ws1)
+    auto_size_columns(ws1)
+    style_data(ws1, start_row=data_start)
 
     # ---- Sheet 2: Subject Summary ----
     ws2 = wb.create_sheet("Subject Summary")
-    ws2.append(["Course Code", "Course Name", "Program", "Semester",
-                "Section", "Faculty", "Emp Code", "TCH", "Allocated"])
-    style_header(ws2)
+    add_note_row(ws2)
+    ws2.append([
+        "Course Code", "Course Name", "Program", "Semester",
+        "Section", "Faculty", "Emp Code", "TCH", "Allocated",
+    ])
+    style_header(ws2, row=header_row)
 
-    subj_data = get_subject_summary(academic_year, semester_type)
-    for rec in subj_data["records"]:
-        ws2.append([
-            rec["course_code"], rec["course_name"], rec["program"],
-            rec["semester"], rec["section"],
-            rec["faculty_name"] or "UNASSIGNED",
-            rec["faculty_emp_code"] or "",
-            rec["tch"], "Yes" if rec["allocated"] else "No",
-        ])
+    if subj_data["records"]:
+        for rec in subj_data["records"]:
+            ws2.append([
+                rec["course_code"], rec["course_name"], rec["program"],
+                rec["semester"], rec["section"],
+                rec["faculty_name"] or "UNASSIGNED",
+                rec["faculty_emp_code"] or "",
+                rec["tch"], "Yes" if rec["allocated"] else "No",
+            ])
 
-    for col in ws2.columns:
-        max_len = max(len(str(c.value or "")) for c in col)
-        ws2.column_dimensions[col[0].column_letter].width = min(max_len + 3, 40)
-    style_data(ws2)
+    auto_size_columns(ws2)
+    style_data(ws2, start_row=data_start)
 
     # ---- Sheet 3: Workload Summary ----
     ws3 = wb.create_sheet("Workload Summary")
-    ws3.append(["Emp Code", "Name", "Designation", "TCH Norm",
-                "TCH Assigned", "Deviation", "Status"])
-    style_header(ws3)
+    add_note_row(ws3)
+    ws3.append([
+        "Emp Code", "Name", "Designation", "TCH Norm",
+        "TCH Assigned", "Deviation", "Status",
+    ])
+    style_header(ws3, row=header_row)
 
-    for fac in faculty_data["records"]:
-        deviation = fac["deviation_hours"]
-        if deviation > 0:
-            status = "OVERLOADED"
-        elif deviation < -2:
-            status = "UNDERLOADED"
-        else:
-            status = "BALANCED"
-        ws3.append([
-            fac["emp_code"], fac["name"], fac["designation"],
-            fac["tch_norm"], fac["assigned_tch"], deviation, status,
-        ])
+    if faculty_data["records"]:
+        for fac in faculty_data["records"]:
+            deviation = fac["deviation_hours"]
+            if deviation > 0:
+                status = "OVERLOADED"
+            elif deviation < -2:
+                status = "UNDERLOADED"
+            else:
+                status = "BALANCED"
+            ws3.append([
+                fac["emp_code"], fac["name"], fac["designation"],
+                fac["tch_norm"], fac["assigned_tch"], deviation, status,
+            ])
 
-    for col in ws3.columns:
-        max_len = max(len(str(c.value or "")) for c in col)
-        ws3.column_dimensions[col[0].column_letter].width = min(max_len + 3, 40)
-    style_data(ws3)
+    auto_size_columns(ws3)
+    style_data(ws3, start_row=data_start)
 
     # Save to bytes
     output = io.BytesIO()
@@ -342,12 +418,18 @@ def generate_excel_report(
 # ============================================================================
 
 def generate_pdf_report(
-    academic_year: str = ACADEMIC_YEAR, semester_type: str = SEMESTER_TYPE
+    academic_year: Optional[str] = None, semester_type: Optional[str] = None
 ) -> bytes:
     """
     Generate a simple PDF report.
     Uses reportlab if available, otherwise falls back to plain text.
     """
+    if academic_year is None or semester_type is None:
+        with get_transaction() as session:
+            academic_year, semester_type = _resolve_active_cycle(session)
+
+    assert academic_year is not None and semester_type is not None
+
     try:
         from reportlab.lib.pagesizes import A4, landscape
         from reportlab.lib import colors

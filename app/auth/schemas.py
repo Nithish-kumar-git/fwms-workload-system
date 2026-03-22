@@ -1,6 +1,6 @@
 """
 Authentication schemas (request/response models).
-Spec reference: FSB_v1.3.md Section 1, BACKEND_STRUCTURE.md Section 3.1
+3-Role System: faculty / tt_coordinator / hod
 """
 
 from pydantic import BaseModel, EmailStr
@@ -23,8 +23,7 @@ class StaffInfoResponse(BaseModel):
     staff_id: int
     email: EmailStr
     name: str
-    is_coordinator: bool
-    role: str = "faculty"  # coordinator / hod / faculty
+    role: str  # 'faculty' | 'tt_coordinator' | 'hod'
 
 
 class LogoutResponse(BaseModel):

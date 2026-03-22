@@ -42,12 +42,12 @@ BEGIN
     IF v_window_id IS NULL THEN
         INSERT INTO selection_window
             (name, batch_id, specialization_id, start_time, end_time,
-             status, max_subjects_per_staff, academic_year, semester_type,
-             semester_number, allocation_locked)
+             status, max_subjects_per_staff, academic_cycle_id,
+             allocation_locked)
         VALUES (
             'Demo Window', 1, 1,
             NOW(), NOW() + INTERVAL '7 days',
-            'OPEN', 5, '2025-2026', 'EVEN', 1, false
+            'OPEN', 5, v_cycle_id, false
         )
         RETURNING id INTO v_window_id;
         RAISE NOTICE 'Step 3: window opened id=%', v_window_id;

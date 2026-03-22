@@ -1,8 +1,8 @@
 """
 Admin service for allocation review, override, reassignment, and freeze.
-Spec reference: final_system_specification.md (Admin Override System)
+PHASE 3: Enhanced HOD control with strict state validation and workload management.
 
-All operations are coordinator-only and logged to audit_log.
+All operations are coordinator/HOD-only and logged to audit_log.
 All SQL uses parameterized queries.
 """
 
@@ -11,6 +11,9 @@ from app.db.session import get_transaction
 import logging
 
 logger = logging.getLogger(__name__)
+
+# PHASE 3: Maximum overload allowed (20% above norm)
+MAX_OVERLOAD_PERCENT = 0.20
 
 
 def _is_shift_compatible(staff_shift: str, offering_shift: int) -> bool:
@@ -79,22 +82,57 @@ def list_allocations(academic_year: str = "2025-2026", semester_type: str = "EVE
 def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) -> dict:
     """
     Override an allocation: change the assigned staff.
-    Validates shift compatibility, workload capacity, and multi-section.
+    
+    PHASE 3 Enhancements:
+    - Validates semester state (must be ALLOCATED, not FROZEN)
+    - Respects 20% overload limit
+    - Updates workload_summary immediately
+    - Logs detailed before/after state
+    
+    Validates shift compatibility, workload capacity (≤ 20% overload), and multi-section.
     """
     with get_transaction() as session:
-        # Check frozen
-        if _is_allocation_locked(session):
-            return {"success": False, "message": "Allocation is frozen. Unfreeze before making changes."}
+        # PHASE 3: Check semester state - must be ALLOCATED, not FROZEN
+        alloc_semester_state = session.execute(
+            text("""
+                SELECT sem.id, sem.state
+                FROM allocation a
+                JOIN subject_offering so ON so.id = a.subject_offering_id
+                JOIN semester sem ON sem.id = so.semester_id
+                WHERE a.id = :aid
+            """),
+            {"aid": allocation_id}
+        ).fetchone()
         
-        # Load existing allocation
+        if not alloc_semester_state:
+            return {"success": False, "message": "Allocation not found"}
+        
+        semester_id, semester_state = alloc_semester_state
+        
+        if semester_state == "FROZEN":
+            return {
+                "success": False,
+                "message": "Cannot override allocation: Semester is FROZEN (finalized by HOD)"
+            }
+        
+        if semester_state != "ALLOCATED":
+            return {
+                "success": False,
+                "message": f"Cannot override allocation: Semester must be ALLOCATED (currently {semester_state})"
+            }
+        
+        # Load existing allocation with full details
         alloc = session.execute(
             text("""
-                SELECT a.id, a.staff_id, a.subject_offering_id,
-                       so.shift, sub.code, sub.tch,
-                       sub.l, sub.t, sub.p
+                SELECT a.id, a.staff_id, a.subject_offering_id, a.academic_cycle_id,
+                       so.shift, so.academic_year, so.semester_type,
+                       sub.code, sub.name, sub.tch,
+                       sub.l, sub.t, sub.p,
+                       old_staff.name AS old_staff_name, old_staff.emp_code AS old_emp_code
                 FROM allocation a
                 JOIN subject_offering so ON so.id = a.subject_offering_id
                 JOIN subject sub ON sub.id = so.subject_id
+                JOIN staff old_staff ON old_staff.id = a.staff_id
                 WHERE a.id = :aid
             """),
             {"aid": allocation_id}
@@ -105,17 +143,23 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
         
         old_staff_id = alloc[1]
         offering_id = alloc[2]
-        offering_shift = alloc[3]
-        course_code = alloc[4]
-        offer_tch = alloc[5] or 0
+        cycle_id = alloc[3]
+        offering_shift = alloc[4]
+        academic_year = alloc[5]
+        semester_type = alloc[6]
+        course_code = alloc[7]
+        course_name = alloc[8]
+        offer_tch = alloc[9] or 0
+        old_staff_name = alloc[12]
+        old_emp_code = alloc[13]
         
         if old_staff_id == new_staff_id:
             return {"success": False, "message": "New staff is the same as current staff"}
         
-        # Load new staff
+        # Load new staff with full details
         new_staff = session.execute(
             text("""
-                SELECT id, shift, COALESCE(tch_norm, 16) AS tch_norm
+                SELECT id, name, emp_code, shift, COALESCE(tch_norm, 40) AS tch_norm
                 FROM staff WHERE id = :sid AND is_active = true
             """),
             {"sid": new_staff_id}
@@ -124,26 +168,39 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
         if new_staff is None:
             return {"success": False, "message": "New staff not found or inactive"}
         
-        # VALIDATE: Shift compatibility
-        if not _is_shift_compatible(new_staff[1], offering_shift):
-            return {"success": False, "message": "Shift incompatible"}
+        new_staff_name = new_staff[1]
+        new_emp_code = new_staff[2]
+        new_staff_shift = new_staff[3]
+        new_staff_norm = new_staff[4]
         
-        # VALIDATE: Workload capacity
+        # VALIDATE: Shift compatibility
+        if not _is_shift_compatible(new_staff_shift, offering_shift):
+            return {"success": False, "message": "Shift incompatible: Faculty shift does not match subject offering shift"}
+        
+        # VALIDATE: Workload capacity with 20% overload limit
         current_tch = session.execute(
             text("""
                 SELECT COALESCE(SUM(sub.tch), 0)
                 FROM allocation a
                 JOIN subject_offering so ON so.id = a.subject_offering_id
                 JOIN subject sub ON sub.id = so.subject_id
-                WHERE a.staff_id = :sid
+                WHERE a.staff_id = :sid AND a.academic_cycle_id = :cid
             """),
-            {"sid": new_staff_id}
+            {"sid": new_staff_id, "cid": cycle_id}
         ).scalar()
         
-        if current_tch + offer_tch > new_staff[2]:
+        max_allowed = new_staff_norm * (1.0 + MAX_OVERLOAD_PERCENT)
+        new_total = current_tch + offer_tch
+        
+        if new_total > max_allowed:
+            overload_pct = ((new_total - new_staff_norm) / new_staff_norm) * 100
             return {
                 "success": False,
-                "message": f"Would exceed workload norm ({current_tch} + {offer_tch} > {new_staff[2]})"
+                "message": (
+                    f"Would exceed 20% overload limit: "
+                    f"{new_total} TCH > {max_allowed} TCH (norm: {new_staff_norm}, "
+                    f"would be {overload_pct:.1f}% overloaded)"
+                )
             }
         
         # VALIDATE: Multi-section constraint
@@ -152,13 +209,14 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
                 SELECT count(*) FROM allocation a
                 JOIN subject_offering so ON so.id = a.subject_offering_id
                 JOIN subject sub ON sub.id = so.subject_id
-                WHERE a.staff_id = :sid AND sub.code = :code AND a.id != :aid
+                WHERE a.staff_id = :sid AND sub.code = :code 
+                  AND a.id != :aid AND a.academic_cycle_id = :cid
             """),
-            {"sid": new_staff_id, "code": course_code, "aid": allocation_id}
+            {"sid": new_staff_id, "code": course_code, "aid": allocation_id, "cid": cycle_id}
         ).scalar()
         
         if has_same_course > 0:
-            return {"success": False, "message": "Faculty already teaches this course in another section"}
+            return {"success": False, "message": f"Faculty already teaches {course_code} in another section"}
         
         # Perform override
         session.execute(
@@ -166,7 +224,11 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
             {"new_sid": new_staff_id, "aid": allocation_id}
         )
         
-        # Audit log
+        # PHASE 3: Update workload_summary for both faculty immediately
+        _refresh_workload_summary_for_cycle(session, old_staff_id, cycle_id, academic_year, semester_type)
+        _refresh_workload_summary_for_cycle(session, new_staff_id, cycle_id, academic_year, semester_type)
+        
+        # PHASE 3: Enhanced audit log with before/after details
         session.execute(
             text("""
                 INSERT INTO audit_log (actor_staff_id, action_type, details)
@@ -176,9 +238,17 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
                 "actor": actor_id,
                 "details": (
                     f'{{"allocation_id": {allocation_id}, '
+                    f'"subject_offering_id": {offering_id}, '
+                    f'"subject_code": "{course_code}", '
+                    f'"subject_name": "{course_name}", '
+                    f'"tch": {offer_tch}, '
                     f'"old_staff_id": {old_staff_id}, '
+                    f'"old_staff_name": "{old_staff_name}", '
+                    f'"old_emp_code": "{old_emp_code}", '
                     f'"new_staff_id": {new_staff_id}, '
-                    f'"subject_offering_id": {offering_id}}}'
+                    f'"new_staff_name": "{new_staff_name}", '
+                    f'"new_emp_code": "{new_emp_code}", '
+                    f'"semester_id": {semester_id}}}'
                 )
             }
         )
@@ -186,16 +256,20 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
         session.commit()
         
         logger.info(
-            f"Override: allocation {allocation_id} "
-            f"reassigned {old_staff_id} → {new_staff_id}"
+            f"Override: allocation {allocation_id} ({course_code}) "
+            f"reassigned {old_staff_name} → {new_staff_name} by actor {actor_id}"
         )
     
     return {
         "success": True,
-        "message": "Allocation overridden successfully",
+        "message": f"Successfully reassigned {course_code} from {old_staff_name} to {new_staff_name}",
         "allocation_id": allocation_id,
         "old_staff_id": old_staff_id,
+        "old_staff_name": old_staff_name,
         "new_staff_id": new_staff_id,
+        "new_staff_name": new_staff_name,
+        "subject_code": course_code,
+        "tch": offer_tch,
     }
 
 
@@ -209,20 +283,55 @@ def reassign_subject(
 ) -> dict:
     """
     Move a subject offering from one faculty to another.
-    Deletes old allocation, creates new one, updates workload_summary.
+    
+    PHASE 3 Enhancements:
+    - Validates semester state (must be ALLOCATED, not FROZEN)
+    - Respects 20% overload limit
+    - Updates workload_summary immediately for both faculty
+    - Logs detailed before/after state
+    
+    Deletes old allocation, creates new one, updates workload_summary atomically.
     """
     with get_transaction() as session:
-        # Check frozen
-        if _is_allocation_locked(session):
-            return {"success": False, "message": "Allocation is frozen."}
+        # PHASE 3: Check semester state - must be ALLOCATED, not FROZEN
+        offering_semester_state = session.execute(
+            text("""
+                SELECT sem.id, sem.state
+                FROM subject_offering so
+                JOIN semester sem ON sem.id = so.semester_id
+                WHERE so.id = :oid
+            """),
+            {"oid": subject_offering_id}
+        ).fetchone()
         
-        # Find existing allocation
+        if not offering_semester_state:
+            return {"success": False, "message": "Subject offering not found"}
+        
+        semester_id, semester_state = offering_semester_state
+        
+        if semester_state == "FROZEN":
+            return {
+                "success": False,
+                "message": "Cannot reassign subject: Semester is FROZEN (finalized by HOD)"
+            }
+        
+        if semester_state != "ALLOCATED":
+            return {
+                "success": False,
+                "message": f"Cannot reassign subject: Semester must be ALLOCATED (currently {semester_state})"
+            }
+        
+        # Find existing allocation with full details
         alloc = session.execute(
             text("""
-                SELECT a.id, so.shift, sub.code, sub.tch, sub.l, sub.t, sub.p
+                SELECT a.id, a.academic_cycle_id,
+                       so.shift, so.academic_year, so.semester_type,
+                       sub.code, sub.name, sub.tch, sub.l, sub.t, sub.p,
+                       from_staff.name AS from_staff_name, from_staff.emp_code AS from_emp_code
                 FROM allocation a
                 JOIN subject_offering so ON so.id = a.subject_offering_id
                 JOIN subject sub ON sub.id = so.subject_id
+                JOIN staff from_staff ON from_staff.id = a.staff_id
                 WHERE a.staff_id = :from_sid AND a.subject_offering_id = :oid
             """),
             {"from_sid": from_staff_id, "oid": subject_offering_id}
@@ -235,15 +344,21 @@ def reassign_subject(
             }
         
         alloc_id = alloc[0]
-        offering_shift = alloc[1]
-        course_code = alloc[2]
-        offer_tch = alloc[3] or 0
-        l_val, t_val, p_val = alloc[4] or 0, alloc[5] or 0, alloc[6] or 0
+        cycle_id = alloc[1]
+        offering_shift = alloc[2]
+        academic_year = alloc[3]
+        semester_type = alloc[4]
+        course_code = alloc[5]
+        course_name = alloc[6]
+        offer_tch = alloc[7] or 0
+        l_val, t_val, p_val = alloc[8] or 0, alloc[9] or 0, alloc[10] or 0
+        from_staff_name = alloc[11]
+        from_emp_code = alloc[12]
         
-        # Load target staff
+        # Load target staff with full details
         to_staff = session.execute(
             text("""
-                SELECT id, shift, COALESCE(tch_norm, 16) AS tch_norm
+                SELECT id, name, emp_code, shift, COALESCE(tch_norm, 40) AS tch_norm
                 FROM staff WHERE id = :sid AND is_active = true
             """),
             {"sid": to_staff_id}
@@ -252,26 +367,39 @@ def reassign_subject(
         if to_staff is None:
             return {"success": False, "message": "Target staff not found or inactive"}
         
-        # VALIDATE: Shift compatibility
-        if not _is_shift_compatible(to_staff[1], offering_shift):
-            return {"success": False, "message": "Shift incompatible"}
+        to_staff_name = to_staff[1]
+        to_emp_code = to_staff[2]
+        to_staff_shift = to_staff[3]
+        to_staff_norm = to_staff[4]
         
-        # VALIDATE: Workload capacity
+        # VALIDATE: Shift compatibility
+        if not _is_shift_compatible(to_staff_shift, offering_shift):
+            return {"success": False, "message": "Shift incompatible: Faculty shift does not match subject offering shift"}
+        
+        # VALIDATE: Workload capacity with 20% overload limit
         current_tch = session.execute(
             text("""
                 SELECT COALESCE(SUM(sub.tch), 0)
                 FROM allocation a
                 JOIN subject_offering so ON so.id = a.subject_offering_id
                 JOIN subject sub ON sub.id = so.subject_id
-                WHERE a.staff_id = :sid
+                WHERE a.staff_id = :sid AND a.academic_cycle_id = :cid
             """),
-            {"sid": to_staff_id}
+            {"sid": to_staff_id, "cid": cycle_id}
         ).scalar()
         
-        if current_tch + offer_tch > to_staff[2]:
+        max_allowed = to_staff_norm * (1.0 + MAX_OVERLOAD_PERCENT)
+        new_total = current_tch + offer_tch
+        
+        if new_total > max_allowed:
+            overload_pct = ((new_total - to_staff_norm) / to_staff_norm) * 100
             return {
                 "success": False,
-                "message": f"Would exceed workload norm ({current_tch} + {offer_tch} > {to_staff[2]})"
+                "message": (
+                    f"Would exceed 20% overload limit: "
+                    f"{new_total} TCH > {max_allowed} TCH (norm: {to_staff_norm}, "
+                    f"would be {overload_pct:.1f}% overloaded)"
+                )
             }
         
         # VALIDATE: Multi-section
@@ -280,13 +408,13 @@ def reassign_subject(
                 SELECT count(*) FROM allocation a
                 JOIN subject_offering so ON so.id = a.subject_offering_id
                 JOIN subject sub ON sub.id = so.subject_id
-                WHERE a.staff_id = :sid AND sub.code = :code
+                WHERE a.staff_id = :sid AND sub.code = :code AND a.academic_cycle_id = :cid
             """),
-            {"sid": to_staff_id, "code": course_code}
+            {"sid": to_staff_id, "code": course_code, "cid": cycle_id}
         ).scalar()
         
         if has_same > 0:
-            return {"success": False, "message": "Target faculty already teaches this course"}
+            return {"success": False, "message": f"Target faculty already teaches {course_code} in another section"}
         
         # Delete old allocation
         session.execute(
@@ -298,19 +426,19 @@ def reassign_subject(
         new_alloc = session.execute(
             text("""
                 INSERT INTO allocation 
-                    (staff_id, subject_offering_id, l_assigned, t_assigned, p_assigned)
-                VALUES (:sid, :oid, :l, :t, :p)
+                    (staff_id, subject_offering_id, l_assigned, t_assigned, p_assigned, academic_cycle_id)
+                VALUES (:sid, :oid, :l, :t, :p, :cid)
                 RETURNING id
             """),
-            {"sid": to_staff_id, "oid": subject_offering_id, "l": l_val, "t": t_val, "p": p_val}
+            {"sid": to_staff_id, "oid": subject_offering_id, "l": l_val, "t": t_val, "p": p_val, "cid": cycle_id}
         )
         new_alloc_id = new_alloc.scalar()
         
-        # Update workload_summary for both faculty
-        _refresh_workload_summary(session, from_staff_id)
-        _refresh_workload_summary(session, to_staff_id)
+        # PHASE 3: Update workload_summary for both faculty immediately
+        _refresh_workload_summary_for_cycle(session, from_staff_id, cycle_id, academic_year, semester_type)
+        _refresh_workload_summary_for_cycle(session, to_staff_id, cycle_id, academic_year, semester_type)
         
-        # Audit log
+        # PHASE 3: Enhanced audit log with before/after details
         session.execute(
             text("""
                 INSERT INTO audit_log (actor_staff_id, action_type, details)
@@ -320,9 +448,17 @@ def reassign_subject(
                 "actor": actor_id,
                 "details": (
                     f'{{"subject_offering_id": {subject_offering_id}, '
+                    f'"subject_code": "{course_code}", '
+                    f'"subject_name": "{course_name}", '
+                    f'"tch": {offer_tch}, '
                     f'"from_staff_id": {from_staff_id}, '
+                    f'"from_staff_name": "{from_staff_name}", '
+                    f'"from_emp_code": "{from_emp_code}", '
                     f'"to_staff_id": {to_staff_id}, '
-                    f'"new_allocation_id": {new_alloc_id}}}'
+                    f'"to_staff_name": "{to_staff_name}", '
+                    f'"to_emp_code": "{to_emp_code}", '
+                    f'"new_allocation_id": {new_alloc_id}, '
+                    f'"semester_id": {semester_id}}}'
                 )
             }
         )
@@ -330,14 +466,19 @@ def reassign_subject(
         session.commit()
         
         logger.info(
-            f"Reassign: offering {subject_offering_id} "
-            f"moved {from_staff_id} → {to_staff_id}"
+            f"Reassign: {course_code} moved from {from_staff_name} → {to_staff_name} by actor {actor_id}"
         )
     
     return {
         "success": True,
-        "message": "Subject reassigned successfully",
+        "message": f"Successfully reassigned {course_code} from {from_staff_name} to {to_staff_name}",
         "allocation_id": new_alloc_id,
+        "from_staff_id": from_staff_id,
+        "from_staff_name": from_staff_name,
+        "to_staff_id": to_staff_id,
+        "to_staff_name": to_staff_name,
+        "subject_code": course_code,
+        "tch": offer_tch,
     }
 
 
@@ -388,11 +529,27 @@ def unfreeze_allocation(actor_id: int) -> dict:
 
 
 def _is_allocation_locked(session) -> bool:
-    """Check if any selection window has allocation_locked = true."""
-    result = session.execute(
+    """
+    Check if allocation is locked.
+    
+    PHASE 2: Checks both:
+    - Legacy: selection_window.allocation_locked = true
+    - New: Any semester in FROZEN state
+    """
+    # Check legacy selection window lock
+    legacy_locked = session.execute(
         text("SELECT count(*) FROM selection_window WHERE allocation_locked = true")
     ).scalar()
-    return result > 0
+    
+    if legacy_locked > 0:
+        return True
+    
+    # PHASE 2: Check if any semester is FROZEN
+    frozen_count = session.execute(
+        text("SELECT count(*) FROM semester WHERE state = 'FROZEN'")
+    ).scalar()
+    
+    return frozen_count > 0
 
 
 # ============================================================================
@@ -400,16 +557,32 @@ def _is_allocation_locked(session) -> bool:
 # ============================================================================
 
 def get_workload_summary(
-    academic_year: str = "2025-2026", semester_type: str = "EVEN"
+    academic_year: str | None = None, semester_type: str | None = None
 ) -> dict:
     """
     Get workload summary for all faculty with allocations.
+    If academic_year and semester_type not provided, uses active cycle.
     """
+    # Resolve from active cycle if not provided
+    if academic_year is None or semester_type is None:
+        from app.admin.cycle_service import get_active_cycle
+        active_cycle = get_active_cycle()
+        if active_cycle is None:
+            return {
+                "total_faculty": 0,
+                "overloaded": 0,
+                "underloaded": 0,
+                "balanced": 0,
+                "records": [],
+            }
+        academic_year = active_cycle["academic_year"]
+        semester_type = active_cycle["semester_type"]
+    
     with get_transaction() as session:
         rows = session.execute(
             text("""
                 SELECT s.id, s.emp_code, s.name, s.designation,
-                       COALESCE(s.tch_norm, 16) AS tch_norm,
+                       COALESCE(s.tch_norm, 40) AS tch_norm,
                        COALESCE(ws.tch_total, 0) AS tch_assigned,
                        COALESCE(ws.deviation_hours, 0) AS deviation,
                        COALESCE(ws.total_workload, 0) AS total_workload
@@ -460,52 +633,60 @@ def get_workload_summary(
 
 
 # ============================================================================
-# Helper: Refresh workload_summary for a single faculty member
+# Helper: Refresh workload_summary for a single faculty member (cycle-aware)
 # ============================================================================
 
-def _refresh_workload_summary(
-    session, staff_id: int,
-    academic_year: str = "2025-2026", semester_type: str = "EVEN"
+def _refresh_workload_summary_for_cycle(
+    session, staff_id: int, cycle_id: int,
+    academic_year: str, semester_type: str
 ):
-    """Recalculate and upsert workload_summary for one faculty member."""
+    """
+    Recalculate and upsert workload_summary for one faculty member.
+    
+    PHASE 3: Cycle-aware - computes workload from ALL allocations in the cycle.
+    This ensures workload reflects all allocated semesters, not just one.
+    """
+    # Compute total TCH from ALL allocations in this cycle
     tch_total = session.execute(
         text("""
             SELECT COALESCE(SUM(sub.tch), 0)
             FROM allocation a
             JOIN subject_offering so ON so.id = a.subject_offering_id
             JOIN subject sub ON sub.id = so.subject_id
-            WHERE a.staff_id = :sid
-              AND so.academic_year = :year
-              AND so.semester_type = :sem_type
+            WHERE a.staff_id = :sid AND a.academic_cycle_id = :cid
         """),
-        {"sid": staff_id, "year": academic_year, "sem_type": semester_type}
+        {"sid": staff_id, "cid": cycle_id}
     ).scalar()
     
     tch_norm = session.execute(
-        text("SELECT COALESCE(tch_norm, 16) FROM staff WHERE id = :sid"),
+        text("SELECT COALESCE(tch_norm, 40) FROM staff WHERE id = :sid"),
         {"sid": staff_id}
     ).scalar()
     
     deviation = tch_total - tch_norm
     
+    # UPSERT workload_summary
     session.execute(
         text("""
             INSERT INTO workload_summary 
                 (staff_id, academic_year, semester_type, tch_total,
-                 norm_hours, deviation_hours, total_workload)
+                 norm_hours, deviation_hours, total_workload, academic_cycle_id)
             VALUES (:sid, :year, :sem_type, :tch_total,
-                    :norm, :deviation, :tch_total)
+                    :norm, :deviation, :tch_total, :cid)
             ON CONFLICT (staff_id, academic_year, semester_type)
             DO UPDATE SET 
                 tch_total = EXCLUDED.tch_total,
                 norm_hours = EXCLUDED.norm_hours,
                 deviation_hours = EXCLUDED.deviation_hours,
                 total_workload = EXCLUDED.total_workload,
+                academic_cycle_id = EXCLUDED.academic_cycle_id,
                 updated_at = now()
         """),
         {
             "sid": staff_id, "year": academic_year,
             "sem_type": semester_type, "tch_total": tch_total,
-            "norm": tch_norm, "deviation": deviation,
+            "norm": tch_norm, "deviation": deviation, "cid": cycle_id,
         }
     )
+    
+    logger.debug(f"Refreshed workload for staff {staff_id}: {tch_total} TCH (norm: {tch_norm}, deviation: {deviation})")

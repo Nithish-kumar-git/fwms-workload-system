@@ -1,21 +1,60 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, BookOpen, Settings, FileText, LogOut, Clock, CalendarDays, Users } from 'lucide-react';
+import {
+    LayoutDashboard, BookOpen, Settings, FileText, LogOut,
+    Clock, CalendarDays, Users, Shield, Upload, CheckCircle,
+} from 'lucide-react';
 import { logout } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
-const navItems = [
+const hodItems = [
+    { path: '/hod-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/hod/staff', label: 'Staff Management', icon: Users },
+    { path: '/hod/curriculum', label: 'Curriculum Upload', icon: Upload },
+    { path: '/hod/approval', label: 'Final Approval', icon: CheckCircle },
+    { path: '/admin/reports', label: 'Reports', icon: FileText },
+];
+
+const coordinatorItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/preferences', label: 'Preferences', icon: BookOpen },
     { path: '/admin/window', label: 'Window', icon: Clock },
     { path: '/admin/cycles', label: 'Cycles', icon: CalendarDays },
-    { path: '/admin/staff', label: 'Staff', icon: Users },
     { path: '/admin/allocation', label: 'Allocation', icon: Settings },
     { path: '/admin/review', label: 'Review', icon: FileText },
     { path: '/admin/reports', label: 'Reports', icon: FileText },
 ];
 
+const facultyItems = [
+    { path: '/faculty-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/preferences', label: 'Preferences', icon: BookOpen },
+];
+
+function getNavItems(role: string) {
+    switch (role) {
+        case 'hod': return hodItems;
+        case 'tt_coordinator': return coordinatorItems;
+        default: return facultyItems;
+    }
+}
+
+function getRoleBadge(role: string) {
+    switch (role) {
+        case 'hod':
+            return { label: 'HOD', bg: 'bg-purple-50', text: 'text-purple-600', icon: Shield };
+        case 'tt_coordinator':
+            return { label: 'Coordinator', bg: 'bg-blue-50', text: 'text-blue-600', icon: Settings };
+        default:
+            return { label: 'Faculty', bg: 'bg-green-50', text: 'text-green-600', icon: BookOpen };
+    }
+}
+
 export default function Navbar() {
     const location = useLocation();
     const navigate = useNavigate();
+    const { user } = useAuth();
+
+    const role = user?.role ?? 'faculty';
+    const navItems = getNavItems(role);
+    const badge = getRoleBadge(role);
 
     const handleLogout = async () => {
         try {
@@ -31,7 +70,7 @@ export default function Navbar() {
         <div className="px-6 pt-4 pb-2 sticky top-0 z-50 max-w-[1400px] mx-auto w-full">
             <nav className="glass-panel flex items-center justify-between px-6 py-2.5">
                 <div className="flex items-center gap-8">
-                    <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-blue-600 to-blue-400 dark:from-blue-400 dark:to-blue-300 bg-clip-text text-transparent">
+                    <span className="font-bold text-lg tracking-tight text-[#2563eb]">
                         FWMS
                     </span>
                     <div className="flex items-center gap-1.5">
@@ -42,9 +81,9 @@ export default function Navbar() {
                                 <Link
                                     key={item.path}
                                     to={item.path}
-                                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-all duration-300 ${isActive
-                                            ? 'bg-black/5 dark:bg-white/10 text-blue-600 dark:text-blue-400 shadow-sm'
-                                            : 'text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-gray-200'
+                                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition-all duration-200 ${isActive
+                                            ? 'bg-blue-50 text-[#2563eb] shadow-sm'
+                                            : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'
                                         }`}
                                 >
                                     <Icon size={15} strokeWidth={isActive ? 2.5 : 2} />
@@ -54,10 +93,20 @@ export default function Navbar() {
                         })}
                     </div>
                 </div>
-                <button onClick={handleLogout} className="btn btn-outline text-[13px] py-1.5 px-4 font-medium">
-                    <LogOut size={15} />
-                    Logout
-                </button>
+                <div className="flex items-center gap-3">
+                    {user && (
+                        <span className="text-[12px] text-gray-400 font-medium">
+                            {user.name}
+                            <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[11px] uppercase ${badge.bg} ${badge.text}`}>
+                                {badge.label}
+                            </span>
+                        </span>
+                    )}
+                    <button onClick={handleLogout} className="btn btn-outline text-[13px] py-1.5 px-4 font-medium">
+                        <LogOut size={15} />
+                        Logout
+                    </button>
+                </div>
             </nav>
         </div>
     );

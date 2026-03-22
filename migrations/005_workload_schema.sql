@@ -10,16 +10,16 @@
 -- STEP 1: Extend staff table (10 new columns, all NULLABLE)
 -- ============================================================================
 
-ALTER TABLE staff ADD COLUMN emp_code VARCHAR(20);
-ALTER TABLE staff ADD COLUMN designation VARCHAR(50);
-ALTER TABLE staff ADD COLUMN shift VARCHAR(20);
-ALTER TABLE staff ADD COLUMN tch_norm INTEGER;
-ALTER TABLE staff ADD COLUMN total_workload_norm INTEGER;
-ALTER TABLE staff ADD COLUMN is_class_teacher BOOLEAN DEFAULT false;
-ALTER TABLE staff ADD COLUMN ct_program VARCHAR(100);
-ALTER TABLE staff ADD COLUMN ct_section VARCHAR(10);
-ALTER TABLE staff ADD COLUMN ct_semester VARCHAR(10);
-ALTER TABLE staff ADD COLUMN ct_shift INTEGER;
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS emp_code VARCHAR(20);
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS designation VARCHAR(50);
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS shift VARCHAR(20);
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS tch_norm INTEGER;
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS total_workload_norm INTEGER;
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS is_class_teacher BOOLEAN DEFAULT false;
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS ct_program VARCHAR(100);
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS ct_section VARCHAR(10);
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS ct_semester VARCHAR(10);
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS ct_shift INTEGER;
 
 -- Index on emp_code for lookups
 CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_emp_code ON staff(emp_code) WHERE emp_code IS NOT NULL;
@@ -31,13 +31,13 @@ CREATE INDEX IF NOT EXISTS idx_staff_designation ON staff(designation);
 -- STEP 2: Extend subject table (7 new columns, all NULLABLE)
 -- ============================================================================
 
-ALTER TABLE subject ADD COLUMN l INTEGER;
-ALTER TABLE subject ADD COLUMN t INTEGER;
-ALTER TABLE subject ADD COLUMN p INTEGER;
-ALTER TABLE subject ADD COLUMN credits INTEGER;
-ALTER TABLE subject ADD COLUMN tch INTEGER;
-ALTER TABLE subject ADD COLUMN course_category VARCHAR(10);
-ALTER TABLE subject ADD COLUMN course_type VARCHAR(10);
+ALTER TABLE subject ADD COLUMN IF NOT EXISTS l INTEGER;
+ALTER TABLE subject ADD COLUMN IF NOT EXISTS t INTEGER;
+ALTER TABLE subject ADD COLUMN IF NOT EXISTS p INTEGER;
+ALTER TABLE subject ADD COLUMN IF NOT EXISTS credits INTEGER;
+ALTER TABLE subject ADD COLUMN IF NOT EXISTS tch INTEGER;
+ALTER TABLE subject ADD COLUMN IF NOT EXISTS course_category VARCHAR(10);
+ALTER TABLE subject ADD COLUMN IF NOT EXISTS course_type VARCHAR(10);
 
 -- ============================================================================
 -- STEP 3: Create program table
@@ -225,7 +225,7 @@ CREATE INDEX IF NOT EXISTS idx_workload_summary_year ON workload_summary(academi
 -- Add new action types for workload system while preserving existing ones
 -- ============================================================================
 
-ALTER TABLE audit_log DROP CONSTRAINT chk_audit_log_action_type;
+ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS chk_audit_log_action_type;
 
 ALTER TABLE audit_log ADD CONSTRAINT chk_audit_log_action_type 
   CHECK (action_type IN (

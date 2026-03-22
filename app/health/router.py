@@ -22,13 +22,23 @@ async def health_check():
 
 @router.get("/deep")
 async def deep_health_check():
-    """Deep health check endpoint.
-    
-    Placeholder for future DB connectivity verification.
-    DO NOT implement DB access here until critical files are ready.
-    """
-    # TODO: Add database connectivity check when app/db/pool.py is implemented
-    return {"status": "ok", "database": "not_checked"}
+    """Deep health check — verifies actual database connectivity."""
+    db_status = "error"
+    db_error = None
+
+    try:
+        with get_transaction() as session:
+            session.execute(text("SELECT 1"))
+        db_status = "ok"
+    except Exception as e:
+        db_error = str(e)[:200]
+        logger.warning(f"Deep health check: database unreachable — {db_error}")
+
+    result = {"status": "ok" if db_status == "ok" else "degraded", "database": db_status}
+    if db_error:
+        result["database_error"] = db_error
+
+    return result
 
 
 @router.get("/metrics")

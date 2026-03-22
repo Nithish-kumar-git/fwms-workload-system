@@ -8,7 +8,7 @@ const api = axios.create({
     },
 });
 
-// JWT Bearer token interceptor
+// JWT Bearer token interceptor — JWT is the ONLY identity signal
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem('jwt_token');
     if (token) {
@@ -23,26 +23,24 @@ if (typeof window !== 'undefined') {
     const token = params.get('token');
     if (token) {
         localStorage.setItem('jwt_token', token);
-        // Clean URL
-        window.history.replaceState({}, '', window.location.pathname);
+        params.delete('token');
+        const clean = params.toString();
+        const newUrl = window.location.pathname + (clean ? `?${clean}` : '');
+        window.history.replaceState({}, '', newUrl);
     }
 }
 
-// Response interceptor: handle auth failures + network errors
+// Response interceptor: log auth failures, never clear token automatically
 api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response) {
             const status = error.response.status;
-            // Auth failure → clear token, redirect to login
             if (status === 401 || status === 403) {
-                localStorage.removeItem('jwt_token');
-                if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-                    window.location.href = '/login';
-                }
+                console.warn(`Auth error ${status} on ${error.config?.url} — keeping token (dev mode)`);
+                // DO NOT clear localStorage — let AuthContext handle logout
             }
         } else if (error.request) {
-            // Network error — server unreachable
             console.error('Server unavailable:', error.message);
         }
         return Promise.reject(error);
@@ -135,6 +133,16 @@ export const activateCycle = (cycle_id: number) =>
 export const listCycles = () => api.get('/cycles');
 
 export const getActiveCycle = () => api.get('/cycles/active');
+
+// ─── Pipeline & Approval ───
+export const getPipelineStatus = () => api.get('/reports/pipeline-status');
+export const approveWorkload = () => api.post('/reports/approve-workload');
+
+// ─── Exports (snapshot-enforced) ───
+export const downloadMasterWorkload = () =>
+    api.get('/reports/export/master-workload.xlsx', { responseType: 'blob' });
+export const downloadWorkloadPdf = () =>
+    api.get('/reports/export/workload.pdf', { responseType: 'blob' });
 
 // ─── Auth ───
 export const getCurrentUser = () => api.get('/auth/me');

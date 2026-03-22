@@ -14,7 +14,7 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 import logging
 
-from app.auth.dependencies import get_current_coordinator_id
+from app.auth.dependencies import get_current_hod_id
 from app.admin.staff_service import (
     list_staff,
     create_staff,
@@ -52,7 +52,8 @@ class CreateStaffRequest(BaseModel):
     email: EmailStr
     designation: str = "Assistant Professor"
     shift: str = "SHIFT1"
-    tch_norm: int = 16
+    tch_norm: int = 40
+    role: str = "faculty"  # 'faculty', 'tt_coordinator', 'hod'
     is_coordinator: bool = False
     is_class_teacher: bool = False
     ct_program: str | None = None
@@ -84,7 +85,7 @@ class ActionResponse(BaseModel):
 
 @router.get("", response_model=list[StaffRecord])
 async def list_staff_endpoint(
-    _coordinator_id: int = Depends(get_current_coordinator_id),
+    _hod_id: int = Depends(get_current_hod_id),
 ):
     """List all staff records. Coordinator-only."""
     return [StaffRecord(**s) for s in list_staff()]
@@ -93,17 +94,18 @@ async def list_staff_endpoint(
 @router.post("", response_model=ActionResponse)
 async def create_staff_endpoint(
     body: CreateStaffRequest,
-    coordinator_id: int = Depends(get_current_coordinator_id),
+    hod_id: int = Depends(get_current_hod_id),
 ):
-    """Create a new staff record. Coordinator-only."""
+    """Create a new staff record. HOD-only."""
     result = create_staff(
-        coordinator_id=coordinator_id,
+        coordinator_id=hod_id,
         emp_code=body.emp_code,
         name=body.name,
         email=body.email,
         designation=body.designation,
         shift=body.shift,
         tch_norm=body.tch_norm,
+        role=body.role,
         is_coordinator=body.is_coordinator,
         is_class_teacher=body.is_class_teacher,
         ct_program=body.ct_program,
@@ -120,11 +122,11 @@ async def create_staff_endpoint(
 async def update_staff_endpoint(
     staff_id: int,
     body: UpdateStaffRequest,
-    coordinator_id: int = Depends(get_current_coordinator_id),
+    hod_id: int = Depends(get_current_hod_id),
 ):
-    """Update staff fields. Coordinator-only."""
+    """Update staff fields. HOD-only."""
     result = update_staff(
-        coordinator_id=coordinator_id,
+        coordinator_id=hod_id,
         staff_id=staff_id,
         name=body.name,
         designation=body.designation,
@@ -145,10 +147,10 @@ async def update_staff_endpoint(
 @router.patch("/{staff_id}/deactivate", response_model=ActionResponse)
 async def deactivate_staff_endpoint(
     staff_id: int,
-    coordinator_id: int = Depends(get_current_coordinator_id),
+    hod_id: int = Depends(get_current_hod_id),
 ):
-    """Deactivate a staff member. Coordinator-only. Blocked if active allocations."""
-    result = deactivate_staff(coordinator_id=coordinator_id, staff_id=staff_id)
+    """Deactivate a staff member. HOD-only. Blocked if active allocations."""
+    result = deactivate_staff(coordinator_id=hod_id, staff_id=staff_id)
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
     return ActionResponse(**result)

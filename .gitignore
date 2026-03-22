@@ -1,25 +1,106 @@
-# Python bytecode
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# ============================================
+# CRITICAL - NEVER COMMIT THESE FILES
+# ============================================
 
-# Environment
+# Environment files - contain passwords and secrets
 .env
 .env.*
 !.env.example
+*.env
 
-# Logs
-logs/
+# Secret keys and credentials
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# Google OAuth credentials
+client_secret*.json
+google_credentials.json
+
+# Database dumps - may contain real user data
+*.sql.bak
+*.dump
+backups/
+db_backup/
+
+# ============================================
+# Python
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
 *.log
+logs/
 
-# OS artifacts
+# ============================================
+# Node / Frontend
+# ============================================
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+.npm/
+
+# ============================================
+# Docker
+# ============================================
+# Do NOT ignore docker-compose.yml - it's needed
+# But ignore any override files with secrets
+docker-compose.override.yml
+docker-compose.prod.yml
+
+# ============================================
+# IDE and OS files
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Backups
-backups/
+# ============================================
+# Project specific files NOT for GitHub
+# ============================================
+# Reference Excel/Word files (too large, confidential)
+*.xlsx
+*.docx
+*.xls
 
-# Frontend dependencies and builds
-node_modules/
-dist/
+# Generated migration files you created locally
+generate_migration_019*.py
+generate_migration_019*.sql
+
+# Allocation results (contains real faculty data)
+allocation_result.json
+
+# Local test files
+scripts/demo_prep.py
+scripts/import_master_workload.py
+
+# ============================================
+# Temporary files
+# ============================================
+*.tmp
+*.temp
+tmp/
+temp/

@@ -13,7 +13,7 @@ DEV_AUTH_BYPASS behavior:
   false → /dev-login returns 403, strict @hindustanuniv.ac.in enforcement
 """
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy import text
 import logging
@@ -33,54 +33,43 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _resolve_role(staff_id: int, is_coordinator: bool, db_session) -> str:
-    """Resolve role: coordinator > hod > faculty."""
-    if is_coordinator:
-        return "coordinator"
-    try:
-        row = db_session.execute(
-            text("SELECT role_name FROM faculty_role WHERE staff_id = :sid AND role_name = 'HOD' LIMIT 1"),
-            {"sid": staff_id}
-        ).fetchone()
-        if row:
-            return "hod"
-    except Exception:
-        pass  # table may not exist
-    return "faculty"
+def _resolve_role(staff_id: int, role_from_db: str, db_session) -> str:
+    """Return role string. Uses role column directly."""
+    return role_from_db or "faculty"
 
 
 def _lookup_first_coordinator(db_session):
-    """Find first active coordinator, fallback to first active staff."""
+    """Find first active HOD/coordinator, fallback to first active staff."""
     result = db_session.execute(
         text("""
-            SELECT id, email, name, is_coordinator FROM staff
-            WHERE is_coordinator = true AND is_active = true
+            SELECT id, email, name, role FROM staff
+            WHERE role IN ('hod', 'tt_coordinator') AND is_active = true
             ORDER BY id LIMIT 1
         """)
     ).fetchone()
     if result is None:
         result = db_session.execute(
             text("""
-                SELECT id, email, name, is_coordinator FROM staff
+                SELECT id, email, name, role FROM staff
                 WHERE is_active = true
                 ORDER BY id LIMIT 1
             """)
         ).fetchone()
 
-    # DEV_AUTH_BYPASS: auto-create first coordinator if DB is empty
+    # DEV_AUTH_BYPASS: auto-create first HOD if DB is empty
     if result is None:
         from app.core.config import settings
         if settings.DEV_AUTH_BYPASS:
-            logger.warning("DEV_AUTH_BYPASS: Staff table empty. Auto-creating dev coordinator.")
+            logger.warning("DEV_AUTH_BYPASS: Staff table empty. Auto-creating dev HOD.")
             inserted_id = db_session.execute(
                 text("""
-                    INSERT INTO staff (email, name, is_coordinator) 
-                    VALUES ('dev@example.com', 'Dev Coordinator', true) 
+                    INSERT INTO staff (email, name, is_coordinator, role) 
+                    VALUES ('dev@example.com', 'Dev HOD', true, 'hod') 
                     RETURNING id
                 """)
             ).scalar()
             db_session.commit()
-            return (inserted_id, 'dev@example.com', 'Dev Coordinator', True)
+            return (inserted_id, 'dev@example.com', 'Dev HOD', 'hod')
 
     return result
 
@@ -122,7 +111,7 @@ async def oauth_callback(code: str = Query(...), state: str = Query(None)):
         with get_transaction() as db_session:
             # Lookup by email
             result = db_session.execute(
-                text("SELECT id, email, name, is_coordinator FROM staff WHERE email = :email AND is_active = true"),
+                text("SELECT id, email, name, role FROM staff WHERE email = :email AND is_active = true"),
                 {"email": email}
             ).fetchone()
 
@@ -135,8 +124,7 @@ async def oauth_callback(code: str = Query(...), state: str = Query(None)):
                 logger.warning(f"Unauthorized login: {email}")
                 raise HTTPException(status_code=403, detail="Unauthorized faculty. Email not registered.")
 
-            staff_id, staff_email, staff_name, is_coordinator = result
-            role = _resolve_role(staff_id, is_coordinator, db_session)
+            staff_id, staff_email, staff_name, role = result
 
         auth = _create_auth_tokens(staff_id, staff_email, staff_name, role)
 
@@ -160,40 +148,81 @@ async def oauth_callback(code: str = Query(...), state: str = Query(None)):
 
 
 @router.post("/dev-login")
-async def dev_login():
+async def dev_login(request: Request):
     """
-    Development-only login. Returns JWT for the first coordinator.
+    Development-only login. Returns JWT for a specific or default user.
+    Accepts: ?staff_id=N query param or X-Dev-User header.
     Requires DEV_AUTH_BYPASS=true in environment.
     """
     # ── Gate: production blocked ──
     if not settings.DEV_AUTH_BYPASS:
-        logger.warning("dev-login called but DEV_AUTH_BYPASS is false")
-        raise HTTPException(
-            status_code=403,
-            detail="Dev login disabled. Set DEV_AUTH_BYPASS=true in .env"
-        )
+        raise HTTPException(status_code=404, detail="Not found")
 
-    # ── Find coordinator ──
+    # ── Resolve staff_id from header/param ──
+    staff_id = int(request.headers.get("x-dev-user") or request.query_params.get("staff_id") or "1")
+
+    # ── Direct DB lookup ──
     with get_transaction() as db_session:
-        result = _lookup_first_coordinator(db_session)
-        if result is None:
-            raise HTTPException(status_code=404, detail="No staff found in database")
+        row = db_session.execute(
+            text("SELECT id, email, name, role FROM staff WHERE id = :id"),
+            {"id": staff_id}
+        ).fetchone()
 
-        staff_id, email, name, is_coordinator = result
-        role = _resolve_role(staff_id, is_coordinator, db_session)
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"Staff id={staff_id} not found")
 
-    auth = _create_auth_tokens(staff_id, email, name, role)
+        sid = row[0]
+        email = row[1]
+        name = row[2]
+        role = row[3] or "faculty"
 
-    logger.warning(f"DEV LOGIN: staff_id={staff_id}, email={email}, role={role}")
+    auth = _create_auth_tokens(sid, email, name, role)
+
+    print(f"DEV LOGIN (old): id={sid}, role={role}")
 
     return JSONResponse(content={
         "token": auth["token"],
-        "staff_id": staff_id,
+        "staff_id": sid,
         "email": email,
         "name": name,
         "role": role,
     })
 
+
+@router.post("/dev-login/{staff_id}")
+async def dev_login_by_id(staff_id: int):
+    """
+    Development-only login with explicit staff_id in URL path.
+    Reads role directly from DB role column.
+    """
+    if not settings.DEV_AUTH_BYPASS:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    with get_transaction() as db_session:
+        row = db_session.execute(
+            text("SELECT id, email, name, role FROM staff WHERE id = :id"),
+            {"id": staff_id}
+        ).fetchone()
+
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"Staff id={staff_id} not found")
+
+        sid = row[0]
+        email = row[1]
+        name = row[2]
+        role = row[3] or "faculty"
+
+    token = create_jwt(staff_id=sid, email=email, name=name, role=role)
+
+    print(f"DEV LOGIN FINAL: id={sid}, email={email}, role={role}")
+
+    return JSONResponse(content={
+        "token": token,
+        "staff_id": sid,
+        "email": email,
+        "name": name,
+        "role": role,
+    })
 
 @router.get("/me", response_model=StaffInfoResponse)
 async def get_current_user_info(user: UserInfo = Depends(get_current_user)):
@@ -202,8 +231,7 @@ async def get_current_user_info(user: UserInfo = Depends(get_current_user)):
         staff_id=user.staff_id,
         email=user.email,
         name=user.name,
-        is_coordinator=user.is_coordinator,
-        role=user.role
+        role=user.role,
     )
 
 
