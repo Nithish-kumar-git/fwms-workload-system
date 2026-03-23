@@ -51,7 +51,8 @@ export default function WindowStatusBanner() {
     const [status, setStatus] = useState<WindowStatus | null>(null);
     const [countdown, setCountdown] = useState<number | null>(null);
     const [error, setError] = useState(false);
-    const timerRef = useRef<ReturnType<typeof setInterval>>();
+    useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+
 
     useEffect(() => {
         const fetchStatus = () => {
