@@ -1,0 +1,659 @@
+# FWMS — Faculty Workload Management System: Complete System Blueprint
+
+> **Generated from**: Exhaustive source code analysis of the FWMS repository  
+> **Anti-hallucination policy**: All facts verified from repository files. Anything unverified is marked **UNKNOWN FROM REPOSITORY**.
+
+---
+
+## 1. System Purpose & Overview
+
+The FWMS is a **dual-purpose academic management system** for a university department (Computer Applications — MCA/BCA programs at Hindustan University):
+
+1. **FCFS Subject Selection** — Students/faculty select subjects through time-windowed FCFS (First-Come-First-Served) windows with advisory-lock-based concurrency control
+2. **Faculty Workload Management** — Coordinators manage faculty preferences, run an automated allocation engine, override assignments, and generate workload reports
+
+### Key Use Cases
+- Faculty login via Google OAuth and submit ranked preferences (1–5) for subject offerings
+- Coordinator opens/closes preference windows, runs allocation engine, overrides/reassigns allocations
+- Coordinator freezes/unfreezes allocations, manages staff records and academic cycles
+- Reports exported as Excel (3 sheets) or PDF
+
+---
+
+## 2. Repository Structure
+
+```
+faculty_selection/
+├── app/                          # Backend (FastAPI)
+│   ├── main.py                   # App entry point, router inclusion, middleware
+│   ├── core/
+│   │   ├── config.py             # Pydantic Settings (env vars, validation)
+│   │   └── correlation_middleware.py  # X-Correlation-ID middleware
+│   ├── db/
+│   │   ├── pool.py               # SQLAlchemy engine (conservative pool)
+│   │   └── session.py            # Transaction context manager (5s lock timeout)
+│   ├── auth/
+│   │   ├── router.py             # OAuth login, callback, dev-login, /me, logout
+│   │   ├── dependencies.py       # get_current_user, get_current_staff_id, get_current_coordinator_id
+│   │   ├── google_oauth.py       # Google OAuth client (domain validation)
+│   │   ├── jwt_utils.py          # create_jwt, verify_jwt (PyJWT)
+│   │   ├── schemas.py            # Auth Pydantic models
+│   │   └── session_manager.py    # Redis/memory session backends
+│   ├── allocation/
+│   │   ├── router.py             # POST /api/allocation/run
+│   │   ├── service.py            # 3-stage allocation engine
+│   │   └── schemas.py            # Allocation response models
+│   ├── admin/
+│   │   ├── router.py             # Review, override, reassign, freeze/unfreeze, workload
+│   │   ├── service.py            # Admin business logic
+│   │   ├── schemas.py            # Admin Pydantic models
+│   │   ├── staff_router.py       # Staff CRUD endpoints
+│   │   ├── staff_service.py      # Staff management logic
+│   │   ├── cycle_router.py       # Academic cycle CRUD
+│   │   └── cycle_service.py      # Cycle management logic
+│   ├── preference/
+│   │   ├── router.py             # Preference CRUD (submit, list, status, delete)
+│   │   ├── service.py            # 5-rule validation engine
+│   │   ├── window_router.py      # Preference window open/close/status
+│   │   ├── window_service.py     # Window lifecycle management
+│   │   └── schemas.py            # Preference Pydantic models
+│   ├── selection/
+│   │   ├── router.py             # POST /api/selection/select (FCFS)
+│   │   ├── transactions.py       # Advisory-lock FCFS transactions
+│   │   └── schemas.py            # Selection models
+│   ├── coordinator/
+│   │   ├── router.py             # POST /api/coordinator/override
+│   │   ├── transactions.py       # Override transaction
+│   │   └── schemas.py            # Override models
+│   ├── reports/
+│   │   ├── router.py             # Faculty workload, subject summary, dept summary, Excel/PDF
+│   │   ├── service.py            # Report generation + export (openpyxl, reportlab)
+│   │   └── schemas.py            # Report models
+│   ├── health/
+│   │   └── router.py             # GET /health
+│   └── utils/
+│       └── error_mapper.py       # SQLSTATE → HTTP status mapper
+├── frontend/                     # React SPA
+│   ├── package.json              # React 19, Vite 7, Tailwind v4, axios, lucide-react
+│   └── src/
+│       ├── main.tsx              # React root mount
+│       ├── App.tsx               # BrowserRouter with 10 routes
+│       ├── api/client.ts         # axios client with JWT interceptor
+│       ├── pages/                # 9 page components
+│       │   ├── LoginPage.tsx
+│       │   ├── DashboardPage.tsx
+│       │   ├── PreferencesPage.tsx
+│       │   ├── AllocationPage.tsx
+│       │   ├── ReviewPage.tsx
+│       │   ├── ReportsPage.tsx
+│       │   ├── WindowPage.tsx
+│       │   ├── CyclesPage.tsx
+│       │   └── StaffPage.tsx
+│       └── components/           # 3 shared components
+│           ├── Navbar.tsx
+│           ├── Modal.tsx
+│           └── ToastContainer.tsx
+├── migrations/                   # 11 SQL migration files
+├── scripts/                      # Demo data utilities
+│   ├── demo_prep.py              # Python demo orchestrator (API + psql)
+│   └── demo_seed.sql             # Pure-SQL idempotent demo seed
+├── docker-compose.yml            # Dev environment (PostgreSQL + FastAPI)
+├── Dockerfile                    # Multi-stage Python 3.12-slim
+├── requirements.txt              # Python dependencies
+├── .env.example                  # Env var reference
+└── tests/                        # Unit/integration tests
+```
+
+---
+
+## 3. Backend Architecture
+
+### 3.1 Framework & Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | **FastAPI** (Python 3.12) |
+| Database | **PostgreSQL 15+** via **SQLAlchemy** (raw SQL, no ORM models) |
+| Auth | **Google OAuth 2.0** + **PyJWT** + session cookies |
+| Sessions | **Redis** (production) or **in-memory** (development) |
+| Connection Pool | SQLAlchemy `create_engine` (pool_size=10, max_overflow=20) |
+| Middleware | [CorrelationIDMiddleware](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/core/correlation_middleware.py#23-91) (UUID per request → `X-Correlation-ID`) |
+| Exports | **openpyxl** (Excel), **reportlab** (PDF) |
+
+### 3.2 Architectural Pattern
+
+All modules follow: **Router → Service → Raw SQL (parameterized)**.  
+No SQLAlchemy ORM models are used — all database access is via `sqlalchemy.text()` with named parameters.
+
+### 3.3 Transaction Management
+
+[app/db/session.py](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/db/session.py) — [get_transaction()](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/db/session.py#20-49) context manager:
+- Configurable isolation level (default: `READ COMMITTED`)
+- 5-second `lock_timeout` per transaction
+- Automatic rollback on exception
+- Connection always returned clean
+
+### 3.4 Request Flow
+
+```
+Client Request
+  → CorrelationIDMiddleware (UUID generation, timing)
+    → FastAPI Router (path matching)
+      → Auth Dependency (JWT/session validation, role check)
+        → Service Layer (business logic, validation)
+          → get_transaction() → PostgreSQL (raw SQL)
+        ← Result dict
+      ← Pydantic response model
+    ← X-Correlation-ID header
+  ← JSON response
+```
+
+---
+
+## 4. Database Model
+
+### 4.1 Complete Table Inventory (16 tables)
+
+| # | Table | Source Migration | Purpose |
+|---|---|---|---|
+| 1 | [staff](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/admin/staff_service.py#21-45) | [schema.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/schema.sql) + `005` | Faculty/coordinator records (27 seeded) |
+| 2 | `selection_window` | [schema.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/schema.sql) + `002` + `008` + `010` | FCFS + preference time windows |
+| 3 | `batch` | [schema.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/schema.sql) | Batch grouping for FCFS |
+| 4 | `specialization` | [schema.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/schema.sql) | Specialization grouping for FCFS |
+| 5 | `staff_assignment` | [schema.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/schema.sql) | Staff-to-batch/spec eligibility |
+| 6 | [subject](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/selection/router.py#25-78) | [schema.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/schema.sql) + `005` | Subjects with L/T/P/credits/TCH |
+| 7 | `subject_selection` | [schema.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/schema.sql) | FCFS selection records |
+| 8 | `audit_log` | [schema.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/schema.sql) | Append-only audit trail (triggers prevent UPDATE/DELETE) |
+| 9 | `program` | `005` | Academic programs (MCA, BCA) |
+| 10 | `semester` | `005` | Semesters I–VI |
+| 11 | `section` | `005` | Sections A–F |
+| 12 | `subject_offering` | `005` + `010` | Subject × program × semester × section instances |
+| 13 | `faculty_role` | `005` | Named roles with deduction hours (e.g., HOD) |
+| 14 | `faculty_preference` | `005` + `010` | Ranked preferences 1–5 per faculty |
+| 15 | [allocation](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/allocation/router.py#32-86) | `005` + `010` | Final subject-to-faculty assignments |
+| 16 | [workload_summary](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/admin/router.py#115-126) | `005` + `010` | Per-faculty workload statistics |
+| 17 | `academic_cycle` | `010` | Multi-year academic cycle tracking |
+
+### 4.2 Key [staff](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/admin/staff_service.py#21-45) Columns (post-migration 005+007)
+
+```
+id, email, name, is_coordinator, is_active,
+emp_code, designation, shift, tch_norm, total_workload_norm,
+is_class_teacher, ct_program, ct_section, ct_semester, ct_shift
+```
+
+### 4.3 Key [subject](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/selection/router.py#25-78) Columns (post-migration 005)
+
+```
+id, code, name, batch_id (nullable), specialization_id (nullable),
+l, t, p, credits, tch, course_category, course_type
+```
+
+### 4.4 Critical Constraints & Indexes
+
+| Constraint | Table | Purpose |
+|---|---|---|
+| `uq_subject_selected` | `subject_selection` | **FCFS guarantee** — only one `SELECTED` per subject |
+| `uq_staff_slot_per_window` | `subject_selection` | Unique slot per staff per window |
+| `uq_one_open_window_per_batch_spec` | `selection_window` | Single OPEN window per batch/spec |
+| `uq_faculty_preference_number` | `faculty_preference` | **PREF-03**: Each faculty uses each pref# once |
+| `uq_subject_offering_preference` | `faculty_preference` | **PREF-02**: No two faculty same pref# for same offering |
+| `uq_allocation_staff_offering` | [allocation](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/allocation/router.py#32-86) | Prevent duplicate staff-offering allocation |
+| `trg_prevent_audit_log_update/delete` | `audit_log` | Immutable audit trail |
+| `trg_prevent_window_time_update` | `selection_window` | Times immutable after SCHEDULED |
+
+### 4.5 Entity Relationship Overview
+
+```mermaid
+erDiagram
+    academic_cycle ||--o{ subject_offering : scopes
+    academic_cycle ||--o{ faculty_preference : scopes
+    academic_cycle ||--o{ allocation : scopes
+    academic_cycle ||--o{ workload_summary : scopes
+    academic_cycle ||--o{ selection_window : scopes
+    staff ||--o{ faculty_preference : submits
+    staff ||--o{ allocation : assigned
+    staff ||--o{ workload_summary : summarized
+    staff ||--o{ faculty_role : has
+    staff ||--o{ subject_selection : selects
+    staff ||--o{ staff_assignment : eligible
+    subject ||--o{ subject_offering : offered_as
+    subject ||--o{ subject_selection : selected
+    program ||--o{ subject_offering : context
+    semester ||--o{ subject_offering : context
+    section ||--o{ subject_offering : context
+    subject_offering ||--o{ faculty_preference : preferred
+    subject_offering ||--o{ allocation : allocated
+    selection_window ||--o{ subject_selection : during
+```
+
+---
+
+## 5. Complete API Endpoint Inventory
+
+### 5.1 Authentication (`/api/auth`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/auth/login` | Public | Redirect to Google OAuth |
+| GET | `/api/auth/callback` | Public | OAuth callback → JWT + session |
+| POST | `/api/auth/dev-login` | Public (DEV only) | Bypass OAuth for development |
+| GET | `/api/auth/me` | Authenticated | Current user info |
+| POST | `/api/auth/logout` | Authenticated | Destroy session |
+
+### 5.2 Preferences (`/api/preferences`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/preferences` | Faculty | Submit preference (5-rule validation) |
+| GET | `/api/preferences/me` | Faculty | List my preferences |
+| GET | `/api/preferences/status` | Faculty | Completion status (0-5/5) |
+| DELETE | `/api/preferences/{id}` | Faculty | Delete own preference |
+
+### 5.3 Preference Window (`/api/pref-window`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/pref-window/open` | Coordinator | Open preference window |
+| POST | `/api/pref-window/close` | Coordinator | Close active window |
+| GET | `/api/pref-window/status` | Public | Window status + remaining time |
+
+### 5.4 Allocation (`/api/allocation`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/allocation/run` | Coordinator | Run allocation engine |
+
+### 5.5 Admin (`/api/admin`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/admin/allocations` | Coordinator | Review all allocations |
+| PUT | `/api/admin/allocation/{id}` | Coordinator | Override allocation |
+| POST | `/api/admin/reassign` | Coordinator | Reassign subject between faculty |
+| POST | `/api/admin/allocation/freeze` | Coordinator | Freeze allocations |
+| POST | `/api/admin/allocation/unfreeze` | Coordinator | Unfreeze allocations |
+| GET | `/api/admin/workload-summary` | Coordinator | Workload summary |
+
+### 5.6 Staff Management (`/api/admin/staff`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/admin/staff` | Coordinator | List all staff |
+| POST | `/api/admin/staff` | Coordinator | Create staff |
+| PUT | `/api/admin/staff/{id}` | Coordinator | Update staff |
+| PATCH | `/api/admin/staff/{id}/deactivate` | Coordinator | Deactivate staff |
+
+### 5.7 Academic Cycles (`/api/cycles`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/cycles` | Coordinator | Create cycle |
+| POST | `/api/cycles/activate` | Coordinator | Activate cycle (deactivates others) |
+| GET | `/api/cycles` | Authenticated | List all cycles |
+| GET | `/api/cycles/active` | Authenticated | Get active cycle |
+
+### 5.8 Reports (`/api/reports`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/reports/faculty-workload` | Coordinator | Per-faculty workload |
+| GET | `/api/reports/subject-summary` | Coordinator | Subject-wise allocation |
+| GET | `/api/reports/department-summary` | Coordinator | Aggregate statistics |
+| GET | `/api/reports/export/workload.xlsx` | Coordinator | Excel download (3 sheets) |
+| GET | `/api/reports/export/workload.pdf` | Coordinator | PDF download |
+
+### 5.9 FCFS Selection (`/api/selection`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/selection/select` | Staff | FCFS subject selection |
+
+### 5.10 Coordinator Override (`/api/coordinator`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/coordinator/override` | Coordinator | Override subject selection |
+
+### 5.11 Health (`/health`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/health` | Public | Health check |
+
+---
+
+## 6. Authentication System
+
+### 6.1 Flow
+
+```
+Browser → GET /api/auth/login
+  → Redirect to Google OAuth consent page
+  → Google callback → GET /api/auth/callback
+    → Verify ID token
+    → Validate email domain (@hindustanuniv.ac.in)
+    → Lookup/create staff in database
+    → Create session (Redis/memory)
+    → Generate JWT (PyJWT, HS256)
+    → Set faculty_session cookie + redirect with ?token=JWT
+```
+
+### 6.2 Auth Dependencies (per-request)
+
+[get_current_user](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/auth/dependencies.py):
+1. Check `Authorization: Bearer <JWT>` header → decode JWT
+2. Else check `faculty_session` cookie → lookup session
+3. If `DEV_AUTH_BYPASS=true` (dev only) → auto-login as coordinator
+4. **Always** performs fresh DB lookup for user role (never trusts token role)
+
+### 6.3 Roles
+
+| Role | Source | Grants Access To |
+|---|---|---|
+| [coordinator](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/auth/router.py#52-86) | `staff.is_coordinator = true` | All admin, allocation, reports, staff endpoints |
+| `hod` | `staff.designation = 'HOD'` | Same as coordinator (resolved from DB) |
+| [faculty](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/reports/router.py#31-41) | Default | Preferences, selection, dashboard |
+
+### 6.4 Security Controls
+
+- Email domain validation: `@hindustanuniv.ac.in` enforced in production
+- `DEV_AUTH_BYPASS` **blocked at startup** in production (`RuntimeError` raised)
+- Session cookie: `HttpOnly`, `Secure` (production), `SameSite=Lax`
+- JWT expiration: configurable via `SESSION_EXPIRATION_HOURS` (default: 4)
+
+---
+
+## 7. Allocation Engine
+
+**Location**: [app/allocation/service.py](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/allocation/service.py) (517 lines)
+
+### 7.1 Three-Stage Pipeline
+
+```
+Stage 1: Preference-1 Pass
+  → Allocate each faculty's preference-1 subject (if shift-compatible and under norm)
+
+Stage 2: Preferences 2–5 Pass
+  → Iterate preferences 2-5 in order, allocate if constraints pass
+
+Stage 3: Final Pass (Unallocated Subjects)
+  → Assign remaining subjects to lowest-load compatible faculty
+```
+
+### 7.2 Constraints Enforced
+
+| Rule | Description |
+|---|---|
+| **Shift compatibility** | SHIFT1 faculty ↔ shift=1 offerings, SHIFT2 ↔ shift=2, SHIFT1+SHIFT2 ↔ both |
+| **Workload norm** | Faculty's `tch_norm` not exceeded (COALESCE to 16 if null) |
+| **Multi-section** | Faculty cannot teach same course code multiple times |
+| **Active cycle** | Requires an active `academic_cycle` |
+
+### 7.3 Side Effects
+
+- Clears existing [allocation](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/allocation/router.py#32-86) rows for the active cycle before re-running
+- Updates/inserts [workload_summary](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/admin/router.py#115-126) rows
+- Logs `ALLOCATION_RUN` to `audit_log`
+
+---
+
+## 8. Preference Validation Rules
+
+**Location**: [app/preference/service.py](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/preference/service.py) (394 lines)
+
+| Rule ID | Name | Logic |
+|---|---|---|
+| PREF-01 | Range | `preference_number` must be 1–5 |
+| PREF-02 | Offering uniqueness | No two faculty may assign same pref# to same offering |
+| PREF-03 | Faculty uniqueness | Faculty cannot reuse same pref# |
+| PREF-04 | Max count | Maximum 5 preferences per faculty |
+| PREF-DUP | Duplicate guard | Faculty cannot prefer same offering twice |
+| SHIFT-01 | Shift compatibility | Faculty shift must match offering shift |
+| CT-01 | Class teacher | Class teacher's pref=1 must match their assigned class |
+
+**Window guard**: Preferences only accepted when a `selection_window` has `status = 'OPEN'`.
+
+---
+
+## 9. FCFS Subject Selection System
+
+**Location**: [app/selection/transactions.py](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/selection/transactions.py) (423 lines)
+
+### 9.1 Advisory Lock Ordering (FROZEN)
+
+```
+1. FOR SHARE    → Window validation (status='OPEN', batch/spec scoping)
+2. FOR SHARE    → Eligibility verification (staff_assignment check)
+3. pg_advisory_xact_lock(staff_id)          → Staff-level serialization
+4. pg_advisory_xact_lock(staff_id, window_id) → Staff+window serialization
+5. FOR UPDATE   → Quota check (max_subjects_per_staff)
+6. FOR UPDATE   → Slot number assignment
+7. INSERT       → FCFS claim via ON CONFLICT DO NOTHING
+8. INSERT       → Audit log
+```
+
+### 9.2 FCFS Guarantee
+
+The `uq_subject_selected` partial unique index ensures **only one `SELECTED` status per subject**. The `ON CONFLICT DO NOTHING` returns NULL if the subject was already taken.
+
+### 9.3 Change Subject Transaction
+
+Atomic UPDATE swaps `subject_id` on existing row, preserving `staff_slot_number` immutably.
+
+### 9.4 Error Handling
+
+- SQLSTATE `40P01` (deadlock) → "Concurrent change detected, please try again"
+- SQLSTATE `55P03` (lock timeout) → Same message
+- All other exceptions re-raised for HTTP error mapping
+
+---
+
+## 10. Frontend Architecture
+
+### 10.1 Tech Stack
+
+| Technology | Version | Purpose |
+|---|---|---|
+| React | 19.2.0 | UI framework |
+| Vite | 7.3.1 | Build tool |
+| Tailwind CSS | 4.2.1 | Styling |
+| axios | 1.13.6 | HTTP client |
+| react-router-dom | 7.13.1 | Client-side routing |
+| lucide-react | 0.577.0 | Icons |
+| TypeScript | ~5.9.3 | Type safety |
+
+### 10.2 Route Structure
+
+| Path | Component | Description |
+|---|---|---|
+| `/login` | `LoginPage` | Google OAuth login |
+| `/dashboard` | `DashboardPage` | Faculty dashboard |
+| `/preferences` | `PreferencesPage` | Preference submission |
+| `/admin/allocation` | `AllocationPage` | Run allocation engine |
+| `/admin/review` | `ReviewPage` | Review/override allocations |
+| `/admin/reports` | `ReportsPage` | Reports + export |
+| `/admin/window` | `WindowPage` | Preference window management |
+| `/admin/cycles` | `CyclesPage` | Academic cycle management |
+| `/admin/staff` | `StaffPage` | Staff CRUD |
+| `*` | → `/dashboard` | Catch-all redirect |
+
+### 10.3 API Client
+
+[src/api/client.ts](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/frontend/src/api/client.ts):
+- Base URL: `/api` (proxied by Vite dev server)
+- JWT stored in `localStorage`, attached via request interceptor
+- Token captured from OAuth callback `?token=` query param
+- 401/403 → clear token, redirect to `/login`
+
+---
+
+## 11. Environment Variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ENV` | ✓ | `development` | `development` / `staging` / [production](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/.env.production) |
+| `DATABASE_URL` | ✓ | — | PostgreSQL connection string |
+| `GOOGLE_CLIENT_ID` | ✓ | — | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | ✓ | — | Google OAuth client secret |
+| `GOOGLE_REDIRECT_URI` | ✓ | — | OAuth callback URI |
+| `SECRET_KEY` | ✓ | — | JWT signing key (≥32 chars) |
+| `ALLOWED_EMAIL_DOMAIN` | | `hindustanuniv.ac.in` | Email domain restriction |
+| `REDIS_URL` | | `None` | Redis connection URL |
+| `SESSION_BACKEND` | | `memory` | `redis` or `memory` |
+| `SESSION_EXPIRATION_HOURS` | | `4` | Session/JWT TTL |
+| `SESSION_COOKIE_NAME` | | `faculty_session` | Cookie name |
+| `SESSION_COOKIE_SECURE` | | `true` | HTTPS-only cookies |
+| `SESSION_COOKIE_HTTPONLY` | | `true` | XSS protection |
+| `SESSION_COOKIE_SAMESITE` | | `lax` | CSRF protection |
+| `POOL_SIZE` | | `10` | SQLAlchemy pool size |
+| `POOL_MAX_OVERFLOW` | | `20` | Pool overflow limit |
+| `DEV_AUTH_BYPASS` | | `false` | Dev-only auth bypass |
+| `LOG_LEVEL` | | `INFO` | Logging level |
+| `LOG_FILE` | | [logs/app.log](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/logs/app.log) | Log file path |
+| `EMAIL_BACKEND` | | [log](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/auth/router.py#99-104) | `smtp` or [log](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/auth/router.py#99-104) |
+| `RATE_LIMIT_ENABLED` | | `true` | Rate limiting toggle |
+
+### Production Validation (enforced at startup)
+- `SECRET_KEY` ≥ 32 characters
+- `DATABASE_URL` must start with `postgresql://`
+- `SESSION_COOKIE_SECURE` must be `true`
+- `SESSION_BACKEND` must be `redis`
+- `GOOGLE_CLIENT_ID/SECRET` must not be placeholders
+- `DEV_AUTH_BYPASS` must be `false` (raises `RuntimeError` otherwise)
+
+---
+
+## 12. Docker Infrastructure
+
+### 12.1 docker-compose.yml (Development)
+
+```yaml
+services:
+  db:     # PostgreSQL 15
+    image: postgres:15
+    volumes: pgdata
+    healthcheck: pg_isready
+    
+  app:    # FastAPI backend
+    build: .
+    depends_on: db (healthy)
+    ports: 8000:8000
+    env_file: .env
+    command: >
+      sh -c "psql migrations → uvicorn --reload"
+    volumes:
+      - ./app:/app/app          # Hot-reload
+      - ./migrations:/app/migrations
+```
+
+### 12.2 Dockerfile (Multi-stage)
+
+- **Builder**: `python:3.12-slim` + gcc + libpq-dev → pip install
+- **Runtime**: `python:3.12-slim` + libpq5 only
+- **Healthcheck**: HTTP GET `http://localhost:8000/health` every 30s
+- **CMD**: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
+
+### 12.3 Migration Execution Order
+
+Migrations run via [docker-compose.yml](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/docker-compose.yml) entrypoint command:
+
+| Order | File | Purpose |
+|---|---|---|
+| 1 | [schema.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/schema.sql) | Base schema (staff, subject, selection_window, subject_selection, audit_log) |
+| 2 | [002_window_lifecycle.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/002_window_lifecycle.sql) | Window status lifecycle (DRAFT→SCHEDULED→OPEN→CLOSED→ARCHIVED) |
+| 3 | [005_workload_schema.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/005_workload_schema.sql) | Workload tables (program, semester, section, subject_offering, faculty_preference, allocation, workload_summary, faculty_role) |
+| 4 | [006_academic_seed.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/006_academic_seed.sql) | Seed 100+ subjects from MCA/BCA curriculum + offerings |
+| 5 | [007_faculty_seed.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/007_faculty_seed.sql) | Seed 27 faculty from FACULTY-LIST |
+| 6 | [008_admin_override_schema.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/008_admin_override_schema.sql) | allocation_locked flag + admin audit types |
+| 7 | [009_window_audit_types.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/009_window_audit_types.sql) | Expanded audit action types |
+| 8 | [010_academic_cycle_support.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/010_academic_cycle_support.sql) | `academic_cycle` table + FK linkage to all operational tables |
+| 9 | [011_update_staff_emails.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/migrations/011_update_staff_emails.sql) | Convert `@faculty.local` → `@hindustanuniv.ac.in` |
+
+> **Note**: Migrations 003 and 004 are **UNKNOWN FROM REPOSITORY** (files not found).
+
+---
+
+## 13. Demo Data Pipeline
+
+### 13.1 Python Script ([scripts/demo_prep.py](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/scripts/demo_prep.py))
+
+Automated 6-step pipeline:
+1. Dev login → get JWT
+2. Ensure active academic cycle
+3. Open preference window (today)
+4. Clear old allocations/preferences
+5. Seed 5 shift-compatible random preferences per faculty via [psql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/scripts/demo_prep.py#30-37)
+6. Run allocation engine via API
+
+### 13.2 SQL Script ([scripts/demo_seed.sql](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/scripts/demo_seed.sql))
+
+Pure-SQL idempotent alternative:
+- Same logic as Python script but runs entirely in PostgreSQL
+- Requires manual `POST /api/allocation/run` after execution
+
+---
+
+## 14. Audit Log Action Types
+
+The `audit_log.action_type` constraint (final form from migration 009):
+
+```
+SUBJECT_SELECTED, SUBJECT_DESELECTED,
+SELECTION_LOCKED, SELECTION_UNLOCKED,
+COORDINATOR_OVERRIDE,
+WINDOW_CREATED, WINDOW_SCHEDULED, WINDOW_OPENED, WINDOW_CLOSED, WINDOW_ARCHIVED,
+PREFERENCE_SUBMITTED, PREFERENCE_CLEARED,
+ALLOCATION_RUN, ALLOCATION_OVERRIDE, ALLOCATION_REASSIGN,
+ALLOCATION_FREEZE, ALLOCATION_UNFREEZE
+```
+
+> **Note**: There is a **constraint conflict** between migrations 008 and 009. Migration 008 defines action types like `SELECT`, `CHANGE`, `OVERRIDE`, while 009 replaces them with `SUBJECT_SELECTED`, `COORDINATOR_OVERRIDE`, etc. The **last applied** (009) is the authoritative set. Backend code (e.g., [selection/transactions.py](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/selection/transactions.py)) still references old types like `'SELECT'`, `'CHANGE'`, `'OVERRIDE'` — this is a **known inconsistency**.
+
+---
+
+## 15. Known Limitations & Warnings
+
+| Area | Issue | Severity |
+|---|---|---|
+| Session backend | [InMemorySessionBackend](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/auth/session_manager.py#107-159) loses sessions on restart (marked "DEVELOPMENT ONLY") | Medium |
+| Audit constraint | Mismatch between migration 009 action types and code-emitted values | High |
+| Report hardcoding | `ACADEMIC_YEAR = "2025-2026"` and `SEMESTER_TYPE = "EVEN"` hardcoded in [reports/service.py](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/reports/service.py) | Medium |
+| No frontend auth guard | Routes are not protected by role-based guards in React — only backend enforces auth | Low |
+| Missing migrations | Files `003_*.sql` and `004_*.sql` not found in repository | Info |
+| TODO in main.py | `audit_router` inclusion is commented/TODO | Info |
+
+---
+
+## 16. Python Dependencies
+
+From [requirements.txt](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/requirements.txt):
+
+| Package | Purpose |
+|---|---|
+| `fastapi`, `uvicorn` | Web framework + ASGI server |
+| `pydantic`, `pydantic-settings` | Data validation + env config |
+| `sqlalchemy`, `psycopg2-binary` | Database access |
+| `google-auth`, `google-auth-oauthlib`, `google-auth-httplib2` | Google OAuth |
+| `PyJWT` | JWT tokens |
+| `redis` | Session backend |
+| `openpyxl` | Excel export |
+| [reportlab](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/reports/service.py#361-430) | PDF export |
+| `python-multipart` | Form data parsing |
+| `httpx`, `requests` | HTTP clients |
+| `pytest`, `pytest-asyncio`, `pytest-cov` | Testing |
+
+---
+
+## 17. Project Resume Context
+
+To resume this project in a new AI chat:
+
+1. **System type**: FastAPI backend + React frontend for university faculty workload/subject management
+2. **Database**: PostgreSQL 15+ with 16+ tables, raw SQL via SQLAlchemy [text()](file:///c:/Users/itsni/.gemini/antigravity/scratch/faculty_selection/app/reports/service.py#432-463)
+3. **Two subsystems**: FCFS selection (advisory locks, concurrency-safe) + workload allocation (preference-based engine)
+4. **Auth**: Google OAuth → JWT + session cookie, 3 roles (coordinator, hod, faculty)
+5. **Key constraint**: `DEV_AUTH_BYPASS` for development, blocked in production
+6. **Academic scope**: MCA/BCA programs at Hindustan University, 27 faculty, 100+ subjects
+7. **All SQL parameterized**: No ORM models, no f-strings in SQL
+8. **Critical files marked**: Files with `# CRITICAL FCFS FILE` header require external review

@@ -61,7 +61,7 @@ export default function AllocationPage() {
             
             // Show summary toast
             const summary = `Allocation complete: ${res.data.subjects_assigned} assigned, ${res.data.subjects_unassigned} unallocated`;
-            addToast(summary, res.data.subjects_unassigned > 0 ? 'warning' : 'success');
+            addToast(summary, res.data.subjects_unassigned > 0 ? 'info' : 'success');
         } catch (err: any) {
             const msg = err.response?.data?.detail || 'Allocation failed';
             addToast(msg, 'error');

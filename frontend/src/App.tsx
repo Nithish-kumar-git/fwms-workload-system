@@ -12,6 +12,7 @@ import ReportsPage from './pages/ReportsPage';
 import WindowPage from './pages/WindowPage';
 import CyclesPage from './pages/CyclesPage';
 import StaffPage from './pages/StaffPage';
+import StaffEmailsPage from './pages/StaffEmailsPage';
 import CurriculumUploadPage from './pages/CurriculumUploadPage';
 import FinalApprovalPage from './pages/FinalApprovalPage';
 
@@ -113,6 +114,7 @@ export default function App() {
                         <Route element={<RequireHOD />}>
                             <Route path="/hod-dashboard" element={<HODDashboardPage />} />
                             <Route path="/hod/staff" element={<StaffPage />} />
+                            <Route path="/hod/staff-emails" element={<StaffEmailsPage />} />
                             <Route path="/hod/curriculum" element={<CurriculumUploadPage />} />
                             <Route path="/hod/approval" element={<FinalApprovalPage />} />
                         </Route>

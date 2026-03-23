@@ -3,7 +3,8 @@ import { getStaffList, createStaff, updateStaff, deactivateStaff } from '../api/
 import { useToast } from '../hooks/useToast';
 import ToastContainer from '../components/ToastContainer';
 import Modal from '../components/Modal';
-import { UserPlus, Pencil, UserX, Search, AlertCircle, RefreshCw } from 'lucide-react';
+import { UserPlus, Pencil, UserX, Search, AlertCircle, RefreshCw, Shield, Mail } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface Staff {
     id: number;
@@ -30,6 +31,7 @@ const EMPTY_FORM = {
 };
 
 export default function StaffPage() {
+    const navigate = useNavigate();
     const [staff, setStaff] = useState<Staff[]>([]);
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
@@ -40,6 +42,11 @@ export default function StaffPage() {
     const { toasts, addToast, removeToast } = useToast();
 
     const [error, setError] = useState('');
+    
+    // Role assignment modal
+    const [showRoleModal, setShowRoleModal] = useState(false);
+    const [selectedStaffId, setSelectedStaffId] = useState<number | null>(null);
+    const [selectedRole, setSelectedRole] = useState('faculty');
 
     const load = () => {
         setLoading(true);
@@ -107,6 +114,7 @@ export default function StaffPage() {
             await updateStaff(editId, {
                 name: form.name, designation: form.designation,
                 shift: form.shift, tch_norm: form.tch_norm,
+                role: form.role,
                 is_coordinator: form.role !== 'faculty',
                 is_class_teacher: form.is_class_teacher,
                 ct_program: form.ct_program || null,
@@ -130,6 +138,39 @@ export default function StaffPage() {
             load();
         } catch (err: any) {
             addToast(err.response?.data?.detail || 'Deactivation failed', 'error');
+        }
+    };
+
+    const openRoleModal = (staffId: number, currentRole: string) => {
+        setSelectedStaffId(staffId);
+        setSelectedRole(currentRole);
+        setShowRoleModal(true);
+    };
+
+    const handleRoleUpdate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedStaffId) return;
+        setSubmitting(true);
+        try {
+            const res = await fetch(`/api/admin/staff/${selectedStaffId}/role`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`
+                },
+                body: JSON.stringify({ role: selectedRole })
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.detail || 'Role update failed');
+            }
+            addToast('Role updated successfully', 'success');
+            setShowRoleModal(false);
+            load();
+        } catch (err: any) {
+            addToast(err.message || 'Role update failed', 'error');
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -236,6 +277,9 @@ export default function StaffPage() {
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input className="form-input pl-9 w-64" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
                     </div>
+                    <button onClick={() => navigate('/hod/staff-emails')} className="btn btn-outline">
+                        <Mail size={16} /> Manage Emails
+                    </button>
                     <button onClick={openAdd} className="btn btn-primary">
                         <UserPlus size={16} /> Add Faculty
                     </button>
@@ -248,6 +292,36 @@ export default function StaffPage() {
 
             <Modal isOpen={editId !== null} onClose={() => setEditId(null)} title="Edit Faculty">
                 <form onSubmit={handleEdit}>{formFields}</form>
+            </Modal>
+
+            <Modal isOpen={showRoleModal} onClose={() => setShowRoleModal(false)} title="Assign Role">
+                <form onSubmit={handleRoleUpdate}>
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem', display: 'block', marginBottom: '0.5rem' }}>
+                            Select Role
+                        </label>
+                        <select
+                            className="form-select w-full"
+                            value={selectedRole}
+                            onChange={(e) => setSelectedRole(e.target.value)}
+                        >
+                            <option value="faculty">Faculty</option>
+                            <option value="tt_coordinator">TT Coordinator</option>
+                            <option value="hod">HOD</option>
+                        </select>
+                        <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                            Coordinators can manage windows, allocations, and reports. HODs have full system access.
+                        </p>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', paddingTop: '1rem', borderTop: '1px solid #e5e7eb' }}>
+                        <button type="button" onClick={() => setShowRoleModal(false)} className="btn btn-outline" disabled={submitting}>
+                            Cancel
+                        </button>
+                        <button type="submit" className="btn btn-primary" disabled={submitting}>
+                            <Shield size={16} /> {submitting ? 'Updating...' : 'Update Role'}
+                        </button>
+                    </div>
+                </form>
             </Modal>
 
             <div className="glass-card" style={{ overflow: 'hidden', marginBottom: '1.5rem' }}>
@@ -288,11 +362,14 @@ export default function StaffPage() {
                                 </td>
                                 <td>
                                     <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                        <button onClick={() => openEdit(s)} className="btn btn-outline" style={{ padding: '0.25rem 0.5rem' }}>
+                                        <button onClick={() => openEdit(s)} className="btn btn-outline" style={{ padding: '0.25rem 0.5rem' }} title="Edit">
                                             <Pencil size={14} />
                                         </button>
+                                        <button onClick={() => openRoleModal(s.id, s.role)} className="btn btn-outline" style={{ padding: '0.25rem 0.5rem' }} title="Assign Role">
+                                            <Shield size={14} />
+                                        </button>
                                         {s.is_active && (
-                                            <button onClick={() => handleDeactivate(s.id, s.name)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem' }}>
+                                            <button onClick={() => handleDeactivate(s.id, s.name)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem' }} title="Deactivate">
                                                 <UserX size={14} />
                                             </button>
                                         )}

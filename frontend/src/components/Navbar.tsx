@@ -16,6 +16,7 @@ const hodItems = [
 
 const coordinatorItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/preferences', label: 'My Preferences', icon: BookOpen },
     { path: '/admin/window', label: 'Window', icon: Clock },
     { path: '/admin/cycles', label: 'Cycles', icon: CalendarDays },
     { path: '/admin/allocation', label: 'Allocation', icon: Settings },

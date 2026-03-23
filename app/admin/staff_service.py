@@ -126,6 +126,7 @@ def update_staff(
     designation: str | None = None,
     shift: str | None = None,
     tch_norm: int | None = None,
+    role: str | None = None,
     is_coordinator: bool | None = None,
     is_class_teacher: bool | None = None,
     ct_program: str | None = None,
@@ -149,6 +150,9 @@ def update_staff(
     if tch_norm is not None:
         updates.append("tch_norm = :tch_norm")
         params["tch_norm"] = tch_norm
+    if role is not None:
+        updates.append("role = :role")
+        params["role"] = role
     if is_coordinator is not None:
         updates.append("is_coordinator = :is_coord")
         params["is_coord"] = is_coordinator
