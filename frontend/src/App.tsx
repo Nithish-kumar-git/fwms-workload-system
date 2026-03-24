@@ -46,7 +46,16 @@ function RequireAuth() {
 /* ── HOD-only guard ── */
 function RequireHOD() {
     const { user, loading } = useAuth();
-    if (loading) return null;
+    if (loading) {
+        return (
+            <div style={{
+                minHeight: '100vh', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', color: 'var(--color-text-muted)',
+            }}>
+                Loading...
+            </div>
+        );
+    }
     if (user?.role !== 'hod') return <Navigate to="/" replace />;
     return <Outlet />;
 }
@@ -54,7 +63,16 @@ function RequireHOD() {
 /* ── Coordinator-only guard (tt_coordinator OR hod) ── */
 function RequireCoordinator() {
     const { user, loading } = useAuth();
-    if (loading) return null;
+    if (loading) {
+        return (
+            <div style={{
+                minHeight: '100vh', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', color: 'var(--color-text-muted)',
+            }}>
+                Loading...
+            </div>
+        );
+    }
     if (user?.role !== 'tt_coordinator' && user?.role !== 'hod') {
         return <Navigate to="/" replace />;
     }
@@ -64,7 +82,16 @@ function RequireCoordinator() {
 /* ── Faculty-only guard ── */
 function RequireFaculty() {
     const { user, loading } = useAuth();
-    if (loading) return null;
+    if (loading) {
+        return (
+            <div style={{
+                minHeight: '100vh', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', color: 'var(--color-text-muted)',
+            }}>
+                Loading...
+            </div>
+        );
+    }
     if (user?.role !== 'faculty') return <Navigate to="/" replace />;
     return <Outlet />;
 }
@@ -72,7 +99,16 @@ function RequireFaculty() {
 /* ── Root redirect: route to correct dashboard by role ── */
 function RootRedirect() {
     const { user, loading } = useAuth();
-    if (loading) return null;
+    if (loading) {
+        return (
+            <div style={{
+                minHeight: '100vh', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', color: 'var(--color-text-muted)',
+            }}>
+                Loading...
+            </div>
+        );
+    }
     if (!user) return <Navigate to="/login" replace />;
 
     switch (user.role) {

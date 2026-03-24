@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getStaffList, createStaff, updateStaff, deactivateStaff } from '../api/client';
+import { getStaffList, createStaff, updateStaff, deactivateStaff, updateStaffRole } from '../api/client';
 import { useToast } from '../hooks/useToast';
-import ToastContainer from '../components/ToastContainer';
+import ToastContainer from '../components/Modal';
 import Modal from '../components/Modal';
 import { UserPlus, Pencil, UserX, Search, AlertCircle, RefreshCw, Shield, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -152,23 +152,13 @@ export default function StaffPage() {
         if (!selectedStaffId) return;
         setSubmitting(true);
         try {
-            const res = await fetch(`/api/admin/staff/${selectedStaffId}/role`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`
-                },
-                body: JSON.stringify({ role: selectedRole })
-            });
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.detail || 'Role update failed');
-            }
+            await updateStaffRole(selectedStaffId, selectedRole);
             addToast('Role updated successfully', 'success');
             setShowRoleModal(false);
             load();
         } catch (err: any) {
-            addToast(err.message || 'Role update failed', 'error');
+            const msg = err.response?.data?.detail || 'Role update failed';
+            addToast(msg, 'error');
         } finally {
             setSubmitting(false);
         }

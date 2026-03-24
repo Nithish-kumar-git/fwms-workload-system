@@ -104,3 +104,5 @@ scripts/import_master_workload.py
 *.temp
 tmp/
 temp/
+.vercel
+.env*.local

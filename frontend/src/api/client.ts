@@ -116,6 +116,12 @@ export const createStaff = (data: {
 export const updateStaff = (id: number, data: Record<string, unknown>) =>
     api.put(`/admin/staff/${id}`, data);
 
+export const updateStaffEmail = (id: number, email: string) =>
+    api.patch(`/admin/staff/${id}/email`, { email });
+
+export const updateStaffRole = (id: number, role: string) =>
+    api.patch(`/admin/staff/${id}/role`, { role });
+
 export const deactivateStaff = (id: number) =>
     api.patch(`/admin/staff/${id}/deactivate`);
 
