@@ -3,8 +3,63 @@ Configuration management.
 Spec reference: BACKEND_STRUCTURE.md Section 4
 """
 
+import os
+import sys
 from pydantic_settings import BaseSettings
 from typing import Literal
+
+
+def _check_required_env_vars():
+    """
+    Check required environment variables before Pydantic tries to load them.
+    Provides clear error messages instead of cryptic Pydantic validation errors.
+    """
+    missing = []
+    
+    # Check DATABASE_URL
+    if not os.getenv("DATABASE_URL"):
+        missing.append("DATABASE_URL")
+        print("ERROR: DATABASE_URL environment variable is not set", file=sys.stderr)
+        print("  Railway: Should be auto-provided by PostgreSQL service", file=sys.stderr)
+        print("  Local: Set in .env file (see .env.example)", file=sys.stderr)
+    
+    # Check SECRET_KEY
+    secret_key = os.getenv("SECRET_KEY")
+    if not secret_key:
+        missing.append("SECRET_KEY")
+        print("ERROR: SECRET_KEY environment variable is not set", file=sys.stderr)
+        print("  Generate with: python -c \"import secrets; print(secrets.token_hex(32))\"", file=sys.stderr)
+    elif len(secret_key) < 32:
+        print("ERROR: SECRET_KEY must be at least 32 characters", file=sys.stderr)
+        print(f"  Current length: {len(secret_key)}", file=sys.stderr)
+        print("  Generate with: python -c \"import secrets; print(secrets.token_hex(32))\"", file=sys.stderr)
+        sys.exit(1)
+    
+    # Check Google OAuth credentials
+    if not os.getenv("GOOGLE_CLIENT_ID"):
+        missing.append("GOOGLE_CLIENT_ID")
+        print("ERROR: GOOGLE_CLIENT_ID environment variable is not set", file=sys.stderr)
+        print("  Get from: https://console.cloud.google.com/apis/credentials", file=sys.stderr)
+    
+    if not os.getenv("GOOGLE_CLIENT_SECRET"):
+        missing.append("GOOGLE_CLIENT_SECRET")
+        print("ERROR: GOOGLE_CLIENT_SECRET environment variable is not set", file=sys.stderr)
+        print("  Get from: https://console.cloud.google.com/apis/credentials", file=sys.stderr)
+    
+    if not os.getenv("GOOGLE_REDIRECT_URI"):
+        missing.append("GOOGLE_REDIRECT_URI")
+        print("ERROR: GOOGLE_REDIRECT_URI environment variable is not set", file=sys.stderr)
+        print("  Local: http://localhost:8000/api/auth/callback", file=sys.stderr)
+        print("  Railway: https://your-app.up.railway.app/api/auth/callback", file=sys.stderr)
+    
+    if missing:
+        print(f"\nFATAL: {len(missing)} required environment variable(s) missing: {', '.join(missing)}", file=sys.stderr)
+        print("Application cannot start. Set these variables and try again.", file=sys.stderr)
+        sys.exit(1)
+
+
+# Check required vars before Pydantic tries to load them
+_check_required_env_vars()
 
 
 class Settings(BaseSettings):
@@ -77,10 +132,6 @@ class Settings(BaseSettings):
         - Validate DATABASE_URL format
         - Environment-specific validation
         """
-        # Validate SECRET_KEY length
-        if len(self.SECRET_KEY) < 32:
-            raise ValueError("SECRET_KEY must be at least 32 characters")
-        
         # Validate DATABASE_URL format
         if not self.DATABASE_URL.startswith("postgresql://"):
             raise ValueError("DATABASE_URL must be a PostgreSQL connection string")
