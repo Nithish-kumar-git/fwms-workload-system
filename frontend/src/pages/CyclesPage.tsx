@@ -7,7 +7,8 @@ import { CalendarDays, CheckCircle, Plus } from 'lucide-react';
 interface Cycle {
     id: number;
     academic_year: string;
-    semester: string;
+    semester_id: number;
+    semester_name: string;
     status: string;
     opened_at: string | null;
     closed_at: string | null;
@@ -80,7 +81,7 @@ export default function CyclesPage() {
                         <span className="badge badge-success" style={{ fontSize: '0.875rem', padding: '0.375rem 0.75rem' }}>ACTIVE CYCLE</span>
                     </div>
                     <div style={{ display: 'flex', gap: '2rem', fontSize: '0.875rem', color: '#6b7280' }}>
-                        <span><strong style={{ color: '#111827' }}>{activeCycle.academic_year}</strong> · Semester {activeCycle.semester}</span>
+                        <span><strong style={{ color: '#111827' }}>{activeCycle.academic_year}</strong> · Semester {activeCycle.semester_name}</span>
                         <span>Status: <strong style={{ color: '#111827' }}>{activeCycle.status}</strong></span>
                         {activeCycle.opened_at && <span>Opened: {new Date(activeCycle.opened_at).toLocaleDateString()}</span>}
                     </div>
@@ -120,7 +121,7 @@ export default function CyclesPage() {
                             <tr key={c.id}>
                                 <td>{c.id}</td>
                                 <td style={{ fontWeight: 600, color: '#111827' }}>{c.academic_year}</td>
-                                <td><span className="badge badge-info">Semester {c.semester}</span></td>
+                                <td><span className="badge badge-info">Semester {c.semester_name}</span></td>
                                 <td><span className={`badge ${c.status === 'OPEN' ? 'badge-success' : c.status === 'FROZEN' ? 'badge-error' : 'badge-warning'}`}>{c.status}</span></td>
                                 <td style={{ fontSize: '0.8125rem', color: '#6b7280' }}>{c.opened_at ? new Date(c.opened_at).toLocaleDateString() : '—'}</td>
                                 <td style={{ fontSize: '0.8125rem', color: '#6b7280' }}>{c.closed_at ? new Date(c.closed_at).toLocaleDateString() : '—'}</td>

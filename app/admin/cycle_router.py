@@ -42,7 +42,8 @@ class ActivateCycleRequest(BaseModel):
 class CycleResponse(BaseModel):
     id: int
     academic_year: str
-    semester: str
+    semester_id: int
+    semester_name: str
     status: str
     opened_at: str | None = None
     closed_at: str | None = None
