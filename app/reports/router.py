@@ -110,10 +110,10 @@ async def approve_workload(
 
 # ─── Snapshot-Enforced Exports ───────────────────────────────────────────────
 
-def _get_snapshot_or_live_data() -> tuple[dict | None, str, str]:
+def _get_snapshot_or_live_data() -> tuple[dict | None, str, int]:
     """
     Get snapshot if it exists (FROZEN state), otherwise prepare for live data (ALLOCATED state).
-    Returns (snapshot_or_none, academic_year, semester_type).
+    Returns (snapshot_or_none, academic_year, semester_id).
     Raises HTTP 400 if no semesters are ALLOCATED or FROZEN.
     """
     from app.reports.snapshot_service import get_snapshot
@@ -124,7 +124,11 @@ def _get_snapshot_or_live_data() -> tuple[dict | None, str, str]:
     # Try to get snapshot first
     try:
         snapshot = get_snapshot()
-        return snapshot, snapshot["academic_year"], snapshot["semester_type"]
+        # Snapshot still uses old schema with semester_type, convert to semester_id if needed
+        semester_type = snapshot.get("semester_type", "")
+        # Map ODD/EVEN to semester_id (fallback, should not be used in new system)
+        semester_id = snapshot.get("semester_id", 1)  # Default to 1 if not present
+        return snapshot, snapshot["academic_year"], semester_id
     except RuntimeError:
         # No snapshot - check if any semester is ALLOCATED
         active_cycle = get_active_cycle()
@@ -149,7 +153,7 @@ def _get_snapshot_or_live_data() -> tuple[dict | None, str, str]:
                     detail="Cannot export: No semesters are ALLOCATED or FROZEN. Run allocation first."
                 )
         
-        return None, active_cycle["academic_year"], active_cycle["semester_type"]
+        return None, active_cycle["academic_year"], active_cycle["semester_id"]
 
 
 @router.get("/export/workload.xlsx")
@@ -157,7 +161,11 @@ async def export_excel(
     coordinator_id: int = Depends(get_current_coordinator_id),
 ):
     """Download workload report as Excel file (3 sheets). Works when semester is ALLOCATED or FROZEN."""
-    snapshot, academic_year, semester_type = _get_snapshot_or_live_data()
+    snapshot, academic_year, semester_id = _get_snapshot_or_live_data()
+    
+    # Convert semester_id to semester_type for legacy report functions
+    # This is a temporary bridge until reports are fully migrated
+    semester_type = "EVEN" if semester_id in [2, 4, 6] else "ODD"
     
     try:
         excel_bytes = report_service.generate_excel_report(academic_year, semester_type)
@@ -179,7 +187,10 @@ async def export_master_workload(
     Download the institutional Master Workload Excel sheet.
     Works when semester is ALLOCATED (uses live data) or FROZEN (uses snapshot).
     """
-    snapshot, academic_year, semester_type = _get_snapshot_or_live_data()
+    snapshot, academic_year, semester_id = _get_snapshot_or_live_data()
+    
+    # Convert semester_id to semester_type for legacy report functions
+    semester_type = "EVEN" if semester_id in [2, 4, 6] else "ODD"
 
     from app.reports.master_workload_excel import generate_from_snapshot
     
@@ -206,7 +217,7 @@ async def export_master_workload(
     return StreamingResponse(
         io.BytesIO(excel_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="Master_Workload_{academic_year}_{semester_type}.xlsx"'},
+        headers={"Content-Disposition": f'attachment; filename="Master_Workload_{academic_year}_Sem{semester_id}.xlsx"'},
     )
 
 
@@ -218,7 +229,10 @@ async def export_pdf(
     Download workload report as PDF.
     Works when semester is ALLOCATED (uses live data) or FROZEN (uses snapshot).
     """
-    snapshot, academic_year, semester_type = _get_snapshot_or_live_data()
+    snapshot, academic_year, semester_id = _get_snapshot_or_live_data()
+    
+    # Convert semester_id to semester_type for legacy report functions
+    semester_type = "EVEN" if semester_id in [2, 4, 6] else "ODD"
 
     from app.reports.pdf_generator import generate_pdf_from_snapshot
     
@@ -245,5 +259,5 @@ async def export_pdf(
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="Master_Workload_{academic_year}_{semester_type}.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="Master_Workload_{academic_year}_Sem{semester_id}.pdf"'},
     )
