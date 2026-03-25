@@ -1,11 +1,19 @@
 #!/bin/sh
 set -e
 
+echo "DATABASE_URL is: $DATABASE_URL"
+echo "Testing DB connection..."
+psql $DATABASE_URL -c "SELECT 1;" || { echo "DB CONNECTION FAILED"; exit 1; }
+
 echo "Running database migrations..."
 
 run_migration() {
     echo "Running $1..."
-    psql $DATABASE_URL -f migrations/$1 || echo "Warning: $1 failed (may already be applied)"
+    if psql $DATABASE_URL -f migrations/$1; then
+        echo "OK: $1"
+    else
+        echo "SKIP: $1 (may already be applied)"
+    fi
 }
 
 run_migration schema.sql
