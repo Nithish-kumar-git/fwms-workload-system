@@ -65,7 +65,7 @@ export const deletePreference = (id: number) => api.delete(`/preferences/${id}`)
 export const getPreferenceStatus = () => api.get('/preferences/status');
 
 // ─── Allocation ───
-export const runAllocation = (data: { academic_year: string; semester_type: string; program_id: number | null }) =>
+export const runAllocation = (data: { academic_year: string; semester_id: number; program_id: number | null }) =>
     api.post('/allocation/run', data);
 
 // ─── Admin ───
@@ -99,7 +99,7 @@ export const downloadPdf = () =>
 // ─── Preference Window ───
 export const openPrefWindow = (data: {
     academic_year: string;
-    semester_type: string;
+    semester_id: number;
     start_time: string;
     end_time: string;
 }) => api.post('/pref-window/open', data);

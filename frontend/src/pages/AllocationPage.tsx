@@ -24,7 +24,7 @@ export default function AllocationPage() {
     const [cycleError, setCycleError] = useState('');
 
     const [cycleYear, setCycleYear] = useState('');
-    const [cycleSem, setCycleSem] = useState('');
+    const [cycleSem, setCycleSem] = useState<number>(0); // Now stores semester_id (1-6)
     const [programId, setProgramId] = useState<number | null>(null);
 
     const { toasts, addToast, removeToast } = useToast();
@@ -34,7 +34,7 @@ export default function AllocationPage() {
             .then(res => {
                 const ac = res.data;
                 setCycleYear(ac.academic_year);
-                setCycleSem(ac.semester_type);
+                setCycleSem(ac.semester_id); // Now returns semester_id (1-6)
             })
             .catch(err => {
                 const msg = err.response?.data?.detail || 'Failed to load active academic cycle';
@@ -54,7 +54,7 @@ export default function AllocationPage() {
         try {
             const res = await runAllocation({
                 academic_year: cycleYear,
-                semester_type: cycleSem,
+                semester_id: cycleSem,
                 program_id: programId,
             });
             setResult(res.data);
@@ -112,9 +112,9 @@ export default function AllocationPage() {
                     </div>
                     <div className="flex flex-col gap-1.5">
                         <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>
-                            Semester Type (Active Cycle)
+                            Semester (Active Cycle)
                         </label>
-                        <input className="form-input w-40" style={{ background: '#f9fafb', color: '#9ca3af', cursor: 'not-allowed' }} value={cycleSem} disabled />
+                        <input className="form-input w-40" style={{ background: '#f9fafb', color: '#9ca3af', cursor: 'not-allowed' }} value={cycleSem ? `Semester ${cycleSem}` : ''} disabled />
                     </div>
                     <div className="flex flex-col gap-1.5">
                         <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>

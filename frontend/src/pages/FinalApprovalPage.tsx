@@ -10,7 +10,8 @@ interface PipelineStatus {
     hod_approved: boolean;
     snapshot_id: number | null;
     academic_year: string | null;
-    semester_type: string | null;
+    semester_type: string | null; // Legacy field (may still be returned by backend)
+    semester_id: number | null; // New field
     is_locked: boolean;
 }
 
@@ -62,7 +63,7 @@ export default function FinalApprovalPage() {
             const link = document.createElement('a');
             link.href = url;
             const ay = status?.academic_year || 'workload';
-            const st = status?.semester_type || '';
+            const st = status?.semester_id ? `Sem${status.semester_id}` : (status?.semester_type || '');
             link.download = type === 'excel'
                 ? `Master_Workload_${ay}_${st}.xlsx`
                 : `Master_Workload_${ay}_${st}.pdf`;
@@ -110,7 +111,7 @@ export default function FinalApprovalPage() {
                 <div>
                     <h1 className="page-title">Final Approval</h1>
                     <p className="page-subtitle">
-                        {status?.academic_year} {status?.semester_type} semester
+                        {status?.academic_year} {status?.semester_id ? `Semester ${status.semester_id}` : status?.semester_type}
                     </p>
                 </div>
                 <button onClick={loadStatus} className="btn btn-outline" disabled={loading}>

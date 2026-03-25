@@ -46,7 +46,7 @@ export default function ReportsPage() {
             .finally(() => setLoading(false));
 
         getActiveCycle()
-            .then(r => { setCyclePrefix(`${r.data.academic_year}_${r.data.semester_type}_`); })
+            .then(r => { setCyclePrefix(`${r.data.academic_year}_Sem${r.data.semester_id}_`); })
             .catch(err => console.error('No active cycle', err));
     };
 

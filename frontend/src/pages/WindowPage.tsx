@@ -10,7 +10,7 @@ export default function WindowPage() {
     const [submitting, setSubmitting] = useState(false);
     const { toasts, addToast, removeToast } = useToast();
     const [year, setYear] = useState('2025-2026');
-    const [semType, setSemType] = useState('EVEN');
+    const [semesterId, setSemesterId] = useState(2); // Default to Semester II
     const [startTime, setStartTime] = useState('');
     const [endTime, setEndTime] = useState('');
     const [error, setError] = useState('');
@@ -51,7 +51,7 @@ export default function WindowPage() {
         setSubmitting(true);
         try {
             await openPrefWindow({
-                academic_year: year, semester_type: semType,
+                academic_year: year, semester_id: semesterId,
                 start_time: new Date(startTime).toISOString(),
                 end_time: new Date(endTime).toISOString(),
             });
@@ -141,7 +141,7 @@ export default function WindowPage() {
                         </div>
                         <div className="stat-card glass-card flex flex-col justify-center">
                             <div className="stat-label mb-1">Year / Semester</div>
-                            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: '#111827' }}>{status.academic_year} / {status.semester_type}</div>
+                            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: '#111827' }}>{status.academic_year} / Semester {status.semester_id}</div>
                         </div>
                     </div>
                 )}
@@ -167,10 +167,14 @@ export default function WindowPage() {
                                 <input className="form-input w-40" value={year} onChange={(e) => setYear(e.target.value)} />
                             </div>
                             <div className="flex flex-col gap-1.5">
-                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>Semester Type</label>
-                                <select className="form-select w-32" value={semType} onChange={(e) => setSemType(e.target.value)}>
-                                    <option value="EVEN">EVEN</option>
-                                    <option value="ODD">ODD</option>
+                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>Semester</label>
+                                <select className="form-select w-32" value={semesterId} onChange={(e) => setSemesterId(Number(e.target.value))}>
+                                    <option value={1}>I</option>
+                                    <option value={2}>II</option>
+                                    <option value={3}>III</option>
+                                    <option value={4}>IV</option>
+                                    <option value={5}>V</option>
+                                    <option value={6}>VI</option>
                                 </select>
                             </div>
                             <div className="flex flex-col gap-1.5">
