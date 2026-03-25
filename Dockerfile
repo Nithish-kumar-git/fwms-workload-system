@@ -38,6 +38,10 @@ COPY --from=builder /root/.local /root/.local
 # Copy application code
 COPY app/ ./app/
 COPY migrations/ ./migrations/
+COPY startup.sh ./startup.sh
+
+# Make startup script executable
+RUN chmod +x startup.sh
 
 # Ensure scripts are in PATH
 ENV PATH=/root/.local/bin:$PATH
@@ -50,4 +54,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request, os; urllib.request.urlopen(f'http://localhost:{os.getenv(\"PORT\", \"8000\")}/api/health')" || exit 1
 
 # Default command (can be overridden in docker-compose)
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port $PORT"]
+CMD ["sh", "startup.sh"]
