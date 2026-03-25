@@ -25,10 +25,8 @@ router = APIRouter(prefix="/api/allocation", tags=["allocation"])
 
 class AllocationScope(BaseModel):
     academic_year: str | None = None
-    semester_type: str | None = None
-    academic_cycle_id: int | None = None
+    semester_id: int | None = None  # NEW: semester_id (1-6)
     program_id: int | None = None
-    semester_id: int | None = None  # Optional - will be resolved from academic_year + semester_type if not provided
 
 @router.post("/run", response_model=AllocationRunResponse)
 async def run_allocation(
@@ -89,8 +87,8 @@ async def run_allocation(
     if scope.semester_id:
         # Single semester allocation
         resolved_semester_ids = [scope.semester_id]
-    elif scope.academic_year and scope.semester_type:
-        # Multi-semester allocation - allocate ALL semesters for this cycle
+    elif scope.academic_year:
+        # Multi-semester allocation - allocate the semester from active cycle
         from app.db.session import get_transaction
         from sqlalchemy import text
         from app.admin.cycle_service_new import get_active_cycle
@@ -103,47 +101,21 @@ async def run_allocation(
                 detail="No active academic cycle found"
             )
         
-        # Verify provided academic_year and semester_type match active cycle
-        if (scope.academic_year != active_cycle["academic_year"] or 
-            scope.semester_type != active_cycle["semester_type"]):
+        # Verify provided academic_year matches active cycle
+        if scope.academic_year != active_cycle["academic_year"]:
             raise HTTPException(
                 status_code=400,
-                detail=f"Provided cycle ({scope.academic_year} {scope.semester_type}) does not match active cycle ({active_cycle['academic_year']} {active_cycle['semester_type']})"
+                detail=f"Provided year ({scope.academic_year}) does not match active cycle ({active_cycle['academic_year']})"
             )
         
-        cycle_id = active_cycle["id"]
+        # Use the semester_id from active cycle
+        resolved_semester_ids = [active_cycle["semester_id"]]
         
-        # Find ALL semesters with offerings in this cycle
-        with get_transaction() as session:
-            semester_rows = session.execute(
-                text("""
-                    SELECT DISTINCT s.id, s.label, s.state
-                    FROM semester s
-                    WHERE EXISTS (
-                        SELECT 1 FROM subject_offering so 
-                        WHERE so.semester_id = s.id 
-                        AND so.academic_cycle_id = :cid
-                    )
-                    ORDER BY s.id
-                """),
-                {"cid": cycle_id}
-            ).fetchall()
-            
-            if not semester_rows:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"No semesters found with offerings for cycle {scope.academic_year} {scope.semester_type}"
-                )
-            
-            # Allocate ALL semesters (not just the first one)
-            resolved_semester_ids = [row[0] for row in semester_rows]
-            semester_labels = [row[1] for row in semester_rows]
-            
-            logger.info(f"Resolved {len(resolved_semester_ids)} semesters for allocation: {', '.join(semester_labels)}")
+        logger.info(f"Resolved semester {active_cycle['semester_id']} from active cycle")
     else:
         raise HTTPException(
             status_code=400,
-            detail="Must provide either semester_id OR (academic_year + semester_type)"
+            detail="Must provide either semester_id OR academic_year"
         )
     
     # ================================================================
@@ -159,8 +131,8 @@ async def run_allocation(
         try:
             result = allocation_service.run_allocation(
                 academic_year=scope.academic_year,
-                semester_type=scope.semester_type,
-                academic_cycle_id=scope.academic_cycle_id,
+                semester_type=None,  # No longer used
+                academic_cycle_id=None,  # No longer used
                 program_id=scope.program_id,
                 semester_id=sem_id
             )
