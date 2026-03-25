@@ -5,6 +5,9 @@ echo "DATABASE_URL is: $DATABASE_URL"
 echo "Testing DB connection..."
 psql $DATABASE_URL -c "SELECT 1;" || { echo "DB CONNECTION FAILED"; exit 1; }
 
+echo "Checking Python imports..."
+python app/startup_check.py || { echo "IMPORT CHECK FAILED - see above"; exit 1; }
+
 echo "Running database migrations..."
 
 run_migration() {
