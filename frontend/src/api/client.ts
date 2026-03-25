@@ -1,7 +1,12 @@
 import axios from 'axios';
 
+// Construct baseURL: use VITE_API_URL if set, otherwise fallback to relative '/api'
+const baseURL = import.meta.env.VITE_API_URL 
+    ? `${import.meta.env.VITE_API_URL}/api`
+    : '/api';
+
 const api = axios.create({
-    baseURL: (import.meta.env.VITE_API_URL || '') + '/api',
+    baseURL,
     withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
