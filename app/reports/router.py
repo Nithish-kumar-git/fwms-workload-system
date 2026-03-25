@@ -117,7 +117,7 @@ def _get_snapshot_or_live_data() -> tuple[dict | None, str, str]:
     Raises HTTP 400 if no semesters are ALLOCATED or FROZEN.
     """
     from app.reports.snapshot_service import get_snapshot
-    from app.admin.cycle_service import get_active_cycle
+    from app.admin.cycle_service_new import get_active_cycle
     from app.db.session import get_transaction
     from sqlalchemy import text
     

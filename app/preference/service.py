@@ -347,7 +347,7 @@ def list_preferences(staff_id: int) -> list[dict]:
     Returns:
         List of preference dicts with joined subject info.
     """
-    from app.admin.cycle_service import get_active_cycle
+    from app.admin.cycle_service_new import get_active_cycle
     active_cycle = get_active_cycle()
     if not active_cycle:
         return []

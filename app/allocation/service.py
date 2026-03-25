@@ -464,7 +464,7 @@ def run_allocation(
     # ================================================================
     # CYCLE GUARD: Resolve active academic cycle
     # ================================================================
-    from app.admin.cycle_service import get_active_cycle
+    from app.admin.cycle_service_new import get_active_cycle
     active_cycle = get_active_cycle()
     if active_cycle is None:
         return {

@@ -22,13 +22,13 @@ def open_preference_window(
     start_time: str,
     end_time: str,
     academic_year: str | None = None,
-    semester_type: str | None = None,
-    academic_cycle_id: int | None = None,
+    semester_id: int | None = None,
+    cycle_id: int | None = None,
 ) -> dict:
     """
     Open a preference submission window.
     Follows the frozen lifecycle: DRAFT → SCHEDULED → OPEN.
-    Only one OPEN window allowed per academic_year + semester_type.
+    Only one OPEN window allowed per academic_year + semester_id.
     """
     with get_transaction() as session:
         # Check for existing OPEN window
@@ -46,39 +46,39 @@ def open_preference_window(
                 "message": f"An open window already exists (id={existing[0]}). Close it first.",
             }
 
-        cycle_id = None
+        resolved_cycle_id = None
         # 1. Use explicit ID
-        if academic_cycle_id is not None:
-            cycle_id = academic_cycle_id
+        if cycle_id is not None:
+            resolved_cycle_id = cycle_id
         # 2. Lookup by year/semester
-        elif academic_year and semester_type:
+        elif academic_year and semester_id:
             cycle_row = session.execute(
                 text("""
-                    SELECT id FROM academic_cycle
-                    WHERE academic_year = :year AND semester_type = :sem
+                    SELECT id FROM cycle
+                    WHERE academic_year = :year AND semester_id = :sem_id
                     ORDER BY id DESC LIMIT 1
                 """),
-                {"year": academic_year, "sem": semester_type},
+                {"year": academic_year, "sem_id": semester_id},
             ).fetchone()
-            cycle_id = cycle_row[0] if cycle_row else None
+            resolved_cycle_id = cycle_row[0] if cycle_row else None
         
         # 3. Fallback to active cycle
-        if cycle_id is None:
-            from app.admin.cycle_service import get_active_cycle
+        if resolved_cycle_id is None:
+            from app.admin.cycle_service_new import get_active_cycle
             active = get_active_cycle()
             if active:
-                cycle_id = active["id"]
+                resolved_cycle_id = active["id"]
                 academic_year = active["academic_year"]
-                semester_type = active["semester_type"]
+                semester_id = active["semester_id"]
             else:
-                return {"success": False, "message": "Failed to resolve academic cycle scope"}
+                return {"success": False, "message": "Failed to resolve cycle scope"}
                 
         # ---- LIFECYCLE STEP 1: Insert as DRAFT ----
         result = session.execute(
             text("""
                 INSERT INTO selection_window
                     (name, batch_id, specialization_id, start_time, end_time,
-                     status, max_subjects_per_staff, academic_cycle_id,
+                     status, max_subjects_per_staff, cycle_id,
                      allocation_locked)
                 VALUES (
                     :name, 1, 1, :start_time, :end_time,
@@ -87,10 +87,10 @@ def open_preference_window(
                 RETURNING id
             """),
             {
-                "name": f"Preference Window {academic_year} {semester_type}",
+                "name": f"Preference Window {academic_year} Sem-{semester_id}",
                 "start_time": start_time,
                 "end_time": end_time,
-                "cycle_id": cycle_id,
+                "cycle_id": resolved_cycle_id,
             },
         )
         window_id = result.scalar()
@@ -106,7 +106,7 @@ def open_preference_window(
                 "details": (
                     f'{{"window_id": {window_id}, '
                     f'"academic_year": "{academic_year}", '
-                    f'"semester_type": "{semester_type}"}}'
+                    f'"semester_id": {semester_id}}}'
                 ),
             },
         )
@@ -158,7 +158,7 @@ def open_preference_window(
                 "details": (
                     f'{{"window_id": {window_id}, '
                     f'"academic_year": "{academic_year}", '
-                    f'"semester_type": "{semester_type}", '
+                    f'"semester_id": {semester_id}, '
                     f'"start_time": "{start_time}", '
                     f'"end_time": "{end_time}"}}'
                 ),
@@ -217,9 +217,9 @@ def get_window_status() -> dict:
         row = session.execute(
             text("""
                 SELECT sw.id, sw.status, sw.start_time, sw.end_time,
-                       ac.academic_year, ac.semester_type
+                       c.academic_year, c.semester_id
                 FROM selection_window sw
-                LEFT JOIN academic_cycle ac ON ac.id = sw.academic_cycle_id
+                LEFT JOIN cycle c ON c.id = sw.cycle_id
                 WHERE sw.status = 'OPEN'
                 ORDER BY sw.id DESC LIMIT 1
             """),
@@ -234,7 +234,7 @@ def get_window_status() -> dict:
             "end_time": None,
             "remaining_seconds": 0,
             "academic_year": None,
-            "semester_type": None,
+            "semester_id": None,
         }
 
     now = datetime.now(timezone.utc)
@@ -252,7 +252,7 @@ def get_window_status() -> dict:
         "end_time": str(row[3]),
         "remaining_seconds": remaining,
         "academic_year": row[4],
-        "semester_type": row[5],
+        "semester_id": row[5],
     }
 
 

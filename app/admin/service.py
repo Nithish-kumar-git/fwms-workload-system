@@ -34,7 +34,7 @@ def _is_shift_compatible(staff_shift: str, offering_shift: int) -> bool:
 # STEP 1: Allocation Review
 # ============================================================================
 
-def list_allocations(academic_year: str = "2025-2026", semester_type: str = "EVEN") -> list[dict]:
+def list_allocations(academic_year: str = "2025-2026", semester_id: int = 2) -> list[dict]:
     """
     List all allocations with full staff + subject details.
     """
@@ -54,10 +54,11 @@ def list_allocations(academic_year: str = "2025-2026", semester_type: str = "EVE
                 JOIN section sec ON sec.id = so.section_id
                 JOIN semester sem ON sem.id = so.semester_id
                 JOIN program p ON p.id = so.program_id
-                WHERE so.academic_year = :year AND so.semester_type = :sem_type
+                JOIN cycle c ON c.id = a.cycle_id
+                WHERE c.academic_year = :year AND c.semester_id = :sem_id
                 ORDER BY p.name, sem.label, sec.label, sub.code
             """),
-            {"year": academic_year, "sem_type": semester_type}
+            {"year": academic_year, "sem_id": semester_id}
         ).fetchall()
     
     return [
@@ -124,8 +125,8 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
         # Load existing allocation with full details
         alloc = session.execute(
             text("""
-                SELECT a.id, a.staff_id, a.subject_offering_id, a.academic_cycle_id,
-                       so.shift, so.academic_year, so.semester_type,
+                SELECT a.id, a.staff_id, a.subject_offering_id, a.cycle_id,
+                       so.shift, c.academic_year, s.label AS semester_name,
                        sub.code, sub.name, sub.tch,
                        sub.l, sub.t, sub.p,
                        old_staff.name AS old_staff_name, old_staff.emp_code AS old_emp_code
@@ -133,6 +134,8 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
                 JOIN subject_offering so ON so.id = a.subject_offering_id
                 JOIN subject sub ON sub.id = so.subject_id
                 JOIN staff old_staff ON old_staff.id = a.staff_id
+                JOIN cycle c ON c.id = a.cycle_id
+                JOIN semester s ON s.id = c.semester_id
                 WHERE a.id = :aid
             """),
             {"aid": allocation_id}
@@ -146,7 +149,7 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
         cycle_id = alloc[3]
         offering_shift = alloc[4]
         academic_year = alloc[5]
-        semester_type = alloc[6]
+        semester_name = alloc[6]
         course_code = alloc[7]
         course_name = alloc[8]
         offer_tch = alloc[9] or 0
@@ -184,7 +187,7 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
                 FROM allocation a
                 JOIN subject_offering so ON so.id = a.subject_offering_id
                 JOIN subject sub ON sub.id = so.subject_id
-                WHERE a.staff_id = :sid AND a.academic_cycle_id = :cid
+                WHERE a.staff_id = :sid AND a.cycle_id = :cid
             """),
             {"sid": new_staff_id, "cid": cycle_id}
         ).scalar()
@@ -210,7 +213,7 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
                 JOIN subject_offering so ON so.id = a.subject_offering_id
                 JOIN subject sub ON sub.id = so.subject_id
                 WHERE a.staff_id = :sid AND sub.code = :code 
-                  AND a.id != :aid AND a.academic_cycle_id = :cid
+                  AND a.id != :aid AND a.cycle_id = :cid
             """),
             {"sid": new_staff_id, "code": course_code, "aid": allocation_id, "cid": cycle_id}
         ).scalar()
@@ -225,8 +228,8 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
         )
         
         # PHASE 3: Update workload_summary for both faculty immediately
-        _refresh_workload_summary_for_cycle(session, old_staff_id, cycle_id, academic_year, semester_type)
-        _refresh_workload_summary_for_cycle(session, new_staff_id, cycle_id, academic_year, semester_type)
+        _refresh_workload_summary_for_cycle(session, old_staff_id, cycle_id, academic_year, semester_name)
+        _refresh_workload_summary_for_cycle(session, new_staff_id, cycle_id, academic_year, semester_name)
         
         # PHASE 3: Enhanced audit log with before/after details
         session.execute(
@@ -324,14 +327,16 @@ def reassign_subject(
         # Find existing allocation with full details
         alloc = session.execute(
             text("""
-                SELECT a.id, a.academic_cycle_id,
-                       so.shift, so.academic_year, so.semester_type,
+                SELECT a.id, a.cycle_id,
+                       so.shift, c.academic_year, s.label AS semester_name,
                        sub.code, sub.name, sub.tch, sub.l, sub.t, sub.p,
                        from_staff.name AS from_staff_name, from_staff.emp_code AS from_emp_code
                 FROM allocation a
                 JOIN subject_offering so ON so.id = a.subject_offering_id
                 JOIN subject sub ON sub.id = so.subject_id
                 JOIN staff from_staff ON from_staff.id = a.staff_id
+                JOIN cycle c ON c.id = a.cycle_id
+                JOIN semester s ON s.id = c.semester_id
                 WHERE a.staff_id = :from_sid AND a.subject_offering_id = :oid
             """),
             {"from_sid": from_staff_id, "oid": subject_offering_id}
@@ -347,7 +352,7 @@ def reassign_subject(
         cycle_id = alloc[1]
         offering_shift = alloc[2]
         academic_year = alloc[3]
-        semester_type = alloc[4]
+        semester_name = alloc[4]
         course_code = alloc[5]
         course_name = alloc[6]
         offer_tch = alloc[7] or 0
@@ -383,7 +388,7 @@ def reassign_subject(
                 FROM allocation a
                 JOIN subject_offering so ON so.id = a.subject_offering_id
                 JOIN subject sub ON sub.id = so.subject_id
-                WHERE a.staff_id = :sid AND a.academic_cycle_id = :cid
+                WHERE a.staff_id = :sid AND a.cycle_id = :cid
             """),
             {"sid": to_staff_id, "cid": cycle_id}
         ).scalar()
@@ -408,7 +413,7 @@ def reassign_subject(
                 SELECT count(*) FROM allocation a
                 JOIN subject_offering so ON so.id = a.subject_offering_id
                 JOIN subject sub ON sub.id = so.subject_id
-                WHERE a.staff_id = :sid AND sub.code = :code AND a.academic_cycle_id = :cid
+                WHERE a.staff_id = :sid AND sub.code = :code AND a.cycle_id = :cid
             """),
             {"sid": to_staff_id, "code": course_code, "cid": cycle_id}
         ).scalar()
@@ -426,7 +431,7 @@ def reassign_subject(
         new_alloc = session.execute(
             text("""
                 INSERT INTO allocation 
-                    (staff_id, subject_offering_id, l_assigned, t_assigned, p_assigned, academic_cycle_id)
+                    (staff_id, subject_offering_id, l_assigned, t_assigned, p_assigned, cycle_id)
                 VALUES (:sid, :oid, :l, :t, :p, :cid)
                 RETURNING id
             """),
@@ -435,8 +440,8 @@ def reassign_subject(
         new_alloc_id = new_alloc.scalar()
         
         # PHASE 3: Update workload_summary for both faculty immediately
-        _refresh_workload_summary_for_cycle(session, from_staff_id, cycle_id, academic_year, semester_type)
-        _refresh_workload_summary_for_cycle(session, to_staff_id, cycle_id, academic_year, semester_type)
+        _refresh_workload_summary_for_cycle(session, from_staff_id, cycle_id, academic_year, semester_name)
+        _refresh_workload_summary_for_cycle(session, to_staff_id, cycle_id, academic_year, semester_name)
         
         # PHASE 3: Enhanced audit log with before/after details
         session.execute(
@@ -557,15 +562,15 @@ def _is_allocation_locked(session) -> bool:
 # ============================================================================
 
 def get_workload_summary(
-    academic_year: str | None = None, semester_type: str | None = None
+    academic_year: str | None = None, semester_id: int | None = None
 ) -> dict:
     """
     Get workload summary for all faculty with allocations.
-    If academic_year and semester_type not provided, uses active cycle.
+    If academic_year and semester_id not provided, uses active cycle.
     """
     # Resolve from active cycle if not provided
-    if academic_year is None or semester_type is None:
-        from app.admin.cycle_service import get_active_cycle
+    if academic_year is None or semester_id is None:
+        from app.admin.cycle_service_new import get_active_cycle
         active_cycle = get_active_cycle()
         if active_cycle is None:
             return {
@@ -576,7 +581,7 @@ def get_workload_summary(
                 "records": [],
             }
         academic_year = active_cycle["academic_year"]
-        semester_type = active_cycle["semester_type"]
+        semester_id = active_cycle["semester_id"]
     
     with get_transaction() as session:
         rows = session.execute(
@@ -589,11 +594,11 @@ def get_workload_summary(
                 FROM staff s
                 LEFT JOIN workload_summary ws ON ws.staff_id = s.id
                     AND ws.academic_year = :year
-                    AND ws.semester_type = :sem_type
+                    AND ws.semester_id = :sem_id
                 WHERE s.emp_code IS NOT NULL AND s.is_active = true
                 ORDER BY s.designation, s.name
             """),
-            {"year": academic_year, "sem_type": semester_type}
+            {"year": academic_year, "sem_id": semester_id}
         ).fetchall()
     
     records = []
@@ -638,7 +643,7 @@ def get_workload_summary(
 
 def _refresh_workload_summary_for_cycle(
     session, staff_id: int, cycle_id: int,
-    academic_year: str, semester_type: str
+    academic_year: str, semester_name: str
 ):
     """
     Recalculate and upsert workload_summary for one faculty member.
@@ -653,7 +658,7 @@ def _refresh_workload_summary_for_cycle(
             FROM allocation a
             JOIN subject_offering so ON so.id = a.subject_offering_id
             JOIN subject sub ON sub.id = so.subject_id
-            WHERE a.staff_id = :sid AND a.academic_cycle_id = :cid
+            WHERE a.staff_id = :sid AND a.cycle_id = :cid
         """),
         {"sid": staff_id, "cid": cycle_id}
     ).scalar()
@@ -665,26 +670,32 @@ def _refresh_workload_summary_for_cycle(
     
     deviation = tch_total - tch_norm
     
+    # Get semester_id from cycle
+    semester_id = session.execute(
+        text("SELECT semester_id FROM cycle WHERE id = :cid"),
+        {"cid": cycle_id}
+    ).scalar()
+    
     # UPSERT workload_summary
     session.execute(
         text("""
             INSERT INTO workload_summary 
-                (staff_id, academic_year, semester_type, tch_total,
-                 norm_hours, deviation_hours, total_workload, academic_cycle_id)
-            VALUES (:sid, :year, :sem_type, :tch_total,
+                (staff_id, academic_year, semester_id, tch_total,
+                 norm_hours, deviation_hours, total_workload, cycle_id)
+            VALUES (:sid, :year, :sem_id, :tch_total,
                     :norm, :deviation, :tch_total, :cid)
-            ON CONFLICT (staff_id, academic_year, semester_type)
+            ON CONFLICT (staff_id, academic_year, semester_id)
             DO UPDATE SET 
                 tch_total = EXCLUDED.tch_total,
                 norm_hours = EXCLUDED.norm_hours,
                 deviation_hours = EXCLUDED.deviation_hours,
                 total_workload = EXCLUDED.total_workload,
-                academic_cycle_id = EXCLUDED.academic_cycle_id,
+                cycle_id = EXCLUDED.cycle_id,
                 updated_at = now()
         """),
         {
             "sid": staff_id, "year": academic_year,
-            "sem_type": semester_type, "tch_total": tch_total,
+            "sem_id": semester_id, "tch_total": tch_total,
             "norm": tch_norm, "deviation": deviation, "cid": cycle_id,
         }
     )

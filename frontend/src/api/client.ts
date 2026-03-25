@@ -133,7 +133,7 @@ export const deactivateStaff = (id: number) =>
 // ─── Academic Cycles ───
 export const createCycle = (data: {
     academic_year: string;
-    semester_type: string;
+    semester_id: number;
     start_date?: string;
     end_date?: string;
 }) => api.post('/cycles', data);

@@ -30,8 +30,8 @@ class OpenWindowRequest(BaseModel):
     start_time: str = Field(..., description="ISO datetime")
     end_time: str = Field(..., description="ISO datetime")
     academic_year: str | None = Field(None, description="e.g. 2025-2026")
-    semester_type: str | None = Field(None, description="EVEN or ODD")
-    academic_cycle_id: int | None = Field(None)
+    semester_id: int | None = Field(None, description="Semester ID (1-6)")
+    cycle_id: int | None = Field(None)
 
 
 class WindowResponse(BaseModel):
@@ -48,7 +48,7 @@ class WindowStatusResponse(BaseModel):
     end_time: str | None = None
     remaining_seconds: int = 0
     academic_year: str | None = None
-    semester_type: str | None = None
+    semester_id: int | None = None
 
 
 # --- Endpoints ---
@@ -64,8 +64,8 @@ async def open_window(
         start_time=body.start_time,
         end_time=body.end_time,
         academic_year=body.academic_year,
-        semester_type=body.semester_type,
-        academic_cycle_id=body.academic_cycle_id,
+        semester_id=body.semester_id,
+        cycle_id=body.cycle_id,
     )
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])

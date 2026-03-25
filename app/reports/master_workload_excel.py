@@ -106,33 +106,33 @@ def _to_roman(sem_value: str) -> str:
 
 # ─── Data fetching ───────────────────────────────────────────────────────────
 
-def _resolve_active_cycle(session) -> tuple[str, str]:
-    """Get active academic_year, semester_type."""
+def _resolve_active_cycle(session) -> tuple[str, int]:
+    """Get active academic_year, semester_id."""
     row = session.execute(
         text("""
-            SELECT academic_year, semester_type
-            FROM academic_cycle
+            SELECT academic_year, semester_id
+            FROM cycle
             WHERE is_active = true
             LIMIT 1
         """)
     ).fetchone()
     if not row:
-        raise RuntimeError("No active academic cycle found.")
+        raise RuntimeError("No active cycle found.")
     return row[0], row[1]
 
 
 def _fetch_workload_data(
     academic_year: Optional[str] = None,
-    semester_type: Optional[str] = None,
-) -> tuple[list[dict], str, str]:
+    semester_id: Optional[int] = None,
+) -> tuple[list[dict], str, int]:
     """
     Fetch all allocation data joined with offering, subject, program,
     semester, section, and staff.  Returns flat list of dicts, one per
     allocation row.  Sorted by emp_code ASC.
     """
     with get_transaction() as session:
-        if academic_year is None or semester_type is None:
-            academic_year, semester_type = _resolve_active_cycle(session)
+        if academic_year is None or semester_id is None:
+            academic_year, semester_id = _resolve_active_cycle(session)
 
         rows = session.execute(
             text("""
@@ -165,16 +165,17 @@ def _fetch_workload_data(
                 JOIN semester sem        ON sem.id = so.semester_id
                 JOIN section sec         ON sec.id = so.section_id
                 JOIN staff s             ON s.id = a.staff_id
+                JOIN cycle c             ON c.id = a.cycle_id
                 LEFT JOIN workload_summary ws
                     ON ws.staff_id = s.id
                    AND ws.academic_year = :year
-                   AND ws.semester_type = :sem_type
-                WHERE so.academic_year = :year
-                  AND so.semester_type = :sem_type
+                   AND ws.semester_id = :sem_id
+                WHERE c.academic_year = :year
+                  AND c.semester_id = :sem_id
                   AND s.is_active = true
                 ORDER BY s.emp_code ASC, p.name, sem.label, sec.label
             """),
-            {"year": academic_year, "sem_type": semester_type},
+            {"year": academic_year, "sem_id": semester_id},
         ).fetchall()
 
         data = []
@@ -222,18 +223,18 @@ def _fetch_workload_data(
                 LEFT JOIN workload_summary ws
                     ON ws.staff_id = s.id
                    AND ws.academic_year = :year
-                   AND ws.semester_type = :sem_type
+                   AND ws.semester_id = :sem_id
                 WHERE s.emp_code IS NOT NULL
                   AND s.is_active = true
                   AND s.id NOT IN (
                       SELECT DISTINCT a2.staff_id
                       FROM allocation a2
-                      JOIN subject_offering so2 ON so2.id = a2.subject_offering_id
-                      WHERE so2.academic_year = :year AND so2.semester_type = :sem_type
+                      JOIN cycle c2 ON c2.id = a2.cycle_id
+                      WHERE c2.academic_year = :year AND c2.semester_id = :sem_id
                   )
                 ORDER BY s.emp_code ASC
             """),
-            {"year": academic_year, "sem_type": semester_type},
+            {"year": academic_year, "sem_id": semester_id},
         ).fetchall()
 
         for r in unassigned:
@@ -263,7 +264,7 @@ def _fetch_workload_data(
                 "research_scholars": r[7],
             })
 
-        return data, academic_year, semester_type
+        return data, academic_year, semester_id
 
 
 def _group_by_faculty(data: list[dict]) -> list[dict]:
@@ -322,7 +323,7 @@ def _group_by_faculty(data: list[dict]) -> list[dict]:
 
 def generate_master_workload_excel(
     academic_year: Optional[str] = None,
-    semester_type: Optional[str] = None,
+    semester_id: Optional[int] = None,
 ) -> bytes:
     """Generate the institutional master workload Excel sheet. Returns bytes."""
 
@@ -331,7 +332,7 @@ def generate_master_workload_excel(
     from openpyxl.utils import get_column_letter
 
     # ── Fetch and group data ──
-    data, ay, st = _fetch_workload_data(academic_year, semester_type)
+    data, ay, sid = _fetch_workload_data(academic_year, semester_id)
     faculty_blocks = _group_by_faculty(data)
 
     wb = Workbook()
@@ -364,7 +365,7 @@ def generate_master_workload_excel(
         "HINDUSTAN INSTITUTE OF TECHNOLOGY AND SCIENCE",
         "SCHOOL OF BASIC AND APPLIED SCIENCES",
         "DEPARTMENT NAME: COMPUTER APPLICATIONS",
-        f"MASTER WORKLOAD - {'EVEN' if st == 'EVEN' else 'ODD'} SEMESTER {ay}",
+        f"MASTER WORKLOAD - SEMESTER {sid} {ay}",
     ]
     for row_idx, txt in enumerate(header_texts, start=1):
         ws.merge_cells(f"A{row_idx}:{last_col_letter}{row_idx}")
@@ -495,7 +496,7 @@ def generate_master_workload_excel(
 def generate_from_snapshot(
     snapshot_data: list[dict],
     academic_year: str,
-    semester_type: str,
+    semester_id: int,
 ) -> bytes:
     """
     Generate the institutional master workload Excel sheet from snapshot JSON.
@@ -504,7 +505,7 @@ def generate_from_snapshot(
     Args:
         snapshot_data: list of faculty block dicts from workload_snapshot.snapshot_data
         academic_year: e.g. "2025-2026"
-        semester_type: "ODD" or "EVEN"
+        semester_id: integer 1-6
 
     Returns:
         Excel file as bytes
@@ -543,7 +544,7 @@ def generate_from_snapshot(
         "HINDUSTAN INSTITUTE OF TECHNOLOGY AND SCIENCE",
         "SCHOOL OF BASIC AND APPLIED SCIENCES",
         "DEPARTMENT NAME: COMPUTER APPLICATIONS",
-        f"MASTER WORKLOAD - {'EVEN' if semester_type == 'EVEN' else 'ODD'} SEMESTER {academic_year}",
+        f"MASTER WORKLOAD - SEMESTER {semester_id} {academic_year}",
     ]
     for row_idx, txt in enumerate(header_texts, start=1):
         ws.merge_cells(f"A{row_idx}:{last_col_letter}{row_idx}")
@@ -676,4 +677,3 @@ def generate_from_snapshot(
     wb.save(output)
     output.seek(0)
     return output.getvalue()
-

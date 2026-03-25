@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 import logging
 
 from app.auth.dependencies import get_current_coordinator_id
-from app.admin.cycle_service import (
+from app.admin.cycle_service_new import (
     create_cycle,
     activate_cycle,
     list_cycles,
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/api/cycles", tags=["academic-cycles"])
 
 class CreateCycleRequest(BaseModel):
     academic_year: str = Field(..., description="e.g. 2025-2026")
-    semester_type: str = Field(..., description="ODD or EVEN")
+    semester_id: int = Field(..., description="Semester ID (1-6 for I-VI)")
     start_date: str | None = None
     end_date: str | None = None
 
@@ -42,9 +42,12 @@ class ActivateCycleRequest(BaseModel):
 class CycleResponse(BaseModel):
     id: int
     academic_year: str
-    semester_type: str
-    start_date: str | None = None
-    end_date: str | None = None
+    semester: str
+    status: str
+    opened_at: str | None = None
+    closed_at: str | None = None
+    allocated_at: str | None = None
+    frozen_at: str | None = None
     is_active: bool
     created_at: str
 
@@ -65,7 +68,7 @@ async def create_cycle_endpoint(
     """Create a new academic cycle. Coordinator-only."""
     result = create_cycle(
         academic_year=body.academic_year,
-        semester_type=body.semester_type,
+        semester_id=body.semester_id,
         start_date=body.start_date,
         end_date=body.end_date,
     )

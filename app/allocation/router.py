@@ -93,7 +93,7 @@ async def run_allocation(
         # Multi-semester allocation - allocate ALL semesters for this cycle
         from app.db.session import get_transaction
         from sqlalchemy import text
-        from app.admin.cycle_service import get_active_cycle
+        from app.admin.cycle_service_new import get_active_cycle
         
         # Get active cycle to validate
         active_cycle = get_active_cycle()
