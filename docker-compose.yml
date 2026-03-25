@@ -59,43 +59,51 @@ services:
         set -e &&
         echo 'Waiting for database to be ready...' &&
         sleep 5 &&
-        echo '=== Running migrations (18 files) ===' &&
-        echo '[1/18] schema.sql ...' &&
+        echo '=== Running migrations (22 files) ===' &&
+        echo '[1/22] schema.sql ...' &&
         psql $DATABASE_URL -f migrations/schema.sql &&
-        echo '[2/18] 002_window_lifecycle.sql ...' &&
+        echo '[2/22] 002_window_lifecycle.sql ...' &&
         psql $DATABASE_URL -f migrations/002_window_lifecycle.sql &&
-        echo '[3/18] 003_seed_minimal.sql ...' &&
+        echo '[3/22] 003_seed_minimal.sql ...' &&
         psql $DATABASE_URL -f migrations/003_seed_minimal.sql &&
-        echo '[4/18] 004_seed_demo.sql ...' &&
+        echo '[4/22] 004_seed_demo.sql ...' &&
         psql $DATABASE_URL -f migrations/004_seed_demo.sql &&
-        echo '[5/18] 005_workload_schema.sql ...' &&
+        echo '[5/22] 005_workload_schema.sql ...' &&
         psql $DATABASE_URL -f migrations/005_workload_schema.sql &&
-        echo '[6/18] 006_academic_seed.sql ...' &&
+        echo '[6/22] 006_academic_seed.sql ...' &&
         psql $DATABASE_URL -f migrations/006_academic_seed.sql &&
-        echo '[7/18] 007_faculty_seed.sql ...' &&
+        echo '[7/22] 007_faculty_seed.sql ...' &&
         psql $DATABASE_URL -f migrations/007_faculty_seed.sql &&
-        echo '[8/18] 008_admin_override_schema.sql ...' &&
+        echo '[8/22] 008_admin_override_schema.sql ...' &&
         psql $DATABASE_URL -f migrations/008_admin_override_schema.sql &&
-        echo '[9/18] 009_window_audit_types.sql ...' &&
+        echo '[9/22] 009_window_audit_types.sql ...' &&
         psql $DATABASE_URL -f migrations/009_window_audit_types.sql &&
-        echo '[10/18] 010_academic_cycle_support.sql ...' &&
+        echo '[10/22] 010_academic_cycle_support.sql ...' &&
         psql $DATABASE_URL -f migrations/010_academic_cycle_support.sql &&
-        echo '[11/18] 011_update_staff_emails.sql ...' &&
+        echo '[11/22] 011_update_staff_emails.sql ...' &&
         psql $DATABASE_URL -f migrations/011_update_staff_emails.sql &&
-        echo '[12/18] 011b_workload_snapshot.sql ...' &&
+        echo '[12/22] 011b_workload_snapshot.sql ...' &&
         psql $DATABASE_URL -f migrations/011b_workload_snapshot.sql &&
-        echo '[13/18] 012_fix_audit_constraint.sql ...' &&
+        echo '[13/22] 012_fix_audit_constraint.sql ...' &&
         psql $DATABASE_URL -f migrations/012_fix_audit_constraint.sql &&
-        echo '[14/18] 013_single_active_cycle.sql ...' &&
+        echo '[14/22] 013_single_active_cycle.sql ...' &&
         psql $DATABASE_URL -f migrations/013_single_active_cycle.sql &&
-        echo '[15/18] 014_fix_allocation_pipeline.sql ...' &&
+        echo '[15/22] 014_fix_allocation_pipeline.sql ...' &&
         psql $DATABASE_URL -f migrations/014_fix_allocation_pipeline.sql &&
-        echo '[16/18] 015_fix_preference_constraint.sql ...' &&
+        echo '[16/22] 015_fix_preference_constraint.sql ...' &&
         psql $DATABASE_URL -f migrations/015_fix_preference_constraint.sql &&
-        echo '[17/18] 016_semester_state_management.sql ...' &&
+        echo '[17/22] 016_semester_state_management.sql ...' &&
         psql $DATABASE_URL -f migrations/016_semester_state_management.sql &&
-        echo '[18/18] 017_add_role_column.sql ...' &&
+        echo '[18/22] 017_add_role_column.sql ...' &&
         psql $DATABASE_URL -f migrations/017_add_role_column.sql &&
+        echo '[19/22] 019_final_fixed.sql ...' &&
+        psql $DATABASE_URL -f migrations/019_final_fixed.sql &&
+        echo '[20/22] 019_real_subjects_final.sql ...' &&
+        psql $DATABASE_URL -f migrations/019_real_subjects_final.sql &&
+        echo '[21/22] 020_real_faculty.sql ...' &&
+        psql $DATABASE_URL -f migrations/020_real_faculty.sql &&
+        echo '[22/22] 021_semester_specific_cycles.sql ...' &&
+        psql $DATABASE_URL -f migrations/021_semester_specific_cycles.sql &&
         echo '=== All migrations complete ===' &&
         echo 'Starting FastAPI application...' &&
         uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
