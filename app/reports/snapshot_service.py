@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 def get_pipeline_status() -> dict:
     """
-    Check the 3-stage pipeline status for the active academic cycle.
+    Check the 3-stage pipeline status for the active cycle.
 
     Returns:
         {
@@ -34,10 +34,9 @@ def get_pipeline_status() -> dict:
             hod_approved: bool,
             snapshot_id: int | None,
             academic_year: str | None,
-            semester_type: str | None,
+            semester_id: int | None,
             is_locked: bool,
             semester_state: str | None,
-            semester_id: int | None,
             preferences_count: int,
             allocations_count: int,
         }
@@ -46,10 +45,10 @@ def get_pipeline_status() -> dict:
         # Get active cycle
         cycle = session.execute(
             text("""
-                SELECT id, academic_year, semester_type,
-                       COALESCE(is_locked, false) AS is_locked
-                FROM academic_cycle
-                WHERE is_active = true
+                SELECT c.id, ay.label, c.semester_id, c.status
+                FROM cycle c
+                JOIN academic_year ay ON ay.id = c.academic_year_id
+                WHERE c.status = 'OPEN'
                 LIMIT 1
             """)
         ).fetchone()
@@ -61,30 +60,27 @@ def get_pipeline_status() -> dict:
                 "hod_approved": False,
                 "snapshot_id": None,
                 "academic_year": None,
-                "semester_type": None,
+                "semester_id": None,
                 "is_locked": False,
                 "semester_state": None,
-                "semester_id": None,
                 "preferences_count": 0,
                 "allocations_count": 0,
             }
 
-        cycle_id, ay, st, is_locked = cycle
+        cycle_id, ay, semester_id, status = cycle
+        is_locked = (status == 'FROZEN')
 
         # Get semester state for the active cycle
         semester_row = session.execute(
             text("""
-                SELECT DISTINCT sem.id, sem.state
+                SELECT sem.id, sem.state
                 FROM semester sem
-                JOIN subject_offering so ON so.semester_id = sem.id
-                WHERE so.academic_year = :year
-                  AND so.semester_type = :sem_type
+                WHERE sem.id = :sem_id
                 LIMIT 1
             """),
-            {"year": ay, "sem_type": st},
+            {"sem_id": semester_id},
         ).fetchone()
         
-        semester_id = semester_row[0] if semester_row else None
         semester_state = semester_row[1] if semester_row else None
 
         # ── Stage 1: preferences_submitted ──
@@ -95,9 +91,9 @@ def get_pipeline_status() -> dict:
                 FROM faculty_preference fp
                 JOIN subject_offering so ON so.id = fp.subject_offering_id
                 WHERE so.academic_year = :year
-                  AND so.semester_type = :sem_type
+                  AND so.semester_id = :sem_id
             """),
-            {"year": ay, "sem_type": st},
+            {"year": ay, "sem_id": semester_id},
         ).scalar()
         
         preferences_submitted = (preferences_count > 0)
@@ -110,9 +106,9 @@ def get_pipeline_status() -> dict:
                 FROM allocation a
                 JOIN subject_offering so ON so.id = a.subject_offering_id
                 WHERE so.academic_year = :year
-                  AND so.semester_type = :sem_type
+                  AND so.semester_id = :sem_id
             """),
-            {"year": ay, "sem_type": st},
+            {"year": ay, "sem_id": semester_id},
         ).scalar()
         
         allocation_complete = (allocations_count > 0)
@@ -122,10 +118,10 @@ def get_pipeline_status() -> dict:
         snapshot_row = session.execute(
             text("""
                 SELECT id FROM workload_snapshot
-                WHERE academic_year = :year AND semester_type = :sem_type
+                WHERE academic_year = :year AND semester_id = :sem_id
                 LIMIT 1
             """),
-            {"year": ay, "sem_type": st},
+            {"year": ay, "sem_id": semester_id},
         ).fetchone()
         hod_approved = snapshot_row is not None
         snapshot_id = snapshot_row[0] if snapshot_row else None
@@ -136,10 +132,9 @@ def get_pipeline_status() -> dict:
             "hod_approved": hod_approved,
             "snapshot_id": snapshot_id,
             "academic_year": ay,
-            "semester_type": st,
+            "semester_id": semester_id,
             "is_locked": is_locked,
             "semester_state": semester_state,
-            "semester_id": semester_id,
             "preferences_count": preferences_count,
             "allocations_count": allocations_count,
         }
@@ -147,7 +142,7 @@ def get_pipeline_status() -> dict:
 
 # ─── Snapshot Creation ────────────────────────────────────────────────────────
 
-def _build_snapshot_data(session, ay: str, st: str) -> list[dict]:
+def _build_snapshot_data(session, ay: str, sem_id: int) -> list[dict]:
     """
     Build the snapshot JSON from live tables.
     Uses the SAME data logic as the Excel generator.
@@ -187,13 +182,13 @@ def _build_snapshot_data(session, ay: str, st: str) -> list[dict]:
             LEFT JOIN workload_summary ws
                 ON ws.staff_id = s.id
                AND ws.academic_year = :year
-               AND ws.semester_type = :sem_type
+               AND ws.semester_id = :sem_id
             WHERE so.academic_year = :year
-              AND so.semester_type = :sem_type
+              AND so.semester_id = :sem_id
               AND s.is_active = true
             ORDER BY s.emp_code ASC, p.name, sem.label, sec.label
         """),
-        {"year": ay, "sem_type": st},
+        {"year": ay, "sem_id": sem_id},
     ).fetchall()
 
     # Parse into flat dicts
@@ -240,18 +235,18 @@ def _build_snapshot_data(session, ay: str, st: str) -> list[dict]:
             LEFT JOIN workload_summary ws
                 ON ws.staff_id = s.id
                AND ws.academic_year = :year
-               AND ws.semester_type = :sem_type
+               AND ws.semester_id = :sem_id
             WHERE s.emp_code IS NOT NULL
               AND s.is_active = true
               AND s.id NOT IN (
                   SELECT DISTINCT a2.staff_id
                   FROM allocation a2
                   JOIN subject_offering so2 ON so2.id = a2.subject_offering_id
-                  WHERE so2.academic_year = :year AND so2.semester_type = :sem_type
+                  WHERE so2.academic_year = :year AND so2.semester_id = :sem_id
               )
             ORDER BY s.emp_code ASC
         """),
-        {"year": ay, "sem_type": st},
+        {"year": ay, "sem_id": sem_id},
     ).fetchall()
 
     for r in unassigned:
@@ -338,17 +333,17 @@ def _build_snapshot_data(session, ay: str, st: str) -> list[dict]:
 
 def create_snapshot(approved_by: int) -> dict:
     """
-    Create an immutable workload snapshot for the active academic cycle.
+    Create an immutable workload snapshot for the active cycle.
 
     Steps:
         1. Verify active cycle exists and is not already locked
         2. Verify no snapshot already exists (immutable — one per cycle)
         3. Build snapshot data from live tables
         4. INSERT into workload_snapshot
-        5. Lock the academic_cycle (is_locked = true)
+        5. Lock the cycle (status = 'FROZEN')
 
     Returns:
-        {"snapshot_id": int, "academic_year": str, "semester_type": str}
+        {"snapshot_id": int, "academic_year": str, "semester_id": int}
 
     Raises:
         RuntimeError on validation failure
@@ -357,38 +352,38 @@ def create_snapshot(approved_by: int) -> dict:
         # Get active cycle
         cycle = session.execute(
             text("""
-                SELECT id, academic_year, semester_type,
-                       COALESCE(is_locked, false) AS is_locked
-                FROM academic_cycle
-                WHERE is_active = true
+                SELECT c.id, ay.label, c.semester_id, c.status
+                FROM cycle c
+                JOIN academic_year ay ON ay.id = c.academic_year_id
+                WHERE c.status = 'OPEN'
                 LIMIT 1
             """)
         ).fetchone()
 
         if not cycle:
-            raise RuntimeError("No active academic cycle found.")
+            raise RuntimeError("No active cycle found.")
 
-        cycle_id, ay, st, is_locked = cycle
+        cycle_id, ay, semester_id, status = cycle
 
         # Check if snapshot already exists — idempotent: return existing
         existing = session.execute(
             text("""
                 SELECT id FROM workload_snapshot
-                WHERE academic_year = :year AND semester_type = :sem_type
+                WHERE academic_year = :year AND semester_id = :sem_id
             """),
-            {"year": ay, "sem_type": st},
+            {"year": ay, "sem_id": semester_id},
         ).fetchone()
 
         if existing:
             return {
                 "snapshot_id": existing[0],
                 "academic_year": ay,
-                "semester_type": st,
+                "semester_id": semester_id,
                 "already_existed": True,
             }
 
         # Build snapshot data
-        snapshot_data = _build_snapshot_data(session, ay, st)
+        snapshot_data = _build_snapshot_data(session, ay, semester_id)
 
         if not snapshot_data:
             raise RuntimeError(
@@ -400,12 +395,12 @@ def create_snapshot(approved_by: int) -> dict:
         snapshot_id = session.execute(
             text("""
                 INSERT INTO workload_snapshot
-                    (academic_year, semester_type, approved_by, snapshot_data)
-                VALUES (:year, :sem_type, :approved_by, :data)
+                    (academic_year, semester_id, approved_by, snapshot_data)
+                VALUES (:year, :sem_id, :approved_by, :data)
                 RETURNING id
             """),
             {
-                "year": ay, "sem_type": st,
+                "year": ay, "sem_id": semester_id,
                 "approved_by": approved_by,
                 "data": json.dumps(snapshot_data),
             },
@@ -414,37 +409,38 @@ def create_snapshot(approved_by: int) -> dict:
         # Lock the cycle
         session.execute(
             text("""
-                UPDATE academic_cycle
-                SET is_locked = true
+                UPDATE cycle
+                SET status = 'FROZEN', frozen_at = now()
                 WHERE id = :cid
             """),
             {"cid": cycle_id},
         )
         
-        # Set ALL semesters to FROZEN
+        # Set semester to FROZEN
         session.execute(
             text("""
                 UPDATE semester
                 SET state = 'FROZEN',
                     frozen_at = now(),
                     frozen_by_staff_id = :hod_id
+                WHERE id = :sem_id
             """),
-            {"hod_id": approved_by}
+            {"hod_id": approved_by, "sem_id": semester_id}
         )
 
         session.commit()
 
         logger.info(
             f"Workload snapshot created: id={snapshot_id}, "
-            f"cycle={ay} {st}, approved_by={approved_by}, "
+            f"cycle={ay} Sem{semester_id}, approved_by={approved_by}, "
             f"faculty_blocks={len(snapshot_data)}, "
-            f"all semesters FROZEN"
+            f"semester FROZEN"
         )
 
         return {
             "snapshot_id": snapshot_id,
             "academic_year": ay,
-            "semester_type": st,
+            "semester_id": semester_id,
         }
 
 
@@ -452,13 +448,13 @@ def create_snapshot(approved_by: int) -> dict:
 
 def get_snapshot() -> dict:
     """
-    Get the approved snapshot for the active academic cycle.
+    Get the approved snapshot for the active cycle.
 
     Returns:
         {
             "snapshot_id": int,
             "academic_year": str,
-            "semester_type": str,
+            "semester_id": int,
             "approved_by": int,
             "created_at": str,
             "snapshot_data": list[dict],
@@ -470,38 +466,39 @@ def get_snapshot() -> dict:
     with get_transaction() as session:
         cycle = session.execute(
             text("""
-                SELECT academic_year, semester_type
-                FROM academic_cycle
-                WHERE is_active = true
+                SELECT ay.label, c.semester_id
+                FROM cycle c
+                JOIN academic_year ay ON ay.id = c.academic_year_id
+                WHERE c.status = 'OPEN'
                 LIMIT 1
             """)
         ).fetchone()
 
         if not cycle:
-            raise RuntimeError("No active academic cycle found.")
+            raise RuntimeError("No active cycle found.")
 
-        ay, st = cycle
+        ay, semester_id = cycle
 
         row = session.execute(
             text("""
                 SELECT id, approved_by, snapshot_data, created_at
                 FROM workload_snapshot
-                WHERE academic_year = :year AND semester_type = :sem_type
+                WHERE academic_year = :year AND semester_id = :sem_id
                 LIMIT 1
             """),
-            {"year": ay, "sem_type": st},
+            {"year": ay, "sem_id": semester_id},
         ).fetchone()
 
         if not row:
             raise RuntimeError(
-                f"No approved snapshot for {ay} {st}. "
+                f"No approved snapshot for {ay} Sem{semester_id}. "
                 "HOD must approve the workload before export."
             )
 
         return {
             "snapshot_id":   row[0],
             "academic_year": ay,
-            "semester_type": st,
+            "semester_id": semester_id,
             "approved_by":   row[1],
             "created_at":    str(row[3]),
             "snapshot_data": row[2] if isinstance(row[2], list) else json.loads(row[2]),

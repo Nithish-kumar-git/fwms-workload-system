@@ -11,19 +11,21 @@ from app.db.session import get_transaction
 
 
 def is_cycle_locked() -> bool:
-    """Check if the active academic cycle is locked (frozen after HOD approval)."""
+    """Check if the active cycle is locked (frozen after HOD approval)."""
     with get_transaction() as session:
         row = session.execute(
             text("""
-                SELECT COALESCE(is_locked, false)
-                FROM academic_cycle
-                WHERE is_active = true
+                SELECT status
+                FROM cycle
+                WHERE status = 'OPEN'
                 LIMIT 1
             """)
         ).fetchone()
         if not row:
-            return False
-        return bool(row[0])
+            # No open cycle means system is locked
+            return True
+        # Cycle is locked if status is FROZEN
+        return row[0] == 'FROZEN'
 
 
 def require_cycle_unlocked() -> None:
@@ -33,6 +35,6 @@ def require_cycle_unlocked() -> None:
     """
     if is_cycle_locked():
         raise RuntimeError(
-            "Academic cycle is frozen after HOD approval. "
+            "Cycle is frozen after HOD approval. "
             "No further changes to preferences or allocations are allowed."
         )

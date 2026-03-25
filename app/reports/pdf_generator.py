@@ -28,7 +28,7 @@ def _to_roman(val: str) -> str:
 def generate_pdf_from_snapshot(
     snapshot_data: list[dict],
     academic_year: str,
-    semester_type: str,
+    semester_id: int,
 ) -> bytes:
     """
     Generate a landscape A4 PDF workload report from snapshot JSON.
@@ -83,9 +83,9 @@ def generate_pdf_from_snapshot(
     elements.append(Paragraph("HINDUSTAN INSTITUTE OF TECHNOLOGY AND SCIENCE", title_style))
     elements.append(Paragraph("SCHOOL OF BASIC AND APPLIED SCIENCES", subtitle_style))
     elements.append(Paragraph("DEPARTMENT NAME: COMPUTER APPLICATIONS", subtitle_style))
-    sem_label = "EVEN" if semester_type == "EVEN" else "ODD"
+    sem_label = ROMAN.get(str(semester_id), str(semester_id))
     elements.append(Paragraph(
-        f"MASTER WORKLOAD - {sem_label} SEMESTER {academic_year}", subtitle_style
+        f"MASTER WORKLOAD - SEMESTER {sem_label} {academic_year}", subtitle_style
     ))
     elements.append(Spacer(1, 4 * mm))
 

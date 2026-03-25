@@ -23,27 +23,28 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
-def _resolve_active_cycle(session) -> tuple[str, str]:
+def _resolve_active_cycle(session) -> tuple[str, int]:
     """
-    Resolve academic_year and semester_type from the active academic cycle.
+    Resolve academic_year and semester_id from the active cycle.
 
     Returns:
-        (academic_year, semester_type) from academic_cycle WHERE is_active = true
+        (academic_year, semester_id) from cycle table with status = 'OPEN'
 
     Raises:
-        RuntimeError: if no active academic cycle exists
+        RuntimeError: if no active cycle exists
     """
     row = session.execute(
         text("""
-            SELECT academic_year, semester_type
-            FROM academic_cycle
-            WHERE is_active = true
+            SELECT ay.label, c.semester_id
+            FROM cycle c
+            JOIN academic_year ay ON ay.id = c.academic_year_id
+            WHERE c.status = 'OPEN'
             LIMIT 1
         """)
     ).fetchone()
 
     if not row:
-        raise RuntimeError("No active academic cycle found. Activate a cycle before generating reports.")
+        raise RuntimeError("No active cycle found. Activate a cycle before generating reports.")
 
     return row[0], row[1]
 
@@ -53,12 +54,12 @@ def _resolve_active_cycle(session) -> tuple[str, str]:
 # ============================================================================
 
 def get_faculty_workload(
-    academic_year: Optional[str] = None, semester_type: Optional[str] = None
+    academic_year: Optional[str] = None, semester_id: Optional[int] = None
 ) -> dict:
     """Per-faculty workload report with assigned subjects."""
     with get_transaction() as session:
-        if academic_year is None or semester_type is None:
-            academic_year, semester_type = _resolve_active_cycle(session)
+        if academic_year is None or semester_id is None:
+            academic_year, semester_id = _resolve_active_cycle(session)
         # Get all faculty with their norms
         faculty_rows = session.execute(
             text("""
@@ -89,10 +90,10 @@ def get_faculty_workload(
                     JOIN section sec ON sec.id = so.section_id
                     WHERE a.staff_id = :sid
                       AND so.academic_year = :year
-                      AND so.semester_type = :sem_type
+                      AND so.semester_id = :sem_id
                     ORDER BY p.name, sem.label, sec.label
                 """),
-                {"sid": staff_id, "year": academic_year, "sem_type": semester_type}
+                {"sid": staff_id, "year": academic_year, "sem_id": semester_id}
             ).fetchall()
 
             subjects = [
@@ -123,12 +124,12 @@ def get_faculty_workload(
 # ============================================================================
 
 def get_subject_summary(
-    academic_year: Optional[str] = None, semester_type: Optional[str] = None
+    academic_year: Optional[str] = None, semester_id: Optional[int] = None
 ) -> dict:
     """Per-subject-offering report showing assigned faculty."""
     with get_transaction() as session:
-        if academic_year is None or semester_type is None:
-            academic_year, semester_type = _resolve_active_cycle(session)
+        if academic_year is None or semester_id is None:
+            academic_year, semester_id = _resolve_active_cycle(session)
         rows = session.execute(
             text("""
                 SELECT so.id, sub.code, sub.name, p.name AS program,
@@ -143,10 +144,10 @@ def get_subject_summary(
                 JOIN section sec ON sec.id = so.section_id
                 LEFT JOIN allocation a ON a.subject_offering_id = so.id
                 LEFT JOIN staff s ON s.id = a.staff_id
-                WHERE so.academic_year = :year AND so.semester_type = :sem_type
+                WHERE so.academic_year = :year AND so.semester_id = :sem_id
                 ORDER BY p.name, sem.label, sec.label, sub.code
             """),
-            {"year": academic_year, "sem_type": semester_type}
+            {"year": academic_year, "sem_id": semester_id}
         ).fetchall()
 
     records = [
@@ -167,19 +168,19 @@ def get_subject_summary(
 # ============================================================================
 
 def get_department_summary(
-    academic_year: Optional[str] = None, semester_type: Optional[str] = None
+    academic_year: Optional[str] = None, semester_id: Optional[int] = None
 ) -> dict:
     """Aggregate department statistics."""
     with get_transaction() as session:
-        if academic_year is None or semester_type is None:
-            academic_year, semester_type = _resolve_active_cycle(session)
+        if academic_year is None or semester_id is None:
+            academic_year, semester_id = _resolve_active_cycle(session)
         total_offerings = session.execute(
             text("""
                 SELECT count(*) FROM subject_offering
-                WHERE academic_year = :year AND semester_type = :sem_type
+                WHERE academic_year = :year AND semester_id = :sem_id
                   AND is_active = true
             """),
-            {"year": academic_year, "sem_type": semester_type}
+            {"year": academic_year, "sem_id": semester_id}
         ).scalar()
 
         allocated = session.execute(
@@ -187,9 +188,9 @@ def get_department_summary(
                 SELECT count(DISTINCT a.subject_offering_id)
                 FROM allocation a
                 JOIN subject_offering so ON so.id = a.subject_offering_id
-                WHERE so.academic_year = :year AND so.semester_type = :sem_type
+                WHERE so.academic_year = :year AND so.semester_id = :sem_id
             """),
-            {"year": academic_year, "sem_type": semester_type}
+            {"year": academic_year, "sem_id": semester_id}
         ).scalar()
 
         total_faculty = session.execute(
@@ -200,27 +201,27 @@ def get_department_summary(
             text("""
                 SELECT COALESCE(AVG(ws.tch_total), 0)
                 FROM workload_summary ws
-                WHERE ws.academic_year = :year AND ws.semester_type = :sem_type
+                WHERE ws.academic_year = :year AND ws.semester_id = :sem_id
             """),
-            {"year": academic_year, "sem_type": semester_type}
+            {"year": academic_year, "sem_id": semester_id}
         ).scalar()
 
         overloaded = session.execute(
             text("""
                 SELECT count(*) FROM workload_summary
-                WHERE academic_year = :year AND semester_type = :sem_type
+                WHERE academic_year = :year AND semester_id = :sem_id
                   AND deviation_hours > 0
             """),
-            {"year": academic_year, "sem_type": semester_type}
+            {"year": academic_year, "sem_id": semester_id}
         ).scalar()
 
         underloaded = session.execute(
             text("""
                 SELECT count(*) FROM workload_summary
-                WHERE academic_year = :year AND semester_type = :sem_type
+                WHERE academic_year = :year AND semester_id = :sem_id
                   AND deviation_hours < -2
             """),
-            {"year": academic_year, "sem_type": semester_type}
+            {"year": academic_year, "sem_id": semester_id}
         ).scalar()
 
     unallocated = total_offerings - allocated
@@ -243,19 +244,19 @@ def get_department_summary(
 # ============================================================================
 
 def generate_excel_report(
-    academic_year: Optional[str] = None, semester_type: Optional[str] = None
+    academic_year: Optional[str] = None, semester_id: Optional[int] = None
 ) -> bytes:
     """Generate Excel workbook with 3 sheets. Returns bytes. Never raises."""
     # Resolve active cycle if not provided — graceful fallback
     no_cycle = False
-    if academic_year is None or semester_type is None:
+    if academic_year is None or semester_id is None:
         try:
             with get_transaction() as session:
-                academic_year, semester_type = _resolve_active_cycle(session)
+                academic_year, semester_id = _resolve_active_cycle(session)
         except Exception as e:
-            logger.warning(f"No active academic cycle: {e}")
+            logger.warning(f"No active cycle: {e}")
             academic_year = "N/A"
-            semester_type = "N/A"
+            semester_id = 0
             no_cycle = True
 
     try:
@@ -306,13 +307,13 @@ def generate_excel_report(
 
     # ---- Fetch data (safe — empty dicts if query fails) ----
     try:
-        faculty_data = get_faculty_workload(academic_year, semester_type)
+        faculty_data = get_faculty_workload(academic_year, semester_id)
     except Exception as e:
         logger.warning(f"Faculty workload query failed: {e}")
         faculty_data = {"total_faculty": 0, "records": []}
 
     try:
-        subj_data = get_subject_summary(academic_year, semester_type)
+        subj_data = get_subject_summary(academic_year, semester_id)
     except Exception as e:
         logger.warning(f"Subject summary query failed: {e}")
         subj_data = {"total": 0, "records": []}
@@ -418,29 +419,29 @@ def generate_excel_report(
 # ============================================================================
 
 def generate_pdf_report(
-    academic_year: Optional[str] = None, semester_type: Optional[str] = None
+    academic_year: Optional[str] = None, semester_id: Optional[int] = None
 ) -> bytes:
     """
     Generate a simple PDF report.
     Uses reportlab if available, otherwise falls back to plain text.
     """
-    if academic_year is None or semester_type is None:
+    if academic_year is None or semester_id is None:
         with get_transaction() as session:
-            academic_year, semester_type = _resolve_active_cycle(session)
+            academic_year, semester_id = _resolve_active_cycle(session)
 
-    assert academic_year is not None and semester_type is not None
+    assert academic_year is not None and semester_id is not None
 
     try:
         from reportlab.lib.pagesizes import A4, landscape
         from reportlab.lib import colors
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         from reportlab.lib.styles import getSampleStyleSheet
-        return _generate_reportlab_pdf(academic_year, semester_type)
+        return _generate_reportlab_pdf(academic_year, semester_id)
     except ImportError:
-        return _generate_text_pdf(academic_year, semester_type)
+        return _generate_text_pdf(academic_year, semester_id)
 
 
-def _generate_reportlab_pdf(academic_year: str, semester_type: str) -> bytes:
+def _generate_reportlab_pdf(academic_year: str, semester_id: int) -> bytes:
     """Generate PDF using reportlab."""
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib import colors
@@ -454,13 +455,13 @@ def _generate_reportlab_pdf(academic_year: str, semester_type: str) -> bytes:
 
     # Title
     elements.append(Paragraph(
-        f"Faculty Workload Report — {academic_year} ({semester_type})",
+        f"Faculty Workload Report — {academic_year} (Semester {semester_id})",
         styles["Title"]
     ))
     elements.append(Spacer(1, 20))
 
     # Faculty Workload Table
-    faculty_data = get_faculty_workload(academic_year, semester_type)
+    faculty_data = get_faculty_workload(academic_year, semester_id)
     table_data = [["Emp Code", "Name", "Designation", "Norm", "Assigned", "Deviation"]]
     
     normal_style = styles["Normal"]
@@ -489,7 +490,7 @@ def _generate_reportlab_pdf(academic_year: str, semester_type: str) -> bytes:
 
     # Department Summary
     elements.append(Spacer(1, 30))
-    dept = get_department_summary(academic_year, semester_type)
+    dept = get_department_summary(academic_year, semester_id)
     elements.append(Paragraph("Department Summary", styles["Heading2"]))
     summary_data = [
         ["Total Offerings", str(dept["total_subject_offerings"])],
@@ -511,13 +512,13 @@ def _generate_reportlab_pdf(academic_year: str, semester_type: str) -> bytes:
     return output.getvalue()
 
 
-def _generate_text_pdf(academic_year: str, semester_type: str) -> bytes:
+def _generate_text_pdf(academic_year: str, semester_id: int) -> bytes:
     """Fallback: plain text report when reportlab is not available."""
-    faculty_data = get_faculty_workload(academic_year, semester_type)
-    dept = get_department_summary(academic_year, semester_type)
+    faculty_data = get_faculty_workload(academic_year, semester_id)
+    dept = get_department_summary(academic_year, semester_id)
 
     lines = []
-    lines.append(f"FACULTY WORKLOAD REPORT — {academic_year} ({semester_type})")
+    lines.append(f"FACULTY WORKLOAD REPORT — {academic_year} (Semester {semester_id})")
     lines.append("=" * 80)
     lines.append("")
     lines.append(f"{'Emp Code':<10} {'Name':<25} {'Designation':<22} {'Norm':>5} {'Assigned':>9} {'Dev':>5}")

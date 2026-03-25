@@ -124,10 +124,7 @@ def _get_snapshot_or_live_data() -> tuple[dict | None, str, int]:
     # Try to get snapshot first
     try:
         snapshot = get_snapshot()
-        # Snapshot still uses old schema with semester_type, convert to semester_id if needed
-        semester_type = snapshot.get("semester_type", "")
-        # Map ODD/EVEN to semester_id (fallback, should not be used in new system)
-        semester_id = snapshot.get("semester_id", 1)  # Default to 1 if not present
+        semester_id = snapshot.get("semester_id", 1)
         return snapshot, snapshot["academic_year"], semester_id
     except RuntimeError:
         # No snapshot - check if any semester is ALLOCATED
@@ -163,19 +160,15 @@ async def export_excel(
     """Download workload report as Excel file (3 sheets). Works when semester is ALLOCATED or FROZEN."""
     snapshot, academic_year, semester_id = _get_snapshot_or_live_data()
     
-    # Convert semester_id to semester_type for legacy report functions
-    # This is a temporary bridge until reports are fully migrated
-    semester_type = "EVEN" if semester_id in [2, 4, 6] else "ODD"
-    
     try:
-        excel_bytes = report_service.generate_excel_report(academic_year, semester_type)
+        excel_bytes = report_service.generate_excel_report(academic_year, semester_id)
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
     return StreamingResponse(
         io.BytesIO(excel_bytes),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=workload_report.xlsx"},
+        headers={"Content-Disposition": f'attachment; filename="workload_report_Sem{semester_id}.xlsx"'},
     )
 
 
@@ -188,9 +181,6 @@ async def export_master_workload(
     Works when semester is ALLOCATED (uses live data) or FROZEN (uses snapshot).
     """
     snapshot, academic_year, semester_id = _get_snapshot_or_live_data()
-    
-    # Convert semester_id to semester_type for legacy report functions
-    semester_type = "EVEN" if semester_id in [2, 4, 6] else "ODD"
 
     from app.reports.master_workload_excel import generate_from_snapshot
     
@@ -202,13 +192,13 @@ async def export_master_workload(
         from app.reports.snapshot_service import _build_snapshot_data
         from app.db.session import get_transaction
         with get_transaction() as session:
-            snapshot_data = _build_snapshot_data(session, academic_year, semester_type)
+            snapshot_data = _build_snapshot_data(session, academic_year, semester_id)
     
     try:
         excel_bytes = generate_from_snapshot(
             snapshot_data=snapshot_data,
             academic_year=academic_year,
-            semester_type=semester_type,
+            semester_id=semester_id,
         )
     except Exception as e:
         logger.error(f"Master workload Excel generation failed: {e}")
@@ -230,9 +220,6 @@ async def export_pdf(
     Works when semester is ALLOCATED (uses live data) or FROZEN (uses snapshot).
     """
     snapshot, academic_year, semester_id = _get_snapshot_or_live_data()
-    
-    # Convert semester_id to semester_type for legacy report functions
-    semester_type = "EVEN" if semester_id in [2, 4, 6] else "ODD"
 
     from app.reports.pdf_generator import generate_pdf_from_snapshot
     
@@ -244,13 +231,13 @@ async def export_pdf(
         from app.reports.snapshot_service import _build_snapshot_data
         from app.db.session import get_transaction
         with get_transaction() as session:
-            snapshot_data = _build_snapshot_data(session, academic_year, semester_type)
+            snapshot_data = _build_snapshot_data(session, academic_year, semester_id)
     
     try:
         pdf_bytes = generate_pdf_from_snapshot(
             snapshot_data=snapshot_data,
             academic_year=academic_year,
-            semester_type=semester_type,
+            semester_id=semester_id,
         )
     except Exception as e:
         logger.error(f"PDF generation failed: {e}")
