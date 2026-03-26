@@ -54,9 +54,10 @@ def open_preference_window(
         elif academic_year and semester_id:
             cycle_row = session.execute(
                 text("""
-                    SELECT id FROM cycle
-                    WHERE academic_year = :year AND semester_id = :sem_id
-                    ORDER BY id DESC LIMIT 1
+                    SELECT c.id FROM cycle c
+                    JOIN academic_year ay ON c.academic_year_id = ay.id
+                    WHERE ay.name = :year AND c.semester_id = :sem_id
+                    ORDER BY c.id DESC LIMIT 1
                 """),
                 {"year": academic_year, "sem_id": semester_id},
             ).fetchone()

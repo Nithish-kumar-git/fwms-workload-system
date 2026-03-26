@@ -1,1173 +1,1155 @@
-# PROGRESS.md
+# PROGRESS REPORT - Cycle Architecture Investigation
 
-## STEP 1 - Docker & Health
+## 1. FILE CONTENTS
 
-### Docker Down
-```
-time="2026-03-26T04:07:08+05:30" level=warning msg="C:\\Users\\itsni\\.gemini\\antigravity\\scratch\\faculty_selection\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
-[+] down 4/4
- ✔ Container faculty_selection_app        Removed                                                                       1.5s
- ✔ Container faculty_selection_db         Removed                                                                       0.4s
- ✔ Network faculty_selection_default      Removed                                                                       0.4s
- ✔ Volume faculty_selection_postgres_data Removed                                                                       0.1s
-Exit Code: 0
-```
-
-### Docker Up
-```
-time="2026-03-26T04:07:18+05:30" level=warning msg="C:\\Users\\itsni\\.gemini\\antigravity\\scratch\\faculty_selection\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
-[+] up 4/4
- ✔ Network faculty_selection_default      Created                                                                       0.1s
- ✔ Volume faculty_selection_postgres_data Created                                                                       0.0s
- ✔ Container faculty_selection_db         Healthy                                                                       6.3s
- ✔ Container faculty_selection_app        Created                                                                       0.2s
-Exit Code: 0
-```
-
-### Health Check
-```
-curl.exe http://localhost:8000/health
-{"status":"ok"}
-Exit Code: 0
-```
-
-**Result**: ✅ Docker started successfully, health endpoint working
-
----
-
-## STEP 2 - Login Token
-
-### First Attempt (GET - Wrong Method)
-```
-curl.exe http://localhost:8000/api/auth/dev-login/16
-{"detail":"Method Not Allowed"}
-Exit Code: 0
-```
-
-### Second Attempt (POST - Correct)
-```
-curl.exe -X POST http://localhost:8000/api/auth/dev-login/16
-{"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNiIsImVtYWlsIjoibWN0NDRAaGluZHVzdGFudW5pdi5hYy5pbiIsIm5hbWUiOiJEci4gUy4gR29raWxhIiwicm9sZSI6ImhvZCIsImlhdCI6MTc3NDQ3ODM1MCwiZXhwIjoxNzc0NDkyNzUwfQ.ai1ApTr4Tf2TQZEginsZHUpXT8R-Wlmy66z3VQdSyOI","staff_id":16,"email":"mct44@hindustanuniv.ac.in","name":"Dr. S. Gokila","role":"hod"}
-Exit Code: 0
-```
-
-**Token obtained**: YES
-
-**Access Token**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNiIsImVtYWlsIjoibWN0NDRAaGluZHVzdGFudW5pdi5hYy5pbiIsIm5hbWUiOiJEci4gUy4gR29raWxhIiwicm9sZSI6ImhvZCIsImlhdCI6MTc3NDQ3ODM1MCwiZXhwIjoxNzc0NDkyNzUwfQ.ai1ApTr4Tf2TQZEginsZHUpXT8R-Wlmy66z3VQdSyOI`
-
----
-
-## STEP 3 - API Endpoint Tests
-
-### /api/dashboard/summary
-```
-curl.exe -H "Authorization: Bearer TOKEN" http://localhost:8000/api/dashboard/summary
-{"detail":"Not Found"}
-Exit Code: 0
-```
-**Status**: ❌ 404 Not Found - ENDPOINT DOES NOT EXIST
-
-### /api/cycles/
-```
-curl.exe -H "Authorization: Bearer TOKEN" http://localhost:8000/api/cycles/
-(empty response)
-Exit Code: 0
-```
-**Status**: ✅ 200 OK (empty array - no cycles created yet)
-
-### /api/reports/summary
-```
-curl.exe -H "Authorization: Bearer TOKEN" http://localhost:8000/api/reports/summary
-{"detail":"Not Found"}
-Exit Code: 0
-```
-**Status**: ❌ 404 Not Found - ENDPOINT DOES NOT EXIST
-
-### /api/reports/department-summary (ACTUAL ENDPOINT)
-```
-curl.exe -H "Authorization: Bearer TOKEN" http://localhost:8000/api/reports/department-summary
-Internal Server Error
-Exit Code: 0
-```
-**Status**: ❌ 500 Internal Server Error - ENDPOINT EXISTS BUT CRASHES
-
----
-
-## STEP 4 - File Contents
-
-### frontend/src/pages/DashboardPage.tsx
-
-**Dashboard calls these API endpoints**:
-1. `getDepartmentSummary()` → `/api/reports/department-summary`
-2. `getCurrentUser()` → `/api/auth/me`
-3. `getFacultyWorkload()` → `/api/reports/faculty-workload`
-
-**Key code**:
+### frontend/src/pages/WindowPage.tsx
 ```typescript
-const loadData = () => {
-    setLoading(true);
-    setError('');
-    getDepartmentSummary()  // ← This is the failing call
-        .then((r) => setData(r.data))
-        .catch((err: any) => {
-            const detail = err.response?.data?.detail || 'Failed to load dashboard data';
-            setError(detail);
-            setData(null);
-            addToast(detail, 'error');
-        })
-        .finally(() => setLoading(false));
-};
+import { useState, useEffect } from 'react';
+import { openPrefWindow, closePrefWindow, getPrefWindowStatus } from '../api/client';
+import { useToast } from '../hooks/useToast';
+import ToastContainer from '../components/ToastContainer';
+import { Clock, DoorOpen, DoorClosed, RefreshCw, AlertCircle, Settings } from 'lucide-react';
+
+export default function WindowPage() {
+    const [status, setStatus] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const { toasts, addToast, removeToast } = useToast();
+    const [year, setYear] = useState('2025-2026');
+    const [semesterId, setSemesterId] = useState(2); // Default to Semester II
+    const [startTime, setStartTime] = useState('');
+    const [endTime, setEndTime] = useState('');
+    const [error, setError] = useState('');
+
+    const loadStatus = () => {
+        setLoading(true);
+        setError('');
+        getPrefWindowStatus()
+            .then((r) => setStatus(r.data))
+            .catch((err: any) => {
+                const detail = err.response?.data?.detail || 'Failed to load window status';
+                setError(detail);
+                addToast(detail, 'error');
+            })
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(() => { loadStatus(); }, []);
+
+    useEffect(() => {
+        if (!status?.is_open || status.remaining_seconds <= 0) return;
+        const interval = setInterval(() => {
+            setStatus((prev: any) => prev ? { ...prev, remaining_seconds: Math.max(0, prev.remaining_seconds - 1) } : prev);
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [status?.is_open]);
+
+    const formatTime = (seconds: number) => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        return `${h}h ${m}m ${s}s`;
+    };
+
+    const handleOpen = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!startTime || !endTime) return;
+        setSubmitting(true);
+        try {
+            await openPrefWindow({
+                academic_year: year, semester_id: semesterId,
+                start_time: new Date(startTime).toISOString(),
+                end_time: new Date(endTime).toISOString(),
+            });
+            addToast('Preference window opened', 'success');
+            loadStatus();
+        } catch (err: any) {
+            addToast(err.response?.data?.detail || 'Failed to open window', 'error');
+        } finally { setSubmitting(false); }
+    };
+
+    const handleClose = async () => {
+        setSubmitting(true);
+        try {
+            await closePrefWindow();
+            addToast('Preference window closed', 'success');
+            loadStatus();
+        } catch (err: any) {
+            addToast(err.response?.data?.detail || 'Failed to close', 'error');
+        } finally { setSubmitting(false); }
+    };
+
+    if (loading) return (
+        <div className="page-container">
+            <p style={{ color: '#6b7280', textAlign: 'center', padding: '3rem' }}>Loading window status...</p>
+        </div>
+    );
+
+    if (error) return (
+        <div className="page-container">
+            <div className="glass-card" style={{ padding: '2rem', textAlign: 'center' }}>
+                <AlertCircle size={32} style={{ color: '#dc2626', marginBottom: '0.75rem' }} />
+                <p style={{ color: '#dc2626', fontWeight: 600, marginBottom: '0.5rem' }}>{error}</p>
+                <button onClick={loadStatus} className="btn btn-primary" style={{ marginTop: '0.5rem' }}>
+                    <RefreshCw size={16} /> Retry
+                </button>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="page-container">
+            <ToastContainer toasts={toasts} onRemove={removeToast} />
+            <div className="page-header">
+                <div>
+                    <h1 className="page-title">Preference Window</h1>
+                    <p className="page-subtitle">Control the faculty preference submission cycle</p>
+                </div>
+                <button onClick={loadStatus} className="btn btn-outline"><RefreshCw size={16} />Refresh</button>
+            </div>
+
+            {/* Current Status Card */}
+            <div className="glass-card" style={{ padding: '2rem', marginBottom: '1.5rem' }}>
+                <div className="flex items-center gap-4 mb-6">
+                    {status?.is_open ? (
+                        <>
+                            <div className="p-3 bg-green-50 rounded-full text-green-600">
+                                <DoorOpen size={28} strokeWidth={2.5} />
+                            </div>
+                            <span className="badge badge-success px-4 py-1.5 text-sm">WINDOW OPEN</span>
+                        </>
+                    ) : (
+                        <>
+                            <div className="p-3 bg-red-50 rounded-full text-red-600">
+                                <DoorClosed size={28} strokeWidth={2.5} />
+                            </div>
+                            <span className="badge badge-danger px-4 py-1.5 text-sm">WINDOW CLOSED</span>
+                        </>
+                    )}
+                </div>
+
+                {status?.is_open && (
+                    <div className="stat-grid" style={{ marginBottom: '1.5rem' }}>
+                        <div className="stat-card glass-card flex flex-col justify-center">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Clock size={16} className="text-blue-600" strokeWidth={2.5} />
+                                <div className="stat-label !mt-0 !text-[13px]">Remaining</div>
+                            </div>
+                            <div className="stat-value text-blue-600 font-mono tracking-tight">{formatTime(status.remaining_seconds)}</div>
+                        </div>
+                        <div className="stat-card glass-card flex flex-col justify-center">
+                            <div className="stat-label mb-1">Start Time</div>
+                            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: '#111827' }}>{status.start_time}</div>
+                        </div>
+                        <div className="stat-card glass-card flex flex-col justify-center">
+                            <div className="stat-label mb-1">End Time</div>
+                            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: '#111827' }}>{status.end_time}</div>
+                        </div>
+                        <div className="stat-card glass-card flex flex-col justify-center">
+                            <div className="stat-label mb-1">Year / Semester</div>
+                            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: '#111827' }}>{status.academic_year} / Semester {status.semester_id}</div>
+                        </div>
+                    </div>
+                )}
+
+                {status?.is_open && (
+                    <button onClick={handleClose} className="btn btn-danger" disabled={submitting}>
+                        <DoorClosed size={16} />
+                        {submitting ? 'Closing...' : 'Close Window Now'}
+                    </button>
+                )}
+            </div>
+
+            {/* Open Window Form */}
+            {!status?.is_open && (
+                <div className="glass-card" style={{ padding: '2rem' }}>
+                    <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#111827' }}>
+                        <Settings size={18} style={{ color: '#9ca3af' }} /> Open New Window
+                    </h3>
+                    <form onSubmit={handleOpen} className="flex flex-col gap-6">
+                        <div className="flex gap-6 flex-wrap">
+                            <div className="flex flex-col gap-1.5">
+                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>Academic Year</label>
+                                <input className="form-input w-40" value={year} onChange={(e) => setYear(e.target.value)} />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>Semester</label>
+                                <select className="form-select w-32" value={semesterId} onChange={(e) => setSemesterId(Number(e.target.value))}>
+                                    <option value={1}>I</option>
+                                    <option value={2}>II</option>
+                                    <option value={3}>III</option>
+                                    <option value={4}>IV</option>
+                                    <option value={5}>V</option>
+                                    <option value={6}>VI</option>
+                                </select>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>Start Time</label>
+                                <input type="datetime-local" className="form-input" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>End Time</label>
+                                <input type="datetime-local" className="form-input" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+                            </div>
+                        </div>
+                        <div className="pt-2 border-t border-gray-100">
+                            <button type="submit" className="btn btn-primary mt-4" disabled={submitting || !startTime || !endTime}>
+                                <DoorOpen size={16} />
+                                {submitting ? 'Opening...' : 'Open Window'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
+        </div>
+    );
+}
 ```
 
-### app/main.py
 
-**Routers included**:
-```python
-app.include_router(health_router.router)
-app.include_router(auth_router.router)
-app.include_router(selection_router.router)
-app.include_router(coordinator_router.router)
-app.include_router(window_router.router, prefix="/api")
-app.include_router(semester_state_router.router)
-app.include_router(preference_router.router)
-app.include_router(pref_window_router.router)
-app.include_router(allocation_router.router)
-app.include_router(admin_router.router)
-app.include_router(cycle_router.router)
-app.include_router(staff_router.router)
-app.include_router(reports_router.router)  # ← Reports router IS included
-```
-
-**CORS origins**:
-```python
-allow_origins=[
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:5175',
-    'http://localhost:5176',
-    'http://localhost:3000',
-    frontend_url
-]
-```
-
-### app/reports/service.py
-
-**Key function**: `get_department_summary()`
-
-Line 39 (FIXED):
-```python
-row = session.execute(
-    text("""
-        SELECT ay.name, c.semester_id
-        FROM cycle c
-        JOIN academic_year ay ON ay.id = c.academic_year_id
-        WHERE c.status = 'OPEN'
-        LIMIT 1
-    """)
-).fetchone()
-```
-
-**This function is called by**:
-- `get_department_summary()` (line 176)
-- `get_faculty_workload()` (line 62)
-- `get_subject_summary()` (line 132)
-- `generate_excel_report()` (line 255)
-- `generate_pdf_report()` (line 430)
-
-### Python files in app/ directory (2 levels deep)
-
-```
-app/main.py
-app/startup_check.py
-app/__init__.py
-app/admin/cycle_router.py
-app/admin/cycle_service.py
-app/admin/cycle_service_new.py
-app/admin/router.py
-app/admin/schemas.py
-app/admin/service.py
-app/admin/staff_router.py
-app/admin/staff_service.py
-app/admin/__init__.py
-app/allocation/router.py
-app/allocation/schemas.py
-app/allocation/service.py
-app/allocation/__init__.py
-app/audit/__init__.py
-app/auth/dependencies.py
-app/auth/google_oauth.py
-app/auth/jwt_utils.py
-app/auth/router.py
-app/auth/schemas.py
-app/auth/session_manager.py
-app/auth/__init__.py
-app/coordinator/router.py
-app/coordinator/schemas.py
-app/coordinator/semester_state_router.py
-app/coordinator/semester_state_service.py
-app/coordinator/transactions.py
-app/coordinator/window_router.py
-app/coordinator/window_schemas.py
-app/coordinator/window_transactions.py
-app/coordinator/__init__.py
-app/core/config.py
-app/core/correlation_middleware.py
-app/core/logging_config.py
-app/core/__init__.py
-app/db/pool.py
-app/db/session.py
-app/db/__init__.py
-app/health/router.py
-app/health/__init__.py
-app/notifications/__init__.py
-app/preference/router.py
-app/preference/schemas.py
-app/preference/service.py
-app/preference/window_router.py
-app/preference/window_service.py
-app/preference/__init__.py
-app/reports/cycle_guard.py
-app/reports/master_workload_excel.py
-app/reports/pdf_generator.py
-app/reports/router.py
-app/reports/schemas.py
-app/reports/service.py
-app/reports/snapshot_service.py
-app/reports/__init__.py
-app/selection/router.py
-app/selection/schemas.py
-app/selection/transactions.py
-app/selection/__init__.py
-app/staff/__init__.py
-app/utils/error_mapper.py
-app/utils/error_schemas.py
-app/utils/rate_limiter.py
-app/utils/__init__.py
-```
-
-### Files with "dashboard" in name
-
-**Search results**: No files named "dashboard.py" in app/ directory
-
-**References to "dashboard" in code**:
-1. `app/auth/router.py:131` - Redirect URL to frontend dashboard
-2. `app/admin/router.py:40` - Comment mentioning "admin dashboard"
-
----
-
-## STEP 5 - What is broken
-
-### Critical Issues
-
-1. **❌ /api/dashboard/summary endpoint does NOT exist**
-   - Frontend calls `getDepartmentSummary()` which tries to hit `/api/dashboard/summary`
-   - This endpoint is not defined in any router
-   - Should be `/api/reports/department-summary` instead
-
-2. **❌ /api/reports/summary endpoint does NOT exist**
-   - This endpoint is not defined in any router
-   - Likely a typo or wrong endpoint name
-
-3. **❌ /api/reports/department-summary returns 500 Internal Server Error**
-   - Endpoint exists but crashes when called
-   - Likely cause: No active cycle in database (fresh docker restart with -v flag deleted all data)
-   - Error from `_resolve_active_cycle()`: "No active cycle found"
-
-### Root Cause Analysis
-
-**The dashboard is broken because**:
-1. Frontend is calling the WRONG endpoint (`/api/dashboard/summary` instead of `/api/reports/department-summary`)
-2. Even if it called the right endpoint, it would fail because there's NO ACTIVE CYCLE in the database
-3. The database was wiped clean with `docker-compose down -v`
-
-### Required Fixes
-
-1. **Fix frontend API client** - Change endpoint from `/api/dashboard/summary` to `/api/reports/department-summary`
-2. **Create an active cycle** - Need to create academic_year and cycle records before dashboard will work
-3. **Check app/reports/router.py** - Verify the actual endpoint path defined there
-
-### Next Steps
-
-1. Read `frontend/src/api/client.ts` to see what `getDepartmentSummary()` actually calls
-2. Read `app/reports/router.py` to see what endpoints are actually defined
-3. Create test data (academic_year + cycle) so reports can work
-4. Fix frontend to call correct endpoint
-
-
----
-
-## FIX 1 - File Contents
-
-### frontend/src/api/client.ts
-
-**getDepartmentSummary() function** (line 107):
+### frontend/src/pages/CyclesPage.tsx
 ```typescript
-export const getDepartmentSummary = () => api.get('/reports/department-summary');
+import { useEffect, useState } from 'react';
+import { createCycle, activateCycle, listCycles } from '../api/client';
+import { useToast } from '../hooks/useToast';
+import ToastContainer from '../components/ToastContainer';
+import { CalendarDays, CheckCircle, Plus } from 'lucide-react';
+
+interface Cycle {
+    id: number;
+    academic_year: string;
+    semester_id: number;
+    semester_name: string;
+    status: string;
+    opened_at: string | null;
+    closed_at: string | null;
+    allocated_at: string | null;
+    frozen_at: string | null;
+    is_active: boolean;
+    created_at: string;
+}
+
+export default function CyclesPage() {
+    const [cycles, setCycles] = useState<Cycle[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const { toasts, addToast, removeToast } = useToast();
+    const [year, setYear] = useState('2025-2026');
+    const [semesterId, setSemesterId] = useState(2); // Default to Semester II
+    const [showForm, setShowForm] = useState(false);
+
+    const loadCycles = () => {
+        listCycles()
+            .then((r) => setCycles(r.data))
+            .catch(() => addToast('Failed to load cycles', 'error'))
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(() => { loadCycles(); }, []);
+
+    const handleCreate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSubmitting(true);
+        try {
+            await createCycle({ academic_year: year, semester_id: semesterId });
+            addToast('Cycle created', 'success');
+            setShowForm(false);
+            loadCycles();
+        } catch (err: any) {
+            addToast(err.response?.data?.detail || 'Failed to create', 'error');
+        } finally { setSubmitting(false); }
+    };
+
+    const handleActivate = async (id: number) => {
+        try {
+            await activateCycle(id);
+            addToast('Cycle activated', 'success');
+            loadCycles();
+        } catch (err: any) {
+            addToast(err.response?.data?.detail || 'Activation failed', 'error');
+        }
+    };
+
+    if (loading) return <div className="page-container"><p style={{ color: '#6b7280' }}>Loading...</p></div>;
+
+    const activeCycle = cycles.find((c) => c.is_active);
+
+    return (
+        <div className="page-container">
+            <ToastContainer toasts={toasts} onRemove={removeToast} />
+            <div className="page-header">
+                <div>
+                    <h1 className="page-title">Academic Cycles</h1>
+                    <p className="page-subtitle">Manage academic year and semester cycles</p>
+                </div>
+                <button onClick={() => setShowForm(!showForm)} className="btn btn-primary"><Plus size={16} /> New Cycle</button>
+            </div>
+
+            {activeCycle && (
+                <div className="glass-card" style={{ padding: '1.25rem 1.5rem', marginBottom: '1.5rem', borderLeft: '4px solid #16a34a' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                        <CheckCircle size={20} style={{ color: '#16a34a' }} />
+                        <span className="badge badge-success" style={{ fontSize: '0.875rem', padding: '0.375rem 0.75rem' }}>ACTIVE CYCLE</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '2rem', fontSize: '0.875rem', color: '#6b7280' }}>
+                        <span><strong style={{ color: '#111827' }}>{activeCycle.academic_year}</strong> · Semester {activeCycle.semester_name}</span>
+                        <span>Status: <strong style={{ color: '#111827' }}>{activeCycle.status}</strong></span>
+                        {activeCycle.opened_at && <span>Opened: {new Date(activeCycle.opened_at).toLocaleDateString()}</span>}
+                    </div>
+                </div>
+            )}
+
+            {showForm && (
+                <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem', color: '#111827' }}>Create New Cycle</h3>
+                    <form onSubmit={handleCreate} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.8125rem', color: '#6b7280', marginBottom: '0.375rem', fontWeight: 500 }}>Academic Year</label>
+                            <input className="form-input" value={year} onChange={(e) => setYear(e.target.value)} style={{ width: '150px' }} />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.8125rem', color: '#6b7280', marginBottom: '0.375rem', fontWeight: 500 }}>Semester</label>
+                            <select className="form-select" value={semesterId} onChange={(e) => setSemesterId(Number(e.target.value))} style={{ width: '120px' }}>
+                                <option value={1}>I</option>
+                                <option value={2}>II</option>
+                                <option value={3}>III</option>
+                                <option value={4}>IV</option>
+                                <option value={5}>V</option>
+                                <option value={6}>VI</option>
+                            </select>
+                        </div>
+                        <button type="submit" className="btn btn-primary" disabled={submitting}>{submitting ? 'Creating...' : 'Create'}</button>
+                        <button type="button" onClick={() => setShowForm(false)} className="btn btn-outline">Cancel</button>
+                    </form>
+                </div>
+            )}
+
+            <div className="glass-card" style={{ overflow: 'hidden' }}>
+                <table className="data-table">
+                    <thead><tr><th>ID</th><th>Academic Year</th><th>Semester</th><th>Status</th><th>Opened</th><th>Closed</th><th>Active</th><th>Created</th><th>Action</th></tr></thead>
+                    <tbody>
+                        {cycles.map((c) => (
+                            <tr key={c.id}>
+                                <td>{c.id}</td>
+                                <td style={{ fontWeight: 600, color: '#111827' }}>{c.academic_year}</td>
+                                <td><span className="badge badge-info">Semester {c.semester_name}</span></td>
+                                <td><span className={`badge ${c.status === 'OPEN' ? 'badge-success' : c.status === 'FROZEN' ? 'badge-error' : 'badge-warning'}`}>{c.status}</span></td>
+                                <td style={{ fontSize: '0.8125rem', color: '#6b7280' }}>{c.opened_at ? new Date(c.opened_at).toLocaleDateString() : '—'}</td>
+                                <td style={{ fontSize: '0.8125rem', color: '#6b7280' }}>{c.closed_at ? new Date(c.closed_at).toLocaleDateString() : '—'}</td>
+                                <td>{c.is_active ? <span className="badge badge-success">Yes</span> : <span className="badge badge-warning">No</span>}</td>
+                                <td style={{ fontSize: '0.8125rem', color: '#6b7280' }}>{c.created_at?.slice(0, 10)}</td>
+                                <td>{!c.is_active && c.status !== 'FROZEN' && <button onClick={() => handleActivate(c.id)} className="btn btn-success" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}><CalendarDays size={14} /> Activate</button>}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
 ```
 
-✅ **CORRECT** - Frontend is already calling the right endpoint `/reports/department-summary`
 
-### app/reports/router.py
-
-**department-summary endpoint** (line 68-75):
+### app/preference/window_router.py
 ```python
-@router.get("/department-summary", response_model=DepartmentSummaryResponse)
-async def department_summary(
+"""
+FastAPI router for preference window management.
+Coordinator endpoints for opening/closing the preference submission window.
+
+Endpoints:
+  POST /api/pref-window/open     Open preference window
+  POST /api/pref-window/close    Close preference window
+  GET  /api/pref-window/status   Get current window status
+"""
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+import logging
+
+from app.auth.dependencies import get_current_coordinator_id
+from app.preference.window_service import (
+    open_preference_window,
+    close_preference_window,
+    get_window_status,
+)
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/pref-window", tags=["preference-window"])
+
+
+# --- Schemas ---
+
+class OpenWindowRequest(BaseModel):
+    start_time: str = Field(..., description="ISO datetime")
+    end_time: str = Field(..., description="ISO datetime")
+    academic_year: str | None = Field(None, description="e.g. 2025-2026")
+    semester_id: int | None = Field(None, description="Semester ID (1-6)")
+    cycle_id: int | None = Field(None)
+
+
+class WindowResponse(BaseModel):
+    success: bool
+    message: str
+    window_id: int | None = None
+
+
+class WindowStatusResponse(BaseModel):
+    is_open: bool
+    status: str = 'CLOSED'  # 'OPEN', 'CLOSED', 'SCHEDULED'
+    window_id: int | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    remaining_seconds: int = 0
+    academic_year: str | None = None
+    semester_id: int | None = None
+
+
+# --- Endpoints ---
+
+@router.post("/open", response_model=WindowResponse)
+async def open_window(
+    body: OpenWindowRequest,
     coordinator_id: int = Depends(get_current_coordinator_id),
 ):
-    """Aggregate department workload statistics."""
-    data = report_service.get_department_summary()
-    return DepartmentSummaryResponse(**data)
-```
-
-✅ **ENDPOINT EXISTS** at `/api/reports/department-summary`
-
-### app/reports/service.py
-
-**_resolve_active_cycle() function** (line 26-48):
-```python
-def _resolve_active_cycle(session) -> tuple[str, int]:
-    """
-    Resolve academic_year and semester_id from the active cycle.
-
-    Returns:
-        (academic_year, semester_id) from cycle table with status = 'OPEN'
-
-    Raises:
-        RuntimeError: if no active cycle exists
-    """
-    row = session.execute(
-        text("""
-            SELECT ay.name, c.semester_id
-            FROM cycle c
-            JOIN academic_year ay ON ay.id = c.academic_year_id
-            WHERE c.status = 'OPEN'
-            LIMIT 1
-        """)
-    ).fetchone()
-
-    if not row:
-        raise RuntimeError("No active cycle found. Activate a cycle before generating reports.")
-
-    return row[0], row[1]
-```
-
-❌ **PROBLEM** - Raises RuntimeError when no active cycle exists, causing 500 error
-
-**get_department_summary() function** (line 176-232):
-```python
-def get_department_summary(
-    academic_year: Optional[str] = None, semester_id: Optional[int] = None
-) -> dict:
-    """Aggregate department statistics."""
-    with get_transaction() as session:
-        if academic_year is None or semester_id is None:
-            academic_year, semester_id = _resolve_active_cycle(session)  # ← CRASHES HERE
-        # ... rest of function
-```
-
----
-
-## FIX 2 - Frontend API Client
-
-**Status**: ✅ NO CHANGES NEEDED
-
-The frontend is already calling the correct endpoint:
-```typescript
-export const getDepartmentSummary = () => api.get('/reports/department-summary');
-```
-
-This matches the backend route at `/api/reports/department-summary`.
+    """Open a preference submission window. Coordinator-only."""
+    result = open_preference_window(
+        coordinator_id=coordinator_id,
+        start_time=body.start_time,
+        end_time=body.end_time,
+        academic_year=body.academic_year,
+        semester_id=body.semester_id,
+        cycle_id=body.cycle_id,
+    )
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return WindowResponse(**result)
 
 
-
----
-
-## FIX 3 - Make get_department_summary() Not Crash
-
-**File**: `app/reports/service.py`
-
-**Changes**: Wrapped `_resolve_active_cycle()` call in try/except block. When no active cycle exists, return safe empty response with faculty count.
-
-**Before** (line 176-180):
-```python
-def get_department_summary(
-    academic_year: Optional[str] = None, semester_id: Optional[int] = None
-) -> dict:
-    """Aggregate department statistics."""
-    with get_transaction() as session:
-        if academic_year is None or semester_id is None:
-            academic_year, semester_id = _resolve_active_cycle(session)  # ← CRASHES HERE
-```
-
-**After** (line 176-195):
-```python
-def get_department_summary(
-    academic_year: Optional[str] = None, semester_id: Optional[int] = None
-) -> dict:
-    """Aggregate department statistics."""
-    with get_transaction() as session:
-        if academic_year is None or semester_id is None:
-            try:
-                academic_year, semester_id = _resolve_active_cycle(session)
-            except RuntimeError:
-                # No active cycle - return safe empty response
-                total_faculty = session.execute(
-                    text("SELECT count(*) FROM staff WHERE emp_code IS NOT NULL AND is_active = true")
-                ).scalar()
-                return {
-                    "total_subject_offerings": 0,
-                    "allocated_subjects": 0,
-                    "unallocated_subjects": 0,
-                    "total_faculty": total_faculty or 0,
-                    "average_workload": 0.0,
-                    "faculty_overloaded": 0,
-                    "faculty_underloaded": 0,
-                    "faculty_balanced": total_faculty or 0,
-                }
-```
-
-✅ **FIXED** - Function now returns safe empty data instead of crashing
-
-
-
----
-
-## FIX 4 - Create Seed Data
-
-**Commands executed**:
-
-1. Insert academic_year:
-```bash
-docker exec faculty_selection_db psql -U postgres -d faculty_selection -c "INSERT INTO academic_year (name, start_date, end_date) VALUES ('2025-2026', '2025-07-01', '2026-04-30') ON CONFLICT DO NOTHING RETURNING id;"
-```
-**Result**: Already exists (id=1)
-
-2. Insert cycle:
-```bash
-docker exec faculty_selection_db psql -U postgres -d faculty_selection -c "INSERT INTO cycle (academic_year_id, semester_id, status, opened_at) VALUES (1, 2, 'OPEN', NOW()) ON CONFLICT DO NOTHING;"
-```
-**Result**: Already exists
-
-3. Verify cycles:
-```bash
-docker exec faculty_selection_db psql -U postgres -d faculty_selection -c "SELECT c.id, c.status, c.semester_id, ay.name FROM cycle c JOIN academic_year ay ON ay.id = c.academic_year_id;"
-```
-**Result**:
-```
- id | status | semester_id |   name    
-----+--------+-------------+-----------
-  1 | OPEN   |           2 | 2025-2026
-  2 | OPEN   |           4 | 2025-2026
-  3 | OPEN   |           6 | 2025-2026
-(3 rows)
-```
-
-✅ **SEED DATA EXISTS** - Multiple active cycles found (migrations already created them)
-
-
-
----
-
-# FIX 1 - File Contents
-
-## frontend/src/api/client.ts
-
-**Key finding**: `getDepartmentSummary()` function exists and calls the CORRECT endpoint:
-
-```typescript
-export const getDepartmentSummary = () => api.get('/reports/department-summary');
-```
-
-This is line 99. The endpoint is CORRECT - it calls `/api/reports/department-summary` (the `/api` prefix is added by baseURL).
-
-## app/reports/router.py
-
-**Key finding**: The endpoint IS defined correctly:
-
-```python
-@router.get("/department-summary", response_model=DepartmentSummaryResponse)
-async def department_summary(
+@router.post("/close", response_model=WindowResponse)
+async def close_window(
     coordinator_id: int = Depends(get_current_coordinator_id),
 ):
-    """Aggregate department workload statistics."""
-    data = report_service.get_department_summary()
-    return DepartmentSummaryResponse(**data)
+    """Close the active preference window. Coordinator-only."""
+    result = close_preference_window(coordinator_id=coordinator_id)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return WindowResponse(**result)
+
+
+@router.get("/status", response_model=WindowStatusResponse)
+async def window_status():
+    """Get current preference window status. Public endpoint."""
+    return WindowStatusResponse(**get_window_status())
 ```
 
-Router prefix is `/api/reports`, so full path is `/api/reports/department-summary` ✅
 
-## app/reports/service.py
-
-**Key finding**: `get_department_summary()` function at line 176 calls `_resolve_active_cycle()` which RAISES RuntimeError when no active cycle exists.
-
-Line 39-48 in `_resolve_active_cycle()`:
+### app/preference/window_service.py
 ```python
-row = session.execute(
-    text("""
-        SELECT ay.name, c.semester_id
-        FROM cycle c
-        JOIN academic_year ay ON ay.id = c.academic_year_id
-        WHERE c.status = 'OPEN'
-        LIMIT 1
-    """)
-).fetchone()
+"""
+Preference window service — manages the preference submission window lifecycle.
+Uses the existing selection_window table and window_transactions module.
 
-if not row:
-    raise RuntimeError("No active cycle found. Activate a cycle before generating reports.")
-```
+Convenience layer that provides:
+  - open_preference_window: creates + opens a window in one step
+  - close_preference_window: closes the active window
+  - get_window_status: returns current window state with remaining time
+  - is_window_open: guard check for preference submissions
+"""
 
-**HOWEVER**: Line 180-195 in `get_department_summary()` ALREADY has a try/except that catches this and returns safe empty response! The fix was already partially applied.
+from sqlalchemy import text
+from app.db.session import get_transaction
+from datetime import datetime, timezone
+import logging
 
-```python
-if academic_year is None or semester_id is None:
-    try:
-        academic_year, semester_id = _resolve_active_cycle(session)
-    except RuntimeError:
-        # No active cycle - return safe empty response
-        total_faculty = session.execute(
-            text("SELECT count(*) FROM staff WHERE emp_code IS NOT NULL AND is_active = true")
-        ).scalar()
+logger = logging.getLogger(__name__)
+
+
+def open_preference_window(
+    coordinator_id: int,
+    start_time: str,
+    end_time: str,
+    academic_year: str | None = None,
+    semester_id: int | None = None,
+    cycle_id: int | None = None,
+) -> dict:
+    """
+    Open a preference submission window.
+    Follows the frozen lifecycle: DRAFT → SCHEDULED → OPEN.
+    Only one OPEN window allowed per academic_year + semester_id.
+    """
+    with get_transaction() as session:
+        # Check for existing OPEN window
+        existing = session.execute(
+            text("""
+                SELECT id FROM selection_window
+                WHERE status = 'OPEN'
+                LIMIT 1
+            """),
+        ).fetchone()
+
+        if existing is not None:
+            return {
+                "success": False,
+                "message": f"An open window already exists (id={existing[0]}). Close it first.",
+            }
+
+        resolved_cycle_id = None
+        # 1. Use explicit ID
+        if cycle_id is not None:
+            resolved_cycle_id = cycle_id
+        # 2. Lookup by year/semester
+        elif academic_year and semester_id:
+            cycle_row = session.execute(
+                text("""
+                    SELECT id FROM cycle
+                    WHERE academic_year = :year AND semester_id = :sem_id
+                    ORDER BY id DESC LIMIT 1
+                """),
+                {"year": academic_year, "sem_id": semester_id},
+            ).fetchone()
+            resolved_cycle_id = cycle_row[0] if cycle_row else None
+        
+        # 3. Fallback to active cycle
+        if resolved_cycle_id is None:
+            from app.admin.cycle_service_new import get_active_cycle
+            active = get_active_cycle()
+            if active:
+                resolved_cycle_id = active["id"]
+                academic_year = active["academic_year"]
+                semester_id = active["semester_id"]
+            else:
+                return {"success": False, "message": "Failed to resolve cycle scope"}
+
+                
+        # ---- LIFECYCLE STEP 1: Insert as DRAFT ----
+        result = session.execute(
+            text("""
+                INSERT INTO selection_window
+                    (name, batch_id, specialization_id, start_time, end_time,
+                     status, max_subjects_per_staff, cycle_id,
+                     allocation_locked)
+                VALUES (
+                    :name, 1, 1, :start_time, :end_time,
+                    'DRAFT', 5, :cycle_id, false
+                )
+                RETURNING id
+            """),
+            {
+                "name": f"Preference Window {academic_year} Sem-{semester_id}",
+                "start_time": start_time,
+                "end_time": end_time,
+                "cycle_id": resolved_cycle_id,
+            },
+        )
+        window_id = result.scalar()
+
+        # Audit: WINDOW_CREATED
+        session.execute(
+            text("""
+                INSERT INTO audit_log (actor_staff_id, action_type, details)
+                VALUES (:actor, 'WINDOW_CREATED', :details)
+            """),
+            {
+                "actor": coordinator_id,
+                "details": (
+                    f'{{"window_id": {window_id}, '
+                    f'"academic_year": "{academic_year}", '
+                    f'"semester_id": {semester_id}}}'
+                ),
+            },
+        )
+
+        # ---- LIFECYCLE STEP 2: Transition DRAFT → SCHEDULED ----
+        session.execute(
+            text("""
+                UPDATE selection_window
+                SET status = 'SCHEDULED', updated_at = now()
+                WHERE id = :id
+            """),
+            {"id": window_id},
+        )
+
+        # Audit: WINDOW_SCHEDULED
+        session.execute(
+            text("""
+                INSERT INTO audit_log (actor_staff_id, action_type, details)
+                VALUES (:actor, 'WINDOW_SCHEDULED', :details)
+            """),
+            {
+                "actor": coordinator_id,
+                "details": (
+                    f'{{"window_id": {window_id}, '
+                    f'"start_time": "{start_time}", '
+                    f'"end_time": "{end_time}"}}'
+                ),
+            },
+        )
+
+        # ---- LIFECYCLE STEP 3: Transition SCHEDULED → OPEN ----
+        session.execute(
+            text("""
+                UPDATE selection_window
+                SET status = 'OPEN', updated_at = now()
+                WHERE id = :id
+            """),
+            {"id": window_id},
+        )
+
+        # Audit: WINDOW_OPENED
+        session.execute(
+            text("""
+                INSERT INTO audit_log (actor_staff_id, action_type, details)
+                VALUES (:actor, 'WINDOW_OPENED', :details)
+            """),
+            {
+                "actor": coordinator_id,
+                "details": (
+                    f'{{"window_id": {window_id}, '
+                    f'"academic_year": "{academic_year}", '
+                    f'"semester_id": {semester_id}, '
+                    f'"start_time": "{start_time}", '
+                    f'"end_time": "{end_time}"}}'
+                ),
+            },
+        )
+
+        session.commit()
+
+    logger.info(f"Preference window opened: id={window_id} (DRAFT→SCHEDULED→OPEN)")
+    return {
+        "success": True,
+        "message": "Preference window opened",
+        "window_id": window_id,
+    }
+
+
+
+def close_preference_window(coordinator_id: int) -> dict:
+    """Close the currently open preference window."""
+    with get_transaction() as session:
+        window = session.execute(
+            text("SELECT id FROM selection_window WHERE status = 'OPEN' LIMIT 1")
+        ).fetchone()
+
+        if window is None:
+            return {"success": False, "message": "No open window found"}
+
+        window_id = window[0]
+        session.execute(
+            text("UPDATE selection_window SET status = 'CLOSED' WHERE id = :id"),
+            {"id": window_id},
+        )
+
+        session.execute(
+            text("""
+                INSERT INTO audit_log (actor_staff_id, action_type, details)
+                VALUES (:actor, 'WINDOW_CLOSED', :details)
+            """),
+            {
+                "actor": coordinator_id,
+                "details": f'{{"window_id": {window_id}}}',
+            },
+        )
+
+        session.commit()
+
+    logger.info(f"Preference window closed: id={window_id}")
+    return {"success": True, "message": "Preference window closed", "window_id": window_id}
+
+
+def get_window_status() -> dict:
+    """
+    Get the current preference window status.
+    Returns is_open, timing details, and remaining time.
+    """
+    with get_transaction() as session:
+        row = session.execute(
+            text("""
+                SELECT sw.id, sw.status, sw.start_time, sw.end_time,
+                       ay.name AS academic_year, c.semester_id
+                FROM selection_window sw
+                LEFT JOIN cycle c ON c.id = sw.cycle_id
+                LEFT JOIN academic_year ay ON ay.id = c.academic_year_id
+                WHERE sw.status = 'OPEN'
+                ORDER BY sw.id DESC LIMIT 1
+            """),
+        ).fetchone()
+
+    if row is None:
         return {
-            "total_subject_offerings": 0,
-            "allocated_subjects": 0,
-            "unallocated_subjects": 0,
-            "total_faculty": total_faculty or 0,
-            "average_workload": 0.0,
-            "faculty_overloaded": 0,
-            "faculty_underloaded": 0,
-            "faculty_balanced": total_faculty or 0,
+            "is_open": False,
+            "status": "CLOSED",
+            "window_id": None,
+            "start_time": None,
+            "end_time": None,
+            "remaining_seconds": 0,
+            "academic_year": None,
+            "semester_id": None,
+        }
+
+    now = datetime.now(timezone.utc)
+    end_time = row[3]
+    if end_time.tzinfo is None:
+        end_time = end_time.replace(tzinfo=timezone.utc)
+
+    remaining = max(0, int((end_time - now).total_seconds()))
+
+    return {
+        "is_open": True,
+        "status": row[1],  # 'OPEN', 'CLOSED', 'SCHEDULED'
+        "window_id": row[0],
+        "start_time": str(row[2]),
+        "end_time": str(row[3]),
+        "remaining_seconds": remaining,
+        "academic_year": row[4],
+        "semester_id": row[5],
+    }
+
+
+def is_window_open() -> bool:
+    """Quick check: is there an open preference window?"""
+    status = get_window_status()
+    return status["is_open"]
+```
+
+
+### app/admin/cycle_router.py
+```python
+"""
+FastAPI router for academic cycle management.
+Coordinator endpoints for creating, activating, and listing academic cycles.
+
+Endpoints:
+  POST /api/cycles          Create new cycle
+  POST /api/cycles/activate Activate a cycle
+  GET  /api/cycles          List all cycles
+  GET  /api/cycles/active   Get current active cycle
+"""
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+import logging
+
+from app.auth.dependencies import get_current_coordinator_id
+from app.admin.cycle_service_new import (
+    create_cycle,
+    activate_cycle,
+    list_cycles,
+    get_active_cycle,
+)
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/cycles", tags=["academic-cycles"])
+
+
+# --- Schemas ---
+
+class CreateCycleRequest(BaseModel):
+    academic_year: str = Field(..., description="e.g. 2025-2026")
+    semester_id: int = Field(..., description="Semester ID (1-6 for I-VI)")
+    start_date: str | None = None
+    end_date: str | None = None
+
+
+class ActivateCycleRequest(BaseModel):
+    cycle_id: int
+
+
+class CycleResponse(BaseModel):
+    id: int
+    academic_year: str
+    semester_id: int
+    semester_name: str
+    status: str
+    opened_at: str | None = None
+    closed_at: str | None = None
+    allocated_at: str | None = None
+    frozen_at: str | None = None
+    is_active: bool
+    created_at: str
+
+
+class ActionResponse(BaseModel):
+    success: bool
+    message: str
+    cycle_id: int | None = None
+
+
+# --- Endpoints ---
+
+@router.post("", response_model=ActionResponse)
+async def create_cycle_endpoint(
+    body: CreateCycleRequest,
+    _coordinator_id: int = Depends(get_current_coordinator_id),
+):
+    """Create a new academic cycle. Coordinator-only."""
+    result = create_cycle(
+        academic_year=body.academic_year,
+        semester_id=body.semester_id,
+        start_date=body.start_date,
+        end_date=body.end_date,
+    )
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return ActionResponse(**result)
+
+
+@router.post("/activate", response_model=ActionResponse)
+async def activate_cycle_endpoint(
+    body: ActivateCycleRequest,
+    _coordinator_id: int = Depends(get_current_coordinator_id),
+):
+    """Activate an academic cycle. Coordinator-only."""
+    result = activate_cycle(body.cycle_id)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return ActionResponse(**result)
+
+
+@router.get("", response_model=list[CycleResponse])
+async def list_cycles_endpoint(
+    _coordinator_id: int = Depends(get_current_coordinator_id),
+):
+    """List all academic cycles. Coordinator-only."""
+    return [CycleResponse(**c) for c in list_cycles()]
+
+
+@router.get("/active", response_model=CycleResponse | None)
+async def get_active_cycle_endpoint():
+    """Get the currently active cycle. Public endpoint."""
+    cycle = get_active_cycle()
+    if cycle is None:
+        raise HTTPException(status_code=404, detail="No active academic cycle")
+    return CycleResponse(**cycle)
+```
+
+
+### app/admin/cycle_service_new.py
+```python
+"""
+Service layer for semester-specific cycle management.
+NEW ARCHITECTURE: Cycles are per (academic_year + semester), not ODD/EVEN.
+
+IMPORTANT: This service uses the NEW cycle table schema from migration 021:
+- cycle.academic_year_id (FK to academic_year.id)
+- cycle.semester_id (FK to semester.id)
+- cycle.status ('OPEN', 'CLOSED', 'ALLOCATED', 'FROZEN')
+"""
+
+import logging
+from sqlalchemy import text
+from app.db.session import get_transaction
+
+logger = logging.getLogger(__name__)
+
+
+def create_cycle(academic_year: str, semester_id: int, start_date: str | None = None, end_date: str | None = None) -> dict:
+    """
+    Create a new semester-specific cycle.
+    
+    Args:
+        academic_year: e.g. "2025-2026"
+        semester_id: 1-6 (I-VI)
+        start_date: Optional start date
+        end_date: Optional end date
+    
+    Returns:
+        {"success": bool, "message": str, "cycle_id": int | None}
+    """
+    with get_transaction() as session:
+        # Ensure academic_year exists in academic_year table
+        year_row = session.execute(
+            text("SELECT id FROM academic_year WHERE name = :name"),
+            {"name": academic_year}
+        ).fetchone()
+        
+        if not year_row:
+            # Create academic_year if it doesn't exist
+            session.execute(
+                text("INSERT INTO academic_year (name, start_date, end_date) VALUES (:name, :start_date, :end_date)"),
+                {"name": academic_year, "start_date": start_date, "end_date": end_date}
+            )
+            year_row = session.execute(
+                text("SELECT id FROM academic_year WHERE name = :name"),
+                {"name": academic_year}
+            ).fetchone()
+        
+        academic_year_id = year_row[0]
+        
+        # Check if cycle already exists
+        existing = session.execute(
+            text("SELECT id FROM cycle WHERE academic_year_id = :year_id AND semester_id = :sem_id"),
+            {"year_id": academic_year_id, "sem_id": semester_id}
+        ).fetchone()
+        
+        if existing:
+            return {
+                "success": False,
+                "message": f"Cycle for {academic_year} Semester {semester_id} already exists",
+                "cycle_id": None
+            }
+        
+        # Create new cycle with status='CLOSED'
+        result = session.execute(
+            text("""
+                INSERT INTO cycle (academic_year_id, semester_id, status)
+                VALUES (:year_id, :sem_id, 'CLOSED')
+                RETURNING id
+            """),
+            {"year_id": academic_year_id, "sem_id": semester_id}
+        )
+        
+        cycle_id = result.fetchone()[0]
+        session.commit()
+        
+        logger.info(f"Created cycle {cycle_id} for {academic_year} Semester {semester_id}")
+        
+        return {
+            "success": True,
+            "message": f"Cycle created for {academic_year} Semester {semester_id}",
+            "cycle_id": cycle_id
+        }
+
+
+
+def activate_cycle(cycle_id: int) -> dict:
+    """
+    Activate a cycle (set status='OPEN').
+    Only one cycle can be OPEN at a time.
+    
+    Returns:
+        {"success": bool, "message": str}
+    """
+    with get_transaction() as session:
+        # Check if cycle exists
+        cycle = session.execute(
+            text("SELECT id, status FROM cycle WHERE id = :id"),
+            {"id": cycle_id}
+        ).fetchone()
+        
+        if not cycle:
+            return {"success": False, "message": "Cycle not found"}
+        
+        if cycle[1] == 'FROZEN':
+            return {"success": False, "message": "Cannot activate a frozen cycle"}
+        
+        # Close all other OPEN cycles
+        session.execute(
+            text("UPDATE cycle SET status = 'CLOSED', closed_at = NOW() WHERE status = 'OPEN'")
+        )
+        
+        # Open this cycle
+        session.execute(
+            text("UPDATE cycle SET status = 'OPEN', opened_at = NOW() WHERE id = :id"),
+            {"id": cycle_id}
+        )
+        
+        session.commit()
+        
+        logger.info(f"Activated cycle {cycle_id}")
+        
+        return {"success": True, "message": "Cycle activated"}
+
+
+def list_cycles() -> list[dict]:
+    """
+    List all cycles with their academic year and semester details.
+    Joins with academic_year and semester tables.
+    
+    Returns:
+        List of cycle dictionaries
+    """
+    with get_transaction() as session:
+        rows = session.execute(
+            text("""
+                SELECT 
+                    c.id,
+                    ay.name as academic_year,
+                    c.semester_id,
+                    s.label as semester_name,
+                    c.status,
+                    c.opened_at,
+                    c.closed_at,
+                    c.allocated_at,
+                    c.frozen_at,
+                    c.created_at
+                FROM cycle c
+                JOIN academic_year ay ON c.academic_year_id = ay.id
+                JOIN semester s ON c.semester_id = s.id
+                ORDER BY c.created_at DESC
+            """)
+        ).fetchall()
+        
+        return [
+            {
+                "id": row[0],
+                "academic_year": row[1],
+                "semester_id": row[2],
+                "semester_name": row[3],
+                "status": row[4],
+                "is_active": row[4] == 'OPEN',
+                "opened_at": row[5].isoformat() if row[5] else None,
+                "closed_at": row[6].isoformat() if row[6] else None,
+                "allocated_at": row[7].isoformat() if row[7] else None,
+                "frozen_at": row[8].isoformat() if row[8] else None,
+                "created_at": row[9].isoformat() if row[9] else None,
+            }
+            for row in rows
+        ]
+
+
+
+def get_active_cycle() -> dict | None:
+    """
+    Get the currently active (OPEN) cycle.
+    Joins with academic_year and semester tables.
+    
+    Returns:
+        Cycle dictionary with id, academic_year, semester_id, semester_name, status, is_active
+        or None if no active cycle
+    """
+    with get_transaction() as session:
+        row = session.execute(
+            text("""
+                SELECT 
+                    c.id,
+                    ay.name as academic_year,
+                    c.semester_id,
+                    s.label as semester_name,
+                    c.status,
+                    c.opened_at,
+                    c.closed_at,
+                    c.allocated_at,
+                    c.frozen_at,
+                    c.created_at
+                FROM cycle c
+                JOIN academic_year ay ON c.academic_year_id = ay.id
+                JOIN semester s ON c.semester_id = s.id
+                WHERE c.status = 'OPEN'
+                LIMIT 1
+            """)
+        ).fetchone()
+        
+        if not row:
+            return None
+        
+        return {
+            "id": row[0],
+            "academic_year": row[1],
+            "semester_id": row[2],
+            "semester_name": row[3],
+            "status": row[4],
+            "is_active": True,
+            "opened_at": row[5].isoformat() if row[5] else None,
+            "closed_at": row[6].isoformat() if row[6] else None,
+            "allocated_at": row[7].isoformat() if row[7] else None,
+            "frozen_at": row[8].isoformat() if row[8] else None,
+            "created_at": row[9].isoformat() if row[9] else None,
         }
 ```
 
-**Conclusion**: 
-- Frontend endpoint is CORRECT ✅
-- Backend endpoint exists ✅
-- Backend already handles no active cycle gracefully ✅
-- The 500 error must be from something else - need to test with actual database
-
-
-
 ---
 
-# FIX 2 - Frontend API Client
+## 2. SQL QUERY RESULTS
 
-**Status**: ✅ NO CHANGES NEEDED
+### Query 1: Semester Table
+```sql
+SELECT id, label FROM semester ORDER BY id;
+```
 
-The frontend was already calling the correct endpoint:
-```typescript
-export const getDepartmentSummary = () => api.get('/reports/department-summary');
+**Result:**
+```
+ id | label 
+----+-------
+  1 | I
+  2 | II
+  3 | III
+  4 | IV
+  5 | V
+  6 | VI
+(6 rows)
+```
+
+### Query 2: Cycle Table with Semester Labels
+```sql
+SELECT c.id, c.status, c.semester_id, s.label 
+FROM cycle c 
+JOIN semester s ON s.id = c.semester_id;
+```
+
+**Result:**
+```
+ id | status | semester_id | label 
+----+--------+-------------+-------
+  1 | OPEN   |           2 | II
+  2 | OPEN   |           4 | IV
+  3 | OPEN   |           6 | VI
+(3 rows)
 ```
 
 ---
 
-# FIX 3 - Backend Service Error Handling
+## 3. KEY FINDINGS
 
-**Status**: ✅ PARTIALLY FIXED, REAL BUG FOUND
+### Critical Issue: Multiple OPEN Cycles
+The database currently has **3 cycles with status='OPEN'** simultaneously:
+- Cycle 1: Semester II (OPEN)
+- Cycle 2: Semester IV (OPEN)
+- Cycle 3: Semester VI (OPEN)
 
-The `get_department_summary()` function already had try/except handling for no active cycle.
+This violates the business rule that **only one cycle should be OPEN at a time**.
 
-**REAL BUG FOUND**: The `workload_summary` table still uses `semester_type` (ODD/EVEN) instead of `semester_id` (1-6).
+### Architecture Mismatch
+1. **window_service.py** tries to lookup cycle by `academic_year` string:
+   ```python
+   SELECT id FROM cycle
+   WHERE academic_year = :year AND semester_id = :sem_id
+   ```
+   But the cycle table uses `academic_year_id` (FK), not `academic_year` string.
 
-**Fix applied to app/reports/service.py** (lines 217-245):
+2. **cycle_service_new.py** correctly uses `academic_year_id`:
+   ```python
+   SELECT id FROM cycle WHERE academic_year_id = :year_id AND semester_id = :sem_id
+   ```
 
-### BEFORE:
+### Frontend-Backend Alignment
+- Frontend sends: `academic_year` (string) + `semester_id` (int)
+- Backend expects: Same format
+- But lookup query in window_service.py is broken
+
+---
+
+## 4. ROOT CAUSE
+
+The window_service.py cycle lookup query is incorrect:
 ```python
-avg_workload = session.execute(
+# WRONG - cycle table doesn't have academic_year column
+cycle_row = session.execute(
     text("""
-        SELECT COALESCE(AVG(ws.tch_total), 0)
-        FROM workload_summary ws
-        WHERE ws.academic_year = :year AND ws.semester_id = :sem_id
-    """),
-    {"year": academic_year, "sem_id": semester_id}
-).scalar()
-
-overloaded = session.execute(
-    text("""
-        SELECT count(*) FROM workload_summary
+        SELECT id FROM cycle
         WHERE academic_year = :year AND semester_id = :sem_id
-          AND deviation_hours > 0
+        ORDER BY id DESC LIMIT 1
     """),
-    {"year": academic_year, "sem_id": semester_id}
-).scalar()
-
-underloaded = session.execute(
-    text("""
-        SELECT count(*) FROM workload_summary
-        WHERE academic_year = :year AND semester_id = :sem_id
-          AND deviation_hours < -2
-    """),
-    {"year": academic_year, "sem_id": semester_id}
-).scalar()
+    {"year": academic_year, "sem_id": semester_id},
+).fetchone()
 ```
 
-### AFTER:
+Should be:
 ```python
-# Convert semester_id to semester_type for workload_summary table (legacy schema)
-semester_type = "EVEN" if semester_id in (2, 4, 6) else "ODD"
-
-avg_workload = session.execute(
+# CORRECT - join with academic_year table
+cycle_row = session.execute(
     text("""
-        SELECT COALESCE(AVG(ws.tch_total), 0)
-        FROM workload_summary ws
-        WHERE ws.academic_year = :year AND ws.semester_type = :sem_type
+        SELECT c.id FROM cycle c
+        JOIN academic_year ay ON c.academic_year_id = ay.id
+        WHERE ay.name = :year AND c.semester_id = :sem_id
+        ORDER BY c.id DESC LIMIT 1
     """),
-    {"year": academic_year, "sem_type": semester_type}
-).scalar()
-
-overloaded = session.execute(
-    text("""
-        SELECT count(*) FROM workload_summary
-        WHERE academic_year = :year AND semester_type = :sem_type
-          AND deviation_hours > 0
-    """),
-    {"year": academic_year, "sem_type": semester_type}
-).scalar()
-
-underloaded = session.execute(
-    text("""
-        SELECT count(*) FROM workload_summary
-        WHERE academic_year = :year AND semester_type = :sem_type
-          AND deviation_hours < -2
-    """),
-    {"year": academic_year, "sem_type": semester_type}
-).scalar()
+    {"year": academic_year, "sem_id": semester_id},
+).fetchone()
 ```
 
 ---
 
-# FIX 4 - Create Seed Data
-
-**Status**: ✅ ALREADY EXISTS
-
-Database already had seed data:
-- Academic year: `2025-2026` (id=1)
-- Active cycles: 3 cycles exist (semester_id 2, 4, 6) all with status='OPEN'
-
-```
- id | status | semester_id |   name    
-----+--------+-------------+-----------
-  1 | OPEN   |           2 | 2025-2026
-  2 | OPEN   |           4 | 2025-2026
-  3 | OPEN   |           6 | 2025-2026
-```
-
----
-
-# FIX 5 - Final Test
-
-**Token obtained**: YES
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNiIsImVtYWlsIjoibWN0NDRAaGluZHVzdGFudW5pdi5hYy5pbiIsIm5hbWUiOiJEci4gUy4gR29raWxhIiwicm9sZSI6ImhvZCIsImlhdCI6MTc3NDQ3OTUwNCwiZXhwIjoxNzc0NDkzOTA0fQ.sTj7L8Dj5E3HbWw0u20XI_HIbrR1IIIVhR65LL0Nhao",
-  "staff_id": 16,
-  "email": "mct44@hindustanuniv.ac.in",
-  "name": "Dr. S. Gokila",
-  "role": "hod"
-}
-```
-
-**Endpoint test**: ✅ SUCCESS
-
-```bash
-curl.exe -H "Authorization: Bearer TOKEN" http://localhost:8000/api/reports/department-summary
-```
-
-**Response**:
-```json
-{
-  "total_subject_offerings": 78,
-  "allocated_subjects": 0,
-  "unallocated_subjects": 78,
-  "total_faculty": 28,
-  "average_workload": 0.0,
-  "faculty_overloaded": 0,
-  "faculty_underloaded": 0,
-  "faculty_balanced": 28
-}
-```
-
-**Status**: ✅ 200 OK - Dashboard endpoint working!
-
----
-
-# FIX 6 - Summary
-
-## Files Changed
-
-1. **app/reports/service.py** (lines 217-245)
-   - Fixed `workload_summary` table queries to use `semester_type` instead of `semester_id`
-   - Added conversion logic: `semester_type = "EVEN" if semester_id in (2, 4, 6) else "ODD"`
-   - Changed 3 SQL queries to use `ws.semester_type = :sem_type` instead of `ws.semester_id = :sem_id`
-
-## Frontend Changes
-
-**None required** - frontend was already correct
-
-## Backend Restart
-
-**Not required** - Docker container automatically reloads on file changes (if using volume mounts)
-
-If changes don't reflect, restart with:
-```bash
-docker-compose restart app
-```
-
-## Browser Verification
-
-1. Open: `http://localhost:5173/dashboard`
-2. Login as HOD (staff_id=16)
-3. Dashboard should now load successfully showing:
-   - 78 total subject offerings
-   - 28 total faculty
-   - 0 allocated subjects (no allocation run yet)
-   - All faculty balanced (no workload assigned yet)
-
-## Root Cause
-
-The `workload_summary` table was never migrated from the old schema (`semester_type` = ODD/EVEN) to the new schema (`semester_id` = 1-6). The fix adds a conversion layer to bridge the gap until the table migration is completed.
-
-## Next Steps
-
-1. ✅ Dashboard is now working
-2. ⚠️ Need to migrate `workload_summary` table schema in a future migration
-3. ✅ All other tables (cycle, subject_offering, allocation) use `semester_id` correctly
-
-
----
-
-# FINAL VERIFICATION
-
-## STEP 1 - Frontend Status
-
-**Command**: `npm run dev` (in frontend/ folder)
-
-**Result**: ✅ Running on http://localhost:5175/
-```
-Port 5173 is in use, trying another one...
-Port 5174 is in use, trying another one...
-VITE v7.3.1  ready in 1347 ms
-➜  Local:   http://localhost:5175/
-```
-
-**Note**: Frontend auto-incremented to port 5175. CORS in backend allows ports 5173-5176 ✅
-
----
-
-## STEP 2 - Auth Dependency Check
-
-**Function**: `get_current_coordinator_id()` in `app/auth/dependencies.py`
-
-**Code** (lines 133-138):
-```python
-async def get_current_coordinator(
-    user: UserInfo = Depends(get_current_user)
-) -> UserInfo:
-    """Require coordinator or HOD role. Returns full UserInfo."""
-    if user.role not in ("tt_coordinator", "hod"):  # ← HOD IS ALLOWED
-        logger.warning(f"Coordinator access denied: staff_id={user.staff_id}, role={user.role}")
-        raise HTTPException(status_code=403, detail="Coordinator access required")
-    return user
-```
-
-**Result**: ✅ HOD role is explicitly allowed to access coordinator endpoints
-
----
-
-## STEP 3 - Browser Test
-
-**Cannot automate browser interaction** - User must manually verify:
-
-1. Open: http://localhost:5175/dashboard
-2. Login as HOD (staff_id=16) using dev login
-3. Dashboard should load and display:
-   - Total Offerings: 78
-   - Allocated: 0
-   - Unallocated: 78
-   - Faculty: 28
-   - Balanced: 28
-   - Overloaded: 0
-   - Underloaded: 0
-   - Avg Workload: 0.0
-
----
-
-## STEP 4 - Browser Console Errors
-
-**Cannot automate** - User must check DevTools console manually
-
----
-
-## STEP 5 - Field Name Verification
-
-**Backend response fields**:
-```json
-{
-  "total_subject_offerings": 78,
-  "allocated_subjects": 0,
-  "unallocated_subjects": 78,
-  "total_faculty": 28,
-  "average_workload": 0.0,
-  "faculty_overloaded": 0,
-  "faculty_underloaded": 0,
-  "faculty_balanced": 28
-}
-```
-
-**Frontend DashboardPage.tsx usage** (lines 207-260):
-```typescript
-{data.total_subject_offerings}  // ✅ Line 207
-{data.allocated_subjects}       // ✅ Line 218
-{data.unallocated_subjects}     // ✅ Line 229
-{data.total_faculty}            // ✅ Line 240
-{data.faculty_balanced}         // ✅ Line 246
-{data.faculty_overloaded}       // ✅ Line 251
-{data.faculty_underloaded}      // ✅ Line 256
-{data.average_workload}         // ✅ Line 261
-```
-
-**Result**: ✅ ALL field names match exactly - no mismatch
-
----
-
-## STEP 6 - Git Commit & Push
-
-**Commands executed**:
-```bash
-git add -A
-git commit -m "Fix dashboard: reports service semester_type conversion for workload_summary table"
-git push origin main
-```
-
-**Result**: ✅ Pushed to Railway (commit 3e56d33)
-
-**Files changed**:
-- app/reports/service.py (semester_type conversion logic)
-- PROGRESS.md (created)
-- DIAGNOSTIC_DUMP.md (created)
-- SESSION_SUMMARY.md (updated)
-
----
-
-# FINAL STATUS: ✅ WORKING
-
-## What Was Fixed
-
-1. **app/reports/service.py** - Added conversion from `semester_id` (1-6) to `semester_type` (ODD/EVEN) for `workload_summary` table queries
-2. **Dockerfile** - Changed CMD to use `startup.sh` (migrations now run on Railway)
-3. **app/reports/service.py line 39** - Changed `ay.label` to `ay.name`
-
-## System Status
-
-- ✅ Local backend: Running on http://localhost:8000
-- ✅ Local frontend: Running on http://localhost:5175
-- ✅ Health endpoint: Working
-- ✅ Auth endpoint: Working (HOD login successful)
-- ✅ Dashboard API: Working (returns valid JSON)
-- 🚀 Railway: Deploying (commit 3e56d33)
-
-## Browser Verification Required
-
-User must manually verify:
-1. Open http://localhost:5175/dashboard
-2. Login as HOD
-3. Confirm dashboard displays stats correctly
-
-## Known Limitations
-
-- `workload_summary` table still uses old schema (`semester_type` instead of `semester_id`)
-- Conversion layer added as temporary bridge
-- Future migration needed to update `workload_summary` table schema
-
-
----
-
-# DIAGNOSTIC STEPS
-
-## STEP 1 - Docker Container Status
-
-```
-docker ps
-```
-
-**Output**:
-```
-CONTAINER ID   IMAGE                   COMMAND                   CREATED       STATUS                 PORTS
-ae7fde2892c9   faculty_selection-app   "sh -c '\n  set -e &&…"   7 hours ago   Up 7 hours (healthy)   0.0.0.0:8000->8000/tcp
-0d502fef6740   postgres:16             "docker-entrypoint.s…"    7 hours ago   Up 7 hours (healthy)   0.0.0.0:5432->5432/tcp
-```
-
-**Result**: ✅ Both containers running and healthy
-
----
-
-## STEP 2 - Backend Health Check
-
-```
-curl.exe http://localhost:8000/health
-```
-
-**Output**:
-```json
-{"status":"ok"}
-```
-
-**Result**: ✅ Backend is reachable
-
----
-
-## STEP 3 - Vite Config
-
-**File**: `frontend/vite.config.ts`
-
-```typescript
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
-
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  server: {
-    port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-    },
-  },
-})
-```
-
-**Analysis**: ✅ Proxy is correctly configured to forward `/api` requests to `http://localhost:8000`
-
-**Note**: Frontend is running on port 5175 (auto-incremented), but proxy target is correct.
-
----
-
-## STEP 4 - Token Tests for Each Role
-
-### HOD Token (staff_id=16)
-
-**Login**:
-```bash
-curl.exe -X POST http://localhost:8000/api/auth/dev-login/16
-```
-
-**Response**:
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNiIsImVtYWlsIjoibWN0NDRAaGluZHVzdGFudW5pdi5hYy5pbiIsIm5hbWUiOiJEci4gUy4gR29raWxhIiwicm9sZSI6ImhvZCIsImlhdCI6MTc3NDUwNDI3OSwiZXhwIjoxNzc0NTE4Njc5fQ.8NHF7IGMo1kf8oJStk0z8-Tbx_UDGPfp0-pF59H8xok",
-  "staff_id": 16,
-  "email": "mct44@hindustanuniv.ac.in",
-  "name": "Dr. S. Gokila",
-  "role": "hod"
-}
-```
-
-**Test 1**: `/api/cycles/`
-```bash
-curl.exe -H "Authorization: Bearer TOKEN" http://localhost:8000/api/cycles/
-```
-**Response**: `[]` (empty array)
-**Status**: ✅ 200 OK
-
-**Test 2**: `/api/reports/department-summary`
-```bash
-curl.exe -H "Authorization: Bearer TOKEN" http://localhost:8000/api/reports/department-summary
-```
-**Response**:
-```json
-{
-  "total_subject_offerings": 78,
-  "allocated_subjects": 0,
-  "unallocated_subjects": 78,
-  "total_faculty": 28,
-  "average_workload": 0.0,
-  "faculty_overloaded": 0,
-  "faculty_underloaded": 0,
-  "faculty_balanced": 28
-}
-```
-**Status**: ✅ 200 OK
-
----
-
-### Coordinator Token (staff_id=22)
-
-**Login**:
-```bash
-curl.exe -X POST http://localhost:8000/api/auth/dev-login/22
-```
-
-**Response**:
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMiIsImVtYWlsIjoic2F0aGlzaGttQGhpbmR1c3RhbnVuaXYuYWMuaW4iLCJuYW1lIjoiRHIuIFNhdGhpc2ggS3VtYXIgTSIsInJvbGUiOiJ0dF9jb29yZGluYXRvciIsImlhdCI6MTc3NDUwNDI5NSwiZXhwIjoxNzc0NTE4Njk1fQ.fniu39pSbzjEFYJXlMYBAqPWvMhkZvTfbwI3JTD8TqU",
-  "staff_id": 22,
-  "email": "sathishkm@hindustanuniv.ac.in",
-  "name": "Dr. Sathish Kumar M",
-  "role": "tt_coordinator"
-}
-```
-
-**Test 1**: `/api/pref-window/status`
-```bash
-curl.exe -H "Authorization: Bearer TOKEN" http://localhost:8000/api/pref-window/status
-```
-**Response**: `Internal Server Error`
-**Status**: ❌ 500 ERROR
-
-**Test 2**: `/api/allocation/run`
-```bash
-curl.exe -H "Authorization: Bearer TOKEN" http://localhost:8000/api/allocation/run
-```
-**Response**: `{"detail":"Method Not Allowed"}`
-**Status**: ❌ 405 (needs POST with body)
-
----
-
-### Faculty Token (staff_id=17)
-
-**Login**:
-```bash
-curl.exe -X POST http://localhost:8000/api/auth/dev-login/17
-```
-
-**Response**:
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNyIsImVtYWlsIjoic3VkaGFzQGhpbmR1c3RhbnVuaXYuYWMuaW4iLCJuYW1lIjoiRHIuIFMuIFN1ZGhhIiwicm9sZSI6ImZhY3VsdHkiLCJpYXQiOjE3NzQ1MDQzMDAsImV4cCI6MTc3NDUxODcwMH0.AM4y9hYe0gszQ2QSgXDJt8w5R1rdxIlrcQMyP-awCUg",
-  "staff_id": 17,
-  "email": "sudhas@hindustanuniv.ac.in",
-  "name": "Dr. S. Sudha",
-  "role": "faculty"
-}
-```
-
-**Test 1**: `/api/preferences/me`
-```bash
-curl.exe -H "Authorization: Bearer TOKEN" http://localhost:8000/api/preferences/me
-```
-**Response**: `Internal Server Error`
-**Status**: ❌ 500 ERROR
-
----
-
-## STEP 5 - Backend Error Logs
-
-**Error 1**: `/api/preferences/me` (Faculty endpoint)
-
-```
-sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column so.academic_cycle_id does not exist
-LINE 14:                   AND so.academic_cycle_id = 1
-                               ^
-
-[SQL:
-                SELECT fp.id, fp.staff_id, fp.subject_offering_id, fp.preference_number,
-                       fp.submitted_at,
-                       s.code AS subject_code, s.name AS subject_name,
-                       sec.label AS section_label, sem.label AS semester_label,
-                       p.name AS program_name
-                FROM faculty_preference fp
-                JOIN subject_offering so ON so.id = fp.subject_offering_id
-                JOIN subject s ON s.id = so.subject_id
-                JOIN section sec ON sec.id = so.section_id
-                JOIN semester sem ON sem.id = so.semester_id
-                JOIN program p ON p.id = so.program_id
-                WHERE fp.staff_id = 17
-                  AND so.academic_cycle_id = 1
-                ORDER BY fp.preference_number
-            ]
-```
-
-**Root Cause**: `app/preference/service.py` line 356 tries to query `so.academic_cycle_id` but the `subject_offering` table no longer has this column (it was removed in migration 021).
-
-**Error 2**: `/api/pref-window/status` (Coordinator endpoint)
-
-Similar error - likely also references `academic_cycle_id` somewhere.
-
----
-
-## STEP 6 - Browser Test
-
-**Cannot automate** - User must manually test:
-1. Open http://localhost:5175/dashboard
-2. Check Network tab in DevTools for failed requests
-3. Report exact error messages
-
----
-
-## STEP 7 - Router Files
-
-### app/preference/router.py
-
-**Key endpoints**:
-- `POST /api/preferences` - Submit preference
-- `GET /api/preferences/me` - List my preferences (❌ CRASHES)
-- `GET /api/preferences/status` - Get status
-- `DELETE /api/preferences/{id}` - Delete preference
-
-**Issue**: Line 80 calls `preference_service.list_preferences()` which queries `academic_cycle_id`
-
-### app/preference/window_router.py
-
-**Key endpoints**:
-- `POST /api/pref-window/open` - Open window
-- `POST /api/pref-window/close` - Close window
-- `GET /api/pref-window/status` - Get status (❌ CRASHES)
-
-**Issue**: Likely queries `academic_cycle_id` in window_service.py
-
-### app/allocation/router.py
-
-**Key endpoint**:
-- `POST /api/allocation/run` - Run allocation
-
-**Status**: ✅ Code looks correct - uses `semester_id` not `academic_cycle_id`
-
----
-
-## CRITICAL ISSUES FOUND
-
-### Issue 1: `preference_service.py` uses `academic_cycle_id`
-
-**File**: `app/preference/service.py` (line 356)
-
-**Problem**: Queries `so.academic_cycle_id` which no longer exists in `subject_offering` table
-
-**Fix needed**: Replace `academic_cycle_id` with join to `cycle` table using `academic_year` and `semester_id`
-
-### Issue 2: `window_service.py` likely uses `academic_cycle_id`
-
-**File**: `app/preference/window_service.py`
-
-**Problem**: `/api/pref-window/status` returns 500 error
-
-**Fix needed**: Check and fix all references to `academic_cycle_id`
-
-### Issue 3: `workload_summary` table schema mismatch
-
-**Status**: ✅ FIXED in previous step (added semester_type conversion)
-
----
-
-## SUMMARY
-
-**Working endpoints**:
-- ✅ `/health`
-- ✅ `/api/auth/dev-login/{id}`
-- ✅ `/api/reports/department-summary`
-- ✅ `/api/cycles/`
-
-**Broken endpoints**:
-- ❌ `/api/preferences/me` - Uses `academic_cycle_id`
-- ❌ `/api/pref-window/status` - Uses `academic_cycle_id`
-
-**Root cause**: Migration 021 removed `academic_cycle_id` from `subject_offering` table, but `app/preference/service.py` and `app/preference/window_service.py` were not updated.
-
-**Next steps**:
-1. Fix `app/preference/service.py` to use `academic_year` + `semester_id` instead of `academic_cycle_id`
-2. Fix `app/preference/window_service.py` similarly
-3. Test all endpoints again
-4. Verify dashboard loads in browser
+## END OF REPORT
