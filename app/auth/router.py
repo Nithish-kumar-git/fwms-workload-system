@@ -128,7 +128,8 @@ async def oauth_callback(code: str = Query(...), state: str = Query(None)):
 
         auth = _create_auth_tokens(staff_id, staff_email, staff_name, role)
 
-        resp = RedirectResponse(url=f"http://localhost:5173/dashboard?token={auth['token']}", status_code=302)
+        frontend_url = settings.FRONTEND_URL if hasattr(settings, 'FRONTEND_URL') else "http://localhost:5173"
+        resp = RedirectResponse(url=f"{frontend_url}/dashboard?token={auth['token']}", status_code=302)
         resp.set_cookie(
             key=settings.SESSION_COOKIE_NAME,
             value=auth["session_id"],

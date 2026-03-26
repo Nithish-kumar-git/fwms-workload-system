@@ -93,40 +93,39 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
     Validates shift compatibility, workload capacity (≤ 20% overload), and multi-section.
     """
     with get_transaction() as session:
-        # PHASE 3: Check semester state - must be ALLOCATED, not FROZEN
-        alloc_semester_state = session.execute(
+        # PHASE 3: Check cycle status - must be ALLOCATED, not FROZEN
+        alloc_cycle_state = session.execute(
             text("""
-                SELECT sem.id, sem.state
+                SELECT c.id, c.status
                 FROM allocation a
-                JOIN subject_offering so ON so.id = a.subject_offering_id
-                JOIN semester sem ON sem.id = so.semester_id
+                JOIN cycle c ON c.id = a.cycle_id
                 WHERE a.id = :aid
             """),
             {"aid": allocation_id}
         ).fetchone()
         
-        if not alloc_semester_state:
+        if not alloc_cycle_state:
             return {"success": False, "message": "Allocation not found"}
         
-        semester_id, semester_state = alloc_semester_state
+        cycle_id_check, cycle_status = alloc_cycle_state
         
-        if semester_state == "FROZEN":
+        if cycle_status == "FROZEN":
             return {
                 "success": False,
-                "message": "Cannot override allocation: Semester is FROZEN (finalized by HOD)"
+                "message": "Cannot override allocation: Cycle is FROZEN (finalized by HOD)"
             }
         
-        if semester_state != "ALLOCATED":
+        if cycle_status != "ALLOCATED":
             return {
                 "success": False,
-                "message": f"Cannot override allocation: Semester must be ALLOCATED (currently {semester_state})"
+                "message": f"Cannot override allocation: Cycle must be ALLOCATED (currently {cycle_status})"
             }
         
         # Load existing allocation with full details
         alloc = session.execute(
             text("""
                 SELECT a.id, a.staff_id, a.subject_offering_id, a.cycle_id,
-                       so.shift, c.academic_year, s.label AS semester_name,
+                       so.shift, ay.name, s.label AS semester_name,
                        sub.code, sub.name, sub.tch,
                        sub.l, sub.t, sub.p,
                        old_staff.name AS old_staff_name, old_staff.emp_code AS old_emp_code
@@ -135,6 +134,7 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
                 JOIN subject sub ON sub.id = so.subject_id
                 JOIN staff old_staff ON old_staff.id = a.staff_id
                 JOIN cycle c ON c.id = a.cycle_id
+                JOIN academic_year ay ON ay.id = c.academic_year_id
                 JOIN semester s ON s.id = c.semester_id
                 WHERE a.id = :aid
             """),
@@ -251,7 +251,7 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
                     f'"new_staff_id": {new_staff_id}, '
                     f'"new_staff_name": "{new_staff_name}", '
                     f'"new_emp_code": "{new_emp_code}", '
-                    f'"semester_id": {semester_id}}}'
+                    f'"cycle_id": {cycle_id}}}'
                 )
             }
         )
@@ -670,21 +670,24 @@ def _refresh_workload_summary_for_cycle(
     
     deviation = tch_total - tch_norm
     
-    # Get semester_id from cycle
+    # Get semester_id from cycle and convert to semester_type
     semester_id = session.execute(
         text("SELECT semester_id FROM cycle WHERE id = :cid"),
         {"cid": cycle_id}
     ).scalar()
     
+    # Convert semester_id to semester_type (ODD: 1,3,5 / EVEN: 2,4,6)
+    semester_type = "ODD" if semester_id in (1, 3, 5) else "EVEN"
+    
     # UPSERT workload_summary
     session.execute(
         text("""
             INSERT INTO workload_summary 
-                (staff_id, academic_year, semester_id, tch_total,
-                 norm_hours, deviation_hours, total_workload, cycle_id)
-            VALUES (:sid, :year, :sem_id, :tch_total,
-                    :norm, :deviation, :tch_total, :cid)
-            ON CONFLICT (staff_id, academic_year, semester_id)
+                (staff_id, academic_year, semester_type, tch_total,
+                 norm_hours, deviation_hours, total_workload, cycle_id, old_academic_cycle_id)
+            VALUES (:sid, :year, :sem_type, :tch_total,
+                    :norm, :deviation, :tch_total, :cid, :cid)
+            ON CONFLICT (staff_id, academic_year, semester_type)
             DO UPDATE SET 
                 tch_total = EXCLUDED.tch_total,
                 norm_hours = EXCLUDED.norm_hours,
@@ -695,7 +698,7 @@ def _refresh_workload_summary_for_cycle(
         """),
         {
             "sid": staff_id, "year": academic_year,
-            "sem_id": semester_id, "tch_total": tch_total,
+            "sem_type": semester_type, "tch_total": tch_total,
             "norm": tch_norm, "deviation": deviation, "cid": cycle_id,
         }
     )

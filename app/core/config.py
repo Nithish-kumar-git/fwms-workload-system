@@ -77,6 +77,9 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str
     ALLOWED_EMAIL_DOMAIN: str = "hindustanuniv.ac.in"
     
+    # Frontend
+    FRONTEND_URL: str = "http://localhost:5173"
+    
     # Session
     REDIS_URL: str | None = None
     SESSION_BACKEND: Literal["redis", "memory"] = "memory"
