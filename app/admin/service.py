@@ -34,7 +34,7 @@ def _is_shift_compatible(staff_shift: str, offering_shift: int) -> bool:
 # STEP 1: Allocation Review
 # ============================================================================
 
-def list_allocations(academic_year: str = "2025-2026", semester_id: int = 2) -> list[dict]:
+def list_allocations() -> list[dict]:
     """
     List all allocations with full staff + subject details.
     """
@@ -55,10 +55,10 @@ def list_allocations(academic_year: str = "2025-2026", semester_id: int = 2) -> 
                 JOIN semester sem ON sem.id = so.semester_id
                 JOIN program p ON p.id = so.program_id
                 JOIN cycle c ON c.id = a.cycle_id
-                WHERE c.academic_year = :year AND c.semester_id = :sem_id
+                JOIN academic_year ay ON ay.id = c.academic_year_id
+                WHERE c.status IN ('OPEN', 'ALLOCATED', 'FROZEN')
                 ORDER BY p.name, sem.label, sec.label, sub.code
-            """),
-            {"year": academic_year, "sem_id": semester_id}
+            """)
         ).fetchall()
     
     return [
