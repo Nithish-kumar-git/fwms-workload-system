@@ -79,12 +79,14 @@ def open_semester(semester_id: int, coordinator_id: int) -> dict:
         dict with success status and message
     """
     with get_transaction() as session:
-        # Get current state and academic_cycle_id
+        # Get current state and cycle_id
         row = session.execute(
             text("""
-                SELECT sem.state, so.academic_cycle_id
+                SELECT sem.state, c.id AS cycle_id
                 FROM semester sem
                 LEFT JOIN subject_offering so ON so.semester_id = sem.id
+                LEFT JOIN cycle c ON c.semester_id = sem.id 
+                                 AND c.academic_year_id = so.academic_year_id
                 WHERE sem.id = :sid
                 LIMIT 1
             """),

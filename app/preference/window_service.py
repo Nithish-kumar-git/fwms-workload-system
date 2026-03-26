@@ -217,9 +217,10 @@ def get_window_status() -> dict:
         row = session.execute(
             text("""
                 SELECT sw.id, sw.status, sw.start_time, sw.end_time,
-                       c.academic_year, c.semester_id
+                       ay.name AS academic_year, c.semester_id
                 FROM selection_window sw
                 LEFT JOIN cycle c ON c.id = sw.cycle_id
+                LEFT JOIN academic_year ay ON ay.id = c.academic_year_id
                 WHERE sw.status = 'OPEN'
                 ORDER BY sw.id DESC LIMIT 1
             """),

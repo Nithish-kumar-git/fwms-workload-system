@@ -366,8 +366,10 @@ def list_preferences(staff_id: int) -> list[dict]:
                 JOIN section sec ON sec.id = so.section_id
                 JOIN semester sem ON sem.id = so.semester_id
                 JOIN program p ON p.id = so.program_id
+                JOIN cycle c ON c.academic_year_id = so.academic_year_id 
+                            AND c.semester_id = so.semester_id
                 WHERE fp.staff_id = :staff_id
-                  AND so.academic_cycle_id = :cid
+                  AND c.id = :cid
                 ORDER BY fp.preference_number
             """),
             {"staff_id": staff_id, "cid": active_cycle["id"]}

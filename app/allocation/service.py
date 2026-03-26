@@ -128,7 +128,9 @@ def _run_allocation_for_semester(
                 JOIN program p ON p.id = so.program_id
                 JOIN semester sem ON sem.id = so.semester_id
                 JOIN section sec ON sec.id = so.section_id
-                WHERE so.academic_cycle_id = :cid
+                JOIN cycle c ON c.academic_year_id = so.academic_year_id 
+                            AND c.semester_id = so.semester_id
+                WHERE c.id = :cid
                   AND so.is_active = true
                   AND so.semester_id = :sem_id
         """
@@ -167,7 +169,9 @@ def _run_allocation_for_semester(
                 SELECT fp.staff_id, fp.subject_offering_id, fp.preference_number
                 FROM faculty_preference fp
                 JOIN subject_offering so ON so.id = fp.subject_offering_id
-                WHERE fp.academic_cycle_id = :cid
+                JOIN cycle c ON c.academic_year_id = so.academic_year_id 
+                            AND c.semester_id = so.semester_id
+                WHERE c.id = :cid
                   AND so.semester_id = :sem_id
                 ORDER BY fp.preference_number, fp.submitted_at
             """),
@@ -639,11 +643,12 @@ def run_allocation(
         deleted_allocs = session.execute(
             text("""
                 DELETE FROM allocation 
-                WHERE academic_cycle_id = :cid 
-                  AND subject_offering_id IN (
-                      SELECT id FROM subject_offering 
-                      WHERE semester_id = :sem_id AND academic_cycle_id = :cid
-                  )
+                WHERE subject_offering_id IN (
+                    SELECT so.id FROM subject_offering so
+                    JOIN cycle c ON c.academic_year_id = so.academic_year_id 
+                                AND c.semester_id = so.semester_id
+                    WHERE c.id = :cid AND so.semester_id = :sem_id
+                )
             """),
             {"cid": cycle_id, "sem_id": target_semester_id}
         ).rowcount
@@ -655,7 +660,7 @@ def run_allocation(
             session.execute(
                 text("""
                     INSERT INTO allocation 
-                        (staff_id, subject_offering_id, l_assigned, t_assigned, p_assigned, academic_cycle_id)
+                        (staff_id, subject_offering_id, l_assigned, t_assigned, p_assigned, cycle_id)
                     VALUES (:staff_id, :offering_id, :l, :t, :p, :cid)
                 """),
                 {
@@ -686,7 +691,7 @@ def run_allocation(
                     COALESCE(s.tch_norm, 40) AS tch_norm,
                     COALESCE(SUM(sub.tch), 0) AS tch_assigned
                 FROM staff s
-                LEFT JOIN allocation a ON a.staff_id = s.id AND a.academic_cycle_id = :cid
+                LEFT JOIN allocation a ON a.staff_id = s.id AND a.cycle_id = :cid
                 LEFT JOIN subject_offering so ON so.id = a.subject_offering_id
                 LEFT JOIN subject sub ON sub.id = so.subject_id
                 WHERE s.is_active = true AND s.emp_code IS NOT NULL
@@ -722,7 +727,7 @@ def run_allocation(
                 text("""
                     INSERT INTO workload_summary 
                         (staff_id, academic_year, semester_type, tch_total,
-                         norm_hours, deviation_hours, total_workload, academic_cycle_id)
+                         norm_hours, deviation_hours, total_workload, cycle_id)
                     VALUES (:staff_id, :year, :sem_type, :tch_total,
                             :norm, :deviation, :total, :cid)
                     ON CONFLICT (staff_id, academic_year, semester_type)

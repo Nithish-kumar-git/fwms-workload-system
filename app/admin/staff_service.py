@@ -204,8 +204,8 @@ def deactivate_staff(coordinator_id: int, staff_id: int) -> dict:
         alloc_count = session.execute(
             text("""
                 SELECT count(*) FROM allocation a
-                JOIN academic_cycle ac ON ac.id = a.academic_cycle_id
-                WHERE a.staff_id = :sid AND ac.is_active = true
+                JOIN cycle c ON c.id = a.cycle_id
+                WHERE a.staff_id = :sid AND c.status != 'FROZEN'
             """),
             {"sid": staff_id},
         ).scalar()
