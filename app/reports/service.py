@@ -173,7 +173,24 @@ def get_department_summary(
     """Aggregate department statistics."""
     with get_transaction() as session:
         if academic_year is None or semester_id is None:
-            academic_year, semester_id = _resolve_active_cycle(session)
+            try:
+                academic_year, semester_id = _resolve_active_cycle(session)
+            except RuntimeError:
+                # No active cycle - return safe empty response
+                total_faculty = session.execute(
+                    text("SELECT count(*) FROM staff WHERE emp_code IS NOT NULL AND is_active = true")
+                ).scalar()
+                return {
+                    "total_subject_offerings": 0,
+                    "allocated_subjects": 0,
+                    "unallocated_subjects": 0,
+                    "total_faculty": total_faculty or 0,
+                    "average_workload": 0.0,
+                    "faculty_overloaded": 0,
+                    "faculty_underloaded": 0,
+                    "faculty_balanced": total_faculty or 0,
+                }
+        
         total_offerings = session.execute(
             text("""
                 SELECT count(*) FROM subject_offering
@@ -197,31 +214,34 @@ def get_department_summary(
             text("SELECT count(*) FROM staff WHERE emp_code IS NOT NULL AND is_active = true")
         ).scalar()
 
+        # Convert semester_id to semester_type for workload_summary table (legacy schema)
+        semester_type = "EVEN" if semester_id in (2, 4, 6) else "ODD"
+        
         avg_workload = session.execute(
             text("""
                 SELECT COALESCE(AVG(ws.tch_total), 0)
                 FROM workload_summary ws
-                WHERE ws.academic_year = :year AND ws.semester_id = :sem_id
+                WHERE ws.academic_year = :year AND ws.semester_type = :sem_type
             """),
-            {"year": academic_year, "sem_id": semester_id}
+            {"year": academic_year, "sem_type": semester_type}
         ).scalar()
 
         overloaded = session.execute(
             text("""
                 SELECT count(*) FROM workload_summary
-                WHERE academic_year = :year AND semester_id = :sem_id
+                WHERE academic_year = :year AND semester_type = :sem_type
                   AND deviation_hours > 0
             """),
-            {"year": academic_year, "sem_id": semester_id}
+            {"year": academic_year, "sem_type": semester_type}
         ).scalar()
 
         underloaded = session.execute(
             text("""
                 SELECT count(*) FROM workload_summary
-                WHERE academic_year = :year AND semester_id = :sem_id
+                WHERE academic_year = :year AND semester_type = :sem_type
                   AND deviation_hours < -2
             """),
-            {"year": academic_year, "sem_id": semester_id}
+            {"year": academic_year, "sem_type": semester_type}
         ).scalar()
 
     unallocated = total_offerings - allocated
