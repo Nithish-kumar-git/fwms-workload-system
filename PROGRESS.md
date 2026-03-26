@@ -1,152 +1,120 @@
-# BUG FIX RESULTS
+# ALLOCATION SERVICE semester_type BUG DIAGNOSIS
 
-## BUG 1: window_service.py Cycle Lookup - FIXED ✅
+## Problem Summary
+The allocation service references `semester_type` column which doesn't exist in the new schema. The system has migrated from ODD/EVEN semester_type to semester_id (1-6 for I-VI).
 
-### Problem
-The `open_preference_window()` function was trying to lookup cycles using a non-existent `academic_year` column:
+## STEP 1: All occurrences of "semester_type" in app/
+
+Found in `app/allocation/service.py`:
+- Line 57: Function parameter `semester_type: str`
+- Line 421: Function parameter `semester_type: str | None = None`
+- Line 436: Comment mentions `academic_year + semester_type`
+- Line 492-493: Validation check `active_cycle["semester_type"]`
+- Line 496: Error message includes `semester_type`
+- Line 505: Assignment `semester_type = active_cycle["semester_type"]`
+- Line 626: Function call parameter `semester_type=semester_type`
+- Line 729: INSERT INTO workload_summary column `semester_type`
+- Line 733: ON CONFLICT clause `(staff_id, academic_year, semester_type)`
+- Line 746: Parameter binding `"st": semester_type`
+
+Found in `app/reports/service.py`:
+- Line 217-218: Comment and conversion logic `semester_type = "EVEN" if semester_id in (2, 4, 6) else "ODD"`
+- Line 224, 226, 232, 235, 241, 244: WHERE clauses using `semester_type`
+
+Found in `app/coordinator/semester_state_service.py`:
+- Line 148-150: Comment about workload_summary using `(academic_year, semester_type)`
+
+## STEP 2: app/allocation/service.py Analysis
+
+The service has these issues:
+1. Function `_run_allocation_for_semester()` accepts `semester_type` parameter (line 57)
+2. Function `run_allocation()` accepts `semester_type` parameter (line 421)
+3. References `active_cycle["semester_type"]` which doesn't exist in new cycle schema
+4. Tries to INSERT INTO workload_summary with `semester_type` column
+5. Uses ON CONFLICT with `(staff_id, academic_year, semester_type)` constraint
+
+## STEP 3: app/allocation/router.py Analysis
+
+The router:
+- Line 22: Removed `semester_type` from AllocationScope (good!)
+- Line 47: Comment mentions "semester_type" but doesn't use it
+- Line 130: Passes `semester_type=None` to service (needs fixing)
+
+## STEP 4: Database Schema Analysis
+
+### allocation table
+- Has `cycle_id` column (FK to cycle.id) ✅
+- Has `old_academic_cycle_id` column (legacy) ✅
+- NO `semester_type` column ✅
+
+### workload_summary table
+- Has `semester_type` column (VARCHAR(10), NOT NULL) ❌
+- Has CHECK constraint: `semester_type IN ('ODD', 'EVEN')` ❌
+- Has UNIQUE constraint: `(staff_id, academic_year, semester_type)` ❌
+- Has `cycle_id` column (nullable FK to cycle.id) ✅
+- Has `old_academic_cycle_id` column (NOT NULL, legacy) ❌
+
+### subject_offering table
+- Has `semester_id` column (FK to semester.id) ✅
+- Has `academic_year` column (VARCHAR) ✅
+- Has `academic_year_id` column (FK to academic_year.id) ✅
+- NO `semester_type` column ✅
+
+## Root Cause
+
+The `workload_summary` table still uses the OLD schema with `semester_type` (ODD/EVEN), but the rest of the system has migrated to `semester_id` (1-6). The allocation service tries to write to this table using `semester_type`, which causes a mismatch.
+
+The `active_cycle` object from `get_active_cycle()` returns:
 ```python
-SELECT id FROM cycle
-WHERE academic_year = :year AND semester_id = :sem_id
+{
+    "id": int,
+    "academic_year": str,
+    "semester_id": int,  # NEW: 1-6
+    "semester_name": str,  # NEW: "I", "II", etc.
+    "status": str,
+    "is_active": bool,
+    ...
+}
 ```
 
-The `cycle` table uses `academic_year_id` (FK to academic_year.id), not a direct string column.
-
-### Fix Applied
-Changed the query to join with the `academic_year` table:
+But the allocation service expects:
 ```python
-SELECT c.id FROM cycle c
-JOIN academic_year ay ON c.academic_year_id = ay.id
-WHERE ay.name = :year AND c.semester_id = :sem_id
-ORDER BY c.id DESC LIMIT 1
+{
+    "academic_year": str,
+    "semester_type": str,  # OLD: "ODD" or "EVEN"
+    ...
+}
 ```
 
-### Test Result
-```bash
-curl -X POST -H "Authorization: Bearer <TOKEN>" \
-  -H "Content-Type: application/json" \
-  --data "@test_window_open.json" \
-  http://localhost:8000/api/pref-window/open
-```
+## Solution Strategy
 
-**Response:**
-```json
-{"success":true,"message":"Preference window opened","window_id":1}
-```
+We have two options:
 
-**Status: FIXED ✅**
+### Option 1: Convert semester_id to semester_type (Quick Fix)
+- Keep workload_summary table as-is
+- Convert semester_id to ODD/EVEN in allocation service
+- Mapping: I, III, V → ODD; II, IV, VI → EVEN
 
----
+### Option 2: Migrate workload_summary table (Proper Fix)
+- Drop semester_type column
+- Add semester_id column
+- Update constraints
+- Requires migration script
 
-## BUG 2: Multiple OPEN Cycles - FIXED ✅
+**Decision: Use Option 1 (Quick Fix)** since it's less risky and doesn't require schema migration.
 
-### Problem
-Database had 3 cycles with `status='OPEN'` simultaneously:
-- Cycle 1: Semester II (OPEN)
-- Cycle 2: Semester IV (OPEN)
-- Cycle 3: Semester VI (OPEN)
+## Files to Fix
 
-This violated the business rule that only one cycle can be OPEN at a time.
+1. `app/allocation/service.py`:
+   - Keep `semester_type` parameter but derive it from `semester_id`
+   - Convert `semester_id` to `semester_type` using: `"ODD" if semester_id in (1, 3, 5) else "EVEN"`
+   - Remove references to `active_cycle["semester_type"]`
 
-### Fix Applied
-Closed cycles 2 and 3:
-```sql
-UPDATE cycle SET status='CLOSED', closed_at=NOW() WHERE id IN (2, 3);
-```
+2. `app/allocation/router.py`:
+   - Already correct (passes `semester_type=None`)
 
-**SQL Output:**
-```
-UPDATE 2
-```
+## Next Steps
 
-### Verification Query
-```sql
-SELECT c.id, c.status, c.semester_id, s.label 
-FROM cycle c 
-JOIN semester s ON s.id = c.semester_id 
-ORDER BY c.id;
-```
-
-**Result:**
-```
- id | status | semester_id | label 
-----+--------+-------------+-------
-  1 | OPEN   |           2 | II
-  2 | CLOSED |           4 | IV
-  3 | CLOSED |           6 | VI
-(3 rows)
-```
-
-### API Test Result
-```bash
-curl -H "Authorization: Bearer <TOKEN>" http://localhost:8000/api/cycles
-```
-
-**Response (formatted):**
-```json
-[
-  {
-    "id": 1,
-    "academic_year": "2025-2026",
-    "semester_id": 2,
-    "semester_name": "II",
-    "status": "OPEN",
-    "is_active": true,
-    "created_at": "2026-03-25T22:37:32.901376"
-  },
-  {
-    "id": 2,
-    "academic_year": "2025-2026",
-    "semester_id": 4,
-    "semester_name": "IV",
-    "status": "CLOSED",
-    "closed_at": "2026-03-26T07:00:00.919826",
-    "is_active": false,
-    "created_at": "2026-03-25T22:37:32.901376"
-  },
-  {
-    "id": 3,
-    "academic_year": "2025-2026",
-    "semester_id": 6,
-    "semester_name": "VI",
-    "status": "CLOSED",
-    "closed_at": "2026-03-26T07:00:00.919826",
-    "is_active": false,
-    "created_at": "2026-03-25T22:37:32.901376"
-  }
-]
-```
-
-**Status: FIXED ✅**
-
-Cycles 2 and 3 now correctly show:
-- `status: "CLOSED"`
-- `is_active: false`
-- `closed_at` timestamp set
-
-The frontend Activate button will now appear for these closed cycles.
-
----
-
-## Git Commit
-
-**Commit Hash:** `6bd8e01`
-
-**Commit Message:** `Fix: window_service cycle lookup + close duplicate OPEN cycles`
-
-**Files Changed:**
-- `app/preference/window_service.py` - Fixed cycle lookup query
-- `PROGRESS.md` - Updated with fix results
-- `test_window_open.json` - Test data file
-
-**Push Status:** Successfully pushed to `origin/main`
-
----
-
-## Summary
-
-Both bugs are now FIXED:
-
-1. ✅ **BUG 1**: Window service can now correctly lookup cycles by academic_year string + semester_id
-2. ✅ **BUG 2**: Only one cycle (Semester II) is OPEN; cycles 2 and 3 are properly CLOSED
-
-The system now correctly enforces the "one OPEN cycle at a time" business rule, and the preference window can be opened for any semester by looking up the correct cycle.
+1. Fix `app/allocation/service.py` to convert semester_id → semester_type
+2. Test allocation endpoint
+3. Commit changes

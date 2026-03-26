@@ -418,7 +418,7 @@ def _run_allocation_for_semester(
 
 def run_allocation(
     academic_year: str | None = None, 
-    semester_type: str | None = None, 
+    semester_type: str | None = None,  # DEPRECATED: No longer used, kept for API compatibility
     academic_cycle_id: int | None = None,
     program_id: int | None = None,
     semester_id: int | None = None
@@ -433,7 +433,10 @@ def run_allocation(
     
     Required parameters (at least one combination):
     - semester_id: Direct semester ID (preferred)
-    - OR academic_year + semester_type (resolved via active cycle)
+    - OR academic_year (resolved via active cycle)
+    
+    NOTE: semester_type parameter is deprecated and ignored.
+    The system now uses semester_id (1-6) instead of semester_type (ODD/EVEN).
     
     Steps:
     1. Validate semester selection
@@ -489,11 +492,12 @@ def run_allocation(
             "allocations": [], "unallocated": [], "workload_summary": [],
         }
 
-    if academic_year and semester_type:
-        if active_cycle["academic_year"] != academic_year or active_cycle["semester_type"] != semester_type:
+    if academic_year:
+        # Verify provided academic_year matches active cycle
+        if academic_year != active_cycle["academic_year"]:
             return {
                 "success": False,
-                "message": f"Must run allocation for the active academic cycle ({active_cycle['academic_year']} {active_cycle['semester_type']}).",
+                "message": f"Must run allocation for the active academic cycle ({active_cycle['academic_year']}).",
                 "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
                 "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
                 "allocations": [], "unallocated": [], "workload_summary": [],
@@ -502,7 +506,10 @@ def run_allocation(
     cycle_id = active_cycle["id"]
     # Always resolve these from the active cycle so they're never None
     academic_year = active_cycle["academic_year"]
-    semester_type = active_cycle["semester_type"]
+    # Convert semester_id to semester_type for workload_summary (legacy schema)
+    # ODD semesters: I, III, V (1, 3, 5)
+    # EVEN semesters: II, IV, VI (2, 4, 6)
+    semester_type = "ODD" if active_cycle["semester_id"] in (1, 3, 5) else "EVEN"
     
     # ================================================================
     # RESOLVE TARGET SEMESTER
@@ -660,8 +667,8 @@ def run_allocation(
             session.execute(
                 text("""
                     INSERT INTO allocation 
-                        (staff_id, subject_offering_id, l_assigned, t_assigned, p_assigned, cycle_id)
-                    VALUES (:staff_id, :offering_id, :l, :t, :p, :cid)
+                        (staff_id, subject_offering_id, l_assigned, t_assigned, p_assigned, cycle_id, old_academic_cycle_id)
+                    VALUES (:staff_id, :offering_id, :l, :t, :p, :cid, :cid)
                 """),
                 {
                     "staff_id": alloc["staff_id"],
@@ -727,9 +734,9 @@ def run_allocation(
                 text("""
                     INSERT INTO workload_summary 
                         (staff_id, academic_year, semester_type, tch_total,
-                         norm_hours, deviation_hours, total_workload, cycle_id)
+                         norm_hours, deviation_hours, total_workload, cycle_id, old_academic_cycle_id)
                     VALUES (:staff_id, :year, :sem_type, :tch_total,
-                            :norm, :deviation, :total, :cid)
+                            :norm, :deviation, :total, :cid, :cid)
                     ON CONFLICT (staff_id, academic_year, semester_type)
                     DO UPDATE SET
                         tch_total = EXCLUDED.tch_total,
