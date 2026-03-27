@@ -545,3 +545,127 @@ ORDER BY c.id;
 ✅ Railway database populated: 194 subject offerings, 5 cycles, 1 academic year
 ✅ Server healthy and running
 ⚠️ Need manual verification: Frontend display and cycle duplication check
+
+
+---
+
+## Debug Endpoint Temporary Public Access
+
+### STEP 1: Remove Authentication
+
+**File:** app/debug_router.py
+
+**BEFORE:**
+```python
+@router.get("/db-state")
+async def debug_db_state(staff_id: int = Depends(get_current_staff_id)):
+    """
+    Diagnostic endpoint to check database state.
+    Returns counts and samples from key tables.
+    """
+```
+
+**AFTER:**
+```python
+@router.get("/db-state")
+async def debug_db_state():
+    """
+    Diagnostic endpoint to check database state.
+    Returns counts and samples from key tables.
+    TEMP: Auth removed for production diagnosis.
+    """
+```
+
+**Commit:** 317d522 - "Temp: make debug endpoint public for production diagnosis"
+
+---
+
+### STEP 2: Get Railway Database State
+
+**Request:**
+```bash
+curl.exe https://fwms-workload-system-production.up.railway.app/api/debug/db-state
+```
+
+**Response (formatted):**
+```json
+{
+  "subject_offering_total": 194,
+  "subject_offering_grouped": [
+    {"academic_year": "2025-2026", "semester_id": 2, "count": 78},
+    {"academic_year": "2025-2026", "semester_id": 4, "count": 58},
+    {"academic_year": "2025-2026", "semester_id": 6, "count": 58}
+  ],
+  "active_cycle": {
+    "id": 4,
+    "academic_year": "2025-2026",
+    "semester_id": 1,
+    "status": "OPEN"
+  },
+  "all_cycles": [
+    {"id": 1, "academic_year": "2025-2026", "semester_id": 2, "status": "CLOSED"},
+    {"id": 2, "academic_year": "2025-2026", "semester_id": 4, "status": "CLOSED"},
+    {"id": 3, "academic_year": "2025-2026", "semester_id": 6, "status": "CLOSED"},
+    {"id": 4, "academic_year": "2025-2026", "semester_id": 1, "status": "OPEN"},
+    {"id": 5, "academic_year": "2025-2026", "semester_id": 3, "status": "CLOSED"}
+  ],
+  "academic_years": [
+    {"id": 1, "name": "2025-2026"}
+  ]
+}
+```
+
+---
+
+### STEP 3: Re-secure Endpoint
+
+**File:** app/debug_router.py
+
+**RESTORED:**
+```python
+@router.get("/db-state")
+async def debug_db_state(staff_id: int = Depends(get_current_staff_id)):
+    """
+    Diagnostic endpoint to check database state.
+    Returns counts and samples from key tables.
+    """
+```
+
+**Commit:** 3d90b3d - "Fix: re-secure debug endpoint after diagnosis"
+
+---
+
+## 🚨 CRITICAL FINDING: Active Cycle Mismatch
+
+### The Problem
+- **Subject offerings exist for:** Semester 2, 4, 6 (78, 58, 58 records)
+- **Active cycle is:** Semester 1 (OPEN)
+- **Result:** API queries for semester_id=1 but data exists for semester_id=2,4,6
+
+### Why This Happened
+Migration 021 created cycles from old `academic_cycle` table which had ODD/EVEN system:
+- ODD cycles → created cycles for semesters 1, 3, 5
+- EVEN cycles → created cycles for semesters 2, 4, 6
+
+The old system had an ODD cycle active, so migration 021 created semester 1 as OPEN.
+
+But subject offerings were populated for EVEN semesters (2, 4, 6).
+
+### All 5 Cycles Explained
+1. Cycle 1: Semester II (2) - CLOSED - has 78 subject offerings
+2. Cycle 2: Semester IV (4) - CLOSED - has 58 subject offerings
+3. Cycle 3: Semester VI (6) - CLOSED - has 58 subject offerings
+4. Cycle 4: Semester I (1) - OPEN - has 0 subject offerings ❌
+5. Cycle 5: Semester III (3) - CLOSED - has 0 subject offerings
+
+### Root Cause
+Active cycle (semester 1) has NO subject offerings. All data is in semester 2, 4, 6.
+
+### Fix Required
+Change active cycle from semester 1 to semester 2:
+```sql
+UPDATE cycle SET status = 'CLOSED' WHERE id = 4;
+UPDATE cycle SET status = 'OPEN' WHERE id = 1;
+```
+
+This will make semester 2 (which has 78 offerings) the active cycle.
