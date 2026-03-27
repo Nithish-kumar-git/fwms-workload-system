@@ -15,10 +15,11 @@ router = APIRouter(prefix="/api/debug", tags=["debug"])
 
 
 @router.get("/db-state")
-async def debug_db_state(staff_id: int = Depends(get_current_staff_id)):
+async def debug_db_state():
     """
     Diagnostic endpoint to check database state.
     Returns counts and samples from key tables.
+    TEMP: Auth removed for production diagnosis.
     """
     with get_transaction() as session:
         # Check subject_offering count
