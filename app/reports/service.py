@@ -131,7 +131,14 @@ def get_subject_summary(
         if academic_year is None:
             academic_year, _ = _resolve_active_cycle(session)
         
-        logger.info(f"[get_subject_summary] Using academic_year={academic_year}, semester_id={semester_id}")
+        # Get academic_year_id for filtering
+        year_row = session.execute(
+            text("SELECT id FROM academic_year WHERE name = :name"),
+            {"name": academic_year}
+        ).fetchone()
+        year_id = year_row[0] if year_row else 1
+        
+        logger.info(f"[get_subject_summary] Using academic_year={academic_year}, year_id={year_id}")
         
         rows = session.execute(
             text("""
@@ -147,10 +154,10 @@ def get_subject_summary(
                 JOIN section sec ON sec.id = so.section_id
                 LEFT JOIN allocation a ON a.subject_offering_id = so.id
                 LEFT JOIN staff s ON s.id = a.staff_id
-                WHERE so.academic_year = :year
+                WHERE so.academic_year_id = :year_id
                 ORDER BY p.name, sem.label, sec.label, sub.code
             """),
-            {"year": academic_year}
+            {"year_id": year_id}
         ).fetchall()
 
     logger.info(f"[get_subject_summary] Query returned {len(rows)} rows")
