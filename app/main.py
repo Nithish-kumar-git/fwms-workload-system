@@ -26,6 +26,7 @@ from app.admin import router as admin_router
 from app.admin import cycle_router
 from app.admin import staff_router
 from app.reports import router as reports_router
+from app import debug_router
 from app.core.config import settings
 import logging
 import os
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
     app.include_router(cycle_router.router)
     app.include_router(staff_router.router)
     app.include_router(reports_router.router)
+    app.include_router(debug_router.router)
     
     # TODO: Include additional routers when implemented:
     # app.include_router(staff_router.router)
