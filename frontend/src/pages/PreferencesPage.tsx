@@ -86,7 +86,10 @@ export default function PreferencesPage() {
             setWindowOpen(winRes.data.is_open);
             setWindowRemaining(winRes.data.remaining_seconds || 0);
         } catch (err: any) {
-            const detail = err.response?.data?.detail || 'Could not connect to server. Check your login.';
+            const status = err.response?.status;
+            const detail = status === 403 
+                ? 'Session expired - please login again'
+                : err.response?.data?.detail || 'Could not connect to server. Check your login.';
             setError(detail);
             addToast(detail, 'error');
         } finally {

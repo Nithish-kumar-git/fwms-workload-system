@@ -128,8 +128,8 @@ def get_subject_summary(
 ) -> dict:
     """Per-subject-offering report showing assigned faculty."""
     with get_transaction() as session:
-        if academic_year is None or semester_id is None:
-            academic_year, semester_id = _resolve_active_cycle(session)
+        if academic_year is None:
+            academic_year, _ = _resolve_active_cycle(session)
         
         logger.info(f"[get_subject_summary] Using academic_year={academic_year}, semester_id={semester_id}")
         
@@ -147,10 +147,10 @@ def get_subject_summary(
                 JOIN section sec ON sec.id = so.section_id
                 LEFT JOIN allocation a ON a.subject_offering_id = so.id
                 LEFT JOIN staff s ON s.id = a.staff_id
-                WHERE so.academic_year = :year AND so.semester_id = :sem_id
+                WHERE so.academic_year = :year
                 ORDER BY p.name, sem.label, sec.label, sub.code
             """),
-            {"year": academic_year, "sem_id": semester_id}
+            {"year": academic_year}
         ).fetchall()
 
     logger.info(f"[get_subject_summary] Query returned {len(rows)} rows")
