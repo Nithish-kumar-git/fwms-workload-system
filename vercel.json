@@ -5,6 +5,10 @@
   "framework": null,
   "routes": [
     {
+      "src": "^/(assets/.*|.*\\.(js|css|png|jpg|jpeg|svg|ico|json))$",
+      "dest": "/$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
