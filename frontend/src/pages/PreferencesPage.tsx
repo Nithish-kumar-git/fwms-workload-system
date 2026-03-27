@@ -98,8 +98,11 @@ export default function PreferencesPage() {
         setOfferingsLoading(true);
         try {
             const res = await getSubjectSummary();
+            console.log('Subject Summary API Response:', res.data);
+            console.log('Records count:', res.data.records?.length || 0);
             setOfferings(res.data.records || []);
-        } catch {
+        } catch (err) {
+            console.error('Failed to load subject offerings:', err);
             // Offerings are supplementary
         } finally {
             setOfferingsLoading(false);
@@ -128,6 +131,7 @@ export default function PreferencesPage() {
 
     const filteredOfferings = useMemo(() => {
         let result = offerings;
+        console.log('Total offerings before filter:', offerings.length);
         if (filterProgram) result = result.filter((o) => o.program === filterProgram);
         if (filterSemester) result = result.filter((o) => o.semester === filterSemester);
         if (searchText) {
@@ -137,6 +141,7 @@ export default function PreferencesPage() {
                 o.course_name.toLowerCase().includes(q)
             );
         }
+        console.log('Filtered offerings count:', result.length);
         return result;
     }, [offerings, filterProgram, filterSemester, searchText]);
 
