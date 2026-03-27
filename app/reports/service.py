@@ -130,6 +130,9 @@ def get_subject_summary(
     with get_transaction() as session:
         if academic_year is None or semester_id is None:
             academic_year, semester_id = _resolve_active_cycle(session)
+        
+        logger.info(f"[get_subject_summary] Using academic_year={academic_year}, semester_id={semester_id}")
+        
         rows = session.execute(
             text("""
                 SELECT so.id, sub.code, sub.name, p.name AS program,
@@ -149,6 +152,8 @@ def get_subject_summary(
             """),
             {"year": academic_year, "sem_id": semester_id}
         ).fetchall()
+
+    logger.info(f"[get_subject_summary] Query returned {len(rows)} rows")
 
     records = [
         {
