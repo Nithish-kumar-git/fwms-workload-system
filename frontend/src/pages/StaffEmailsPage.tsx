@@ -27,7 +27,11 @@ export default function StaffEmailsPage() {
         setLoading(true);
         setError('');
         try {
-            const res = await fetch('/api/admin/staff/emails', {
+            const apiUrl = import.meta.env.VITE_API_URL;
+            if (!apiUrl) {
+                throw new Error("VITE_API_URL is not defined");
+            }
+            const res = await fetch(`${apiUrl}/api/admin/staff/emails`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('jwt_token')}` }
             });
             if (!res.ok) throw new Error('Failed to load staff');
@@ -64,7 +68,11 @@ export default function StaffEmailsPage() {
         if (!editId) return;
         setSubmitting(true);
         try {
-            const res = await fetch(`/api/admin/staff/${editId}/email`, {
+            const apiUrl = import.meta.env.VITE_API_URL;
+            if (!apiUrl) {
+                throw new Error("VITE_API_URL is not defined");
+            }
+            const res = await fetch(`${apiUrl}/api/admin/staff/${editId}/email`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',

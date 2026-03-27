@@ -13,7 +13,11 @@ export default function LoginPage() {
         setError('');
         setLoading('google');
         try {
-            const res = await fetch('/api/auth/login');
+            const apiUrl = import.meta.env.VITE_API_URL;
+            if (!apiUrl) {
+                throw new Error("VITE_API_URL is not defined");
+            }
+            const res = await fetch(`${apiUrl}/api/auth/login`);
             const data = await res.json();
             if (data.authorization_url) {
                 window.location.href = data.authorization_url;
@@ -31,7 +35,11 @@ export default function LoginPage() {
         setError('');
         setLoading(label);
         try {
-            const res = await fetch(`/api/auth/dev-login/${staffId}`, { method: 'POST' });
+            const apiUrl = import.meta.env.VITE_API_URL;
+            if (!apiUrl) {
+                throw new Error("VITE_API_URL is not defined");
+            }
+            const res = await fetch(`${apiUrl}/api/auth/dev-login/${staffId}`, { method: 'POST' });
             const data = await res.json();
 
             console.log(`DEV LOGIN (${label}): staff_id=${staffId}`, data);
