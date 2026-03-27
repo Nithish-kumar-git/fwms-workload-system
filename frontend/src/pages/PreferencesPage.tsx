@@ -122,12 +122,8 @@ export default function PreferencesPage() {
         [...new Set(offerings.map((o) => o.program))].sort(),
         [offerings]
     );
-    const semesters = useMemo(() => {
-        const filtered = filterProgram
-            ? offerings.filter((o) => o.program === filterProgram)
-            : offerings;
-        return [...new Set(filtered.map((o) => o.semester))].sort();
-    }, [offerings, filterProgram]);
+    // Fixed semester options - always show all 6 semesters regardless of data
+    const semesters = ['I', 'II', 'III', 'IV', 'V', 'VI'];
 
     const filteredOfferings = useMemo(() => {
         let result = offerings;

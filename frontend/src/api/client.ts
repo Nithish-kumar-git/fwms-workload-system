@@ -35,14 +35,14 @@ if (typeof window !== 'undefined') {
     }
 }
 
-// Response interceptor: log auth failures, never clear token automatically
+// Response interceptor: log auth failures
 api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response) {
             const status = error.response.status;
             if (status === 401 || status === 403) {
-                console.warn(`Auth error ${status} on ${error.config?.url} — keeping token (dev mode)`);
+                console.warn(`Auth error ${status} on ${error.config?.url}`);
                 // DO NOT clear localStorage — let AuthContext handle logout
             }
         } else if (error.request) {
