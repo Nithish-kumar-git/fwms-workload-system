@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getStaffList, createStaff, updateStaff, deactivateStaff, updateStaffRole } from '../api/client';
 import { useToast } from '../hooks/useToast';
-import ToastContainer from '../components/Modal';
+import ToastContainer from '../components/ToastContainer';
 import Modal from '../components/Modal';
 import { UserPlus, Pencil, UserX, Search, AlertCircle, RefreshCw, Shield, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';

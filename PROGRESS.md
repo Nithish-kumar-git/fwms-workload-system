@@ -1177,3 +1177,128 @@ To deploy to production:
 5. Add production domain to Google Cloud Console authorized redirect URIs
 
 **OAuth is fully functional and ready for testing/production deployment.**
+
+
+---
+
+# FRONTEND_URL Configuration Fix
+
+## Changes Made
+
+### 1. app/auth/router.py - OAuth Callback Redirect
+
+**BEFORE:**
+```python
+        auth = _create_auth_tokens(staff_id, staff_email, staff_name, role)
+
+        resp = RedirectResponse(url=f"http://localhost:5173/dashboard?token={auth['token']}", status_code=302)
+```
+
+**AFTER:**
+```python
+        auth = _create_auth_tokens(staff_id, staff_email, staff_name, role)
+
+        frontend_url = settings.FRONTEND_URL if hasattr(settings, 'FRONTEND_URL') else "http://localhost:5173"
+        resp = RedirectResponse(url=f"{frontend_url}/dashboard?token={auth['token']}", status_code=302)
+```
+
+**Change**: OAuth callback now uses configurable `FRONTEND_URL` from settings instead of hardcoded localhost:5173
+
+---
+
+### 2. app/core/config.py - Settings Class
+
+**BEFORE:**
+```python
+    # OAuth
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: str
+    GOOGLE_REDIRECT_URI: str
+    ALLOWED_EMAIL_DOMAIN: str = "hindustanuniv.ac.in"
+```
+
+**AFTER:**
+```python
+    # OAuth
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: str
+    GOOGLE_REDIRECT_URI: str
+    ALLOWED_EMAIL_DOMAIN: str = "hindustanuniv.ac.in"
+    
+    # Frontend
+    FRONTEND_URL: str = "http://localhost:5173"
+```
+
+**Change**: Added `FRONTEND_URL` setting with default value of `http://localhost:5173`
+
+---
+
+### 3. .env File
+
+**BEFORE:**
+```env
+# Google OAuth
+GOOGLE_CLIENT_ID=866513397597-daqoj2v37mm6ko5b3hu9t0rgflupjsi1.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=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
+GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/callback
+```
+
+**AFTER:**
+```env
+# Google OAuth
+GOOGLE_CLIENT_ID=866513397597-daqoj2v37mm6ko5b3hu9t0rgflupjsi1.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=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
+GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/callback
+
+# Frontend
+FRONTEND_URL=http://localhost:5175
+```
+
+**Change**: Added `FRONTEND_URL=http://localhost:5175` environment variable
+
+---
+
+## Deployment Steps Completed
+
+1. ✅ Modified `app/auth/router.py` - OAuth callback uses configurable URL
+2. ✅ Modified `app/core/config.py` - Added FRONTEND_URL setting
+3. ✅ Modified `.env` - Added FRONTEND_URL=http://localhost:5175
+4. ✅ Restarted Docker: `docker-compose restart app`
+5. ✅ Committed changes: `git commit -m "Fix: OAuth callback redirect uses configurable FRONTEND_URL"`
+6. ✅ Pushed to remote: `git push origin main`
+
+---
+
+## Benefits
+
+1. **Environment Flexibility**: Frontend URL can now be configured per environment (dev/staging/production)
+2. **No Code Changes**: Changing frontend port/domain only requires .env update
+3. **Backward Compatible**: Falls back to default `http://localhost:5173` if not configured
+4. **Production Ready**: Can easily set production frontend URL in Railway/deployment environment
+
+---
+
+## Testing
+
+After OAuth login, users will now be redirected to:
+- **Development**: `http://localhost:5175/dashboard?token=...` (as configured in .env)
+- **Production**: Set `FRONTEND_URL=https://your-frontend-domain.com` in production .env
+
+---
+
+## Git Commit
+
+```
+commit 41c1421
+Author: [Your Name]
+Date:   [Current Date]
+
+    Fix: OAuth callback redirect uses configurable FRONTEND_URL
+    
+    - OAuth callback now reads FRONTEND_URL from settings
+    - Added FRONTEND_URL to Settings class with default value
+    - Added FRONTEND_URL=http://localhost:5175 to .env
+    - Provides environment-specific frontend URL configuration
+```
+
+**Status**: ✅ Changes deployed and pushed to main branch
