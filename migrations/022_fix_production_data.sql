@@ -43,7 +43,7 @@ WHERE so.academic_year = ay.name
 -- STEP 5: Add foreign key constraint if not exists
 -- ============================================================================
 
-DO $
+DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.table_constraints 
@@ -53,7 +53,7 @@ BEGIN
             ADD CONSTRAINT fk_subject_offering_academic_year 
             FOREIGN KEY (academic_year_id) REFERENCES academic_year(id);
     END IF;
-END $;
+END $$;
 
 -- ============================================================================
 -- STEP 6: Ensure cycles exist for semesters 2, 4, 6
@@ -84,7 +84,7 @@ ON CONFLICT (academic_year_id, semester_id) DO NOTHING;
 -- STEP 7: Verify and log results
 -- ============================================================================
 
-DO $
+DO $$
 DECLARE
     ay_count INTEGER;
     cycle_count INTEGER;
@@ -101,6 +101,6 @@ BEGIN
     RAISE NOTICE 'Cycles: %', cycle_count;
     RAISE NOTICE 'Subject offerings total: %', offering_count;
     RAISE NOTICE 'Subject offerings with academic_year_id: %', offering_with_year_id;
-END $;
+END $$;
 
 COMMIT;
