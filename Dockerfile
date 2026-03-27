@@ -46,6 +46,9 @@ RUN chmod +x startup.sh
 # Ensure scripts are in PATH
 ENV PATH=/root/.local/bin:$PATH
 
+# Set PYTHONPATH to ensure Python can find the app package
+ENV PYTHONPATH=/app
+
 # Expose application port
 EXPOSE 8000
 
