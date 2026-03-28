@@ -163,7 +163,7 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
         new_staff = session.execute(
             text("""
                 SELECT id, name, emp_code, shift, COALESCE(tch_norm, 40) AS tch_norm
-                FROM staff WHERE id = :sid AND is_active = true
+                FROM staff WHERE id = :sid
             """),
             {"sid": new_staff_id}
         ).fetchone()

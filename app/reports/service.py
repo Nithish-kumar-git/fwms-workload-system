@@ -28,7 +28,7 @@ def _resolve_active_cycle(session) -> tuple[str, int]:
     Resolve academic_year and semester_id from the active cycle.
 
     Returns:
-        (academic_year, semester_id) from cycle table with status = 'OPEN'
+        (academic_year, semester_id) from cycle table with status IN ('OPEN', 'ALLOCATED', 'FROZEN')
 
     Raises:
         RuntimeError: if no active cycle exists
@@ -38,7 +38,13 @@ def _resolve_active_cycle(session) -> tuple[str, int]:
             SELECT ay.name, c.semester_id
             FROM cycle c
             JOIN academic_year ay ON ay.id = c.academic_year_id
-            WHERE c.status = 'OPEN'
+            WHERE c.status IN ('OPEN', 'ALLOCATED', 'FROZEN')
+            ORDER BY 
+                CASE c.status
+                    WHEN 'FROZEN' THEN 1
+                    WHEN 'ALLOCATED' THEN 2
+                    WHEN 'OPEN' THEN 3
+                END
             LIMIT 1
         """)
     ).fetchone()
