@@ -70,9 +70,10 @@ ON CONFLICT (code) DO UPDATE SET
 -- Using same pattern as migration 019 but for odd semesters
 
 -- MCA Semester I offerings (7 subjects × 3 sections = 21 offerings)
-INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, student_strength, academic_year, academic_year_id)
+INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, student_strength, academic_year, academic_year_id, old_academic_cycle_id)
 SELECT s.id, p.id, 1, sec.id, 1, 40, '2025-2026',
-    (SELECT id FROM academic_year WHERE name = '2025-2026')
+    (SELECT id FROM academic_year WHERE name = '2025-2026'),
+    1
 FROM subject s
 CROSS JOIN (SELECT id FROM program WHERE name IN ('MCA(General)', 'MCA(BD)', 'MCA(CC)')) p
 CROSS JOIN (SELECT id FROM section WHERE label IN ('A', 'B', 'C')) sec
@@ -80,9 +81,10 @@ WHERE s.code IN ('CMA42001','CCM42001','CCA42001','CCA42002','CCA42003','CCA4200
 ON CONFLICT DO NOTHING;
 
 -- MCA Semester III offerings (5 subjects × 3 sections = 15 offerings)
-INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, student_strength, academic_year, academic_year_id)
+INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, student_strength, academic_year, academic_year_id, old_academic_cycle_id)
 SELECT s.id, p.id, 3, sec.id, 1, 40, '2025-2026',
-    (SELECT id FROM academic_year WHERE name = '2025-2026')
+    (SELECT id FROM academic_year WHERE name = '2025-2026'),
+    1
 FROM subject s
 CROSS JOIN (SELECT id FROM program WHERE name IN ('MCA(General)', 'MCA(BD)', 'MCA(CC)')) p
 CROSS JOIN (SELECT id FROM section WHERE label IN ('A', 'B', 'C')) sec
@@ -90,9 +92,10 @@ WHERE s.code IN ('CCA42010','CCA42011','CEL42001','CCA42800','CCA42801')
 ON CONFLICT DO NOTHING;
 
 -- BCA Semester I offerings (7 core subjects × 6 sections = 42 offerings)
-INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, student_strength, academic_year, academic_year_id)
+INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, student_strength, academic_year, academic_year_id, old_academic_cycle_id)
 SELECT s.id, p.id, 1, sec.id, 1, 50, '2025-2026',
-    (SELECT id FROM academic_year WHERE name = '2025-2026')
+    (SELECT id FROM academic_year WHERE name = '2025-2026'),
+    1
 FROM subject s
 CROSS JOIN (SELECT id FROM program WHERE name IN ('BCA(General)', 'BCA(DB)', 'BCA(MM)', 'BCA(Cyber)', 'BCA(DB+MM)', 'BCA(Cyber+MM)')) p
 CROSS JOIN (SELECT id FROM section WHERE label IN ('A', 'B', 'C', 'D', 'E', 'F')) sec
@@ -100,9 +103,10 @@ WHERE s.code IN ('ACA31002','ACA31003','ACA31004','GMA31001','GLS51001','GLS1100
 ON CONFLICT DO NOTHING;
 
 -- BCA Semester III offerings (5 subjects × 6 sections = 30 offerings)
-INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, student_strength, academic_year, academic_year_id)
+INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, student_strength, academic_year, academic_year_id, old_academic_cycle_id)
 SELECT s.id, p.id, 3, sec.id, 1, 50, '2025-2026',
-    (SELECT id FROM academic_year WHERE name = '2025-2026')
+    (SELECT id FROM academic_year WHERE name = '2025-2026'),
+    1
 FROM subject s
 CROSS JOIN (SELECT id FROM program WHERE name IN ('BCA(General)', 'BCA(DB)', 'BCA(MM)', 'BCA(Cyber)', 'BCA(DB+MM)', 'BCA(Cyber+MM)')) p
 CROSS JOIN (SELECT id FROM section WHERE label IN ('A', 'B', 'C', 'D', 'E', 'F')) sec
@@ -110,9 +114,10 @@ WHERE s.code IN ('ACA31010','ACA31009','GLS51005','GGE51015','ABB31001')
 ON CONFLICT DO NOTHING;
 
 -- BCA Semester V offerings (6 subjects × 6 sections = 36 offerings)
-INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, student_strength, academic_year, academic_year_id)
+INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, student_strength, academic_year, academic_year_id, old_academic_cycle_id)
 SELECT s.id, p.id, 5, sec.id, 1, 50, '2025-2026',
-    (SELECT id FROM academic_year WHERE name = '2025-2026')
+    (SELECT id FROM academic_year WHERE name = '2025-2026'),
+    1
 FROM subject s
 CROSS JOIN (SELECT id FROM program WHERE name IN ('BCA(Cyber)', 'BCA(Cyber+MM)')) p
 CROSS JOIN (SELECT id FROM section WHERE label IN ('A', 'B', 'C', 'D', 'E', 'F')) sec
