@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/debug", tags=["debug"])
 
 
 @router.get("/db-state")
-async def debug_db_state(staff_id: int = Depends(get_current_staff_id)):
+async def debug_db_state():
     """
     Diagnostic endpoint to check database state.
     Returns counts and samples from key tables.
@@ -105,6 +105,19 @@ async def debug_db_state(staff_id: int = Depends(get_current_staff_id)):
             LIMIT 20
         """)).fetchall()
         
+        # Odd semester detail
+        odd_detail = session.execute(text("""
+            SELECT p.name as program, sem.label as semester, sec.label as section,
+                   sub.code, sub.name
+            FROM subject_offering so
+            JOIN program p ON p.id = so.program_id
+            JOIN semester sem ON sem.id = so.semester_id
+            JOIN section sec ON sec.id = so.section_id
+            JOIN subject sub ON sub.id = so.subject_id
+            WHERE so.semester_id IN (1, 3, 5)
+            ORDER BY sem.label, p.name, sec.label, sub.code
+        """)).fetchall()
+        
         return {
             "subject_offering_total": so_count,
             "subject_offering_grouped": [
@@ -144,5 +157,9 @@ async def debug_db_state(staff_id: int = Depends(get_current_staff_id)):
             "duplicate_offerings_sample": [
                 {"code": r[0], "program": r[1], "semester": r[2], "section": r[3], "count": r[4], "ids": r[5]}
                 for r in dup_offerings
+            ],
+            "odd_semester_detail": [
+                {"program": r[0], "semester": r[1], "section": r[2], "code": r[3], "name": r[4]}
+                for r in odd_detail
             ]
         }
