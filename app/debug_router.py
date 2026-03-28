@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/debug", tags=["debug"])
 
 
 @router.get("/db-state")
-async def debug_db_state(staff_id: int = Depends(get_current_staff_id)):
+async def debug_db_state():
     """
     Diagnostic endpoint to check database state.
     Returns counts and samples from key tables.
@@ -54,6 +54,29 @@ async def debug_db_state(staff_id: int = Depends(get_current_staff_id)):
             SELECT id, name FROM academic_year ORDER BY id
         """)).fetchall()
         
+        # Get programs
+        programs_result = session.execute(text("""
+            SELECT p.id, p.name, p.ug_pg FROM program p ORDER BY p.id
+        """)).fetchall()
+        
+        # Get sections
+        sections_result = session.execute(text("""
+            SELECT s.id, s.label FROM section s ORDER BY s.id
+        """)).fetchall()
+        
+        # Sample semester 2 offerings
+        sample_offerings = session.execute(text("""
+            SELECT so.id, p.name as program, sem.label as semester, sec.label as section, sub.code, sub.name
+            FROM subject_offering so
+            JOIN program p ON p.id = so.program_id
+            JOIN semester sem ON sem.id = so.semester_id
+            JOIN section sec ON sec.id = so.section_id
+            JOIN subject sub ON sub.id = so.subject_id
+            WHERE so.semester_id = 2
+            ORDER BY p.name, sec.label, sub.code
+            LIMIT 30
+        """)).fetchall()
+        
         return {
             "subject_offering_total": so_count,
             "subject_offering_grouped": [
@@ -73,5 +96,17 @@ async def debug_db_state(staff_id: int = Depends(get_current_staff_id)):
             "academic_years": [
                 {"id": r[0], "name": r[1]}
                 for r in academic_years
+            ],
+            "programs": [
+                {"id": r[0], "name": r[1], "ug_pg": r[2]}
+                for r in programs_result
+            ],
+            "sections": [
+                {"id": r[0], "label": r[1]}
+                for r in sections_result
+            ],
+            "sample_sem2_offerings": [
+                {"id": r[0], "program": r[1], "semester": r[2], "section": r[3], "code": r[4], "name": r[5]}
+                for r in sample_offerings
             ]
         }
