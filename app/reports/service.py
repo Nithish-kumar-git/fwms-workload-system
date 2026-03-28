@@ -155,6 +155,10 @@ def get_subject_summary(
                 LEFT JOIN allocation a ON a.subject_offering_id = so.id
                 LEFT JOIN staff s ON s.id = a.staff_id
                 WHERE so.academic_year_id = :year_id
+                  AND so.semester_id IN (
+                      SELECT semester_id FROM cycle 
+                      WHERE status = 'OPEN' AND academic_year_id = :year_id
+                  )
                 ORDER BY p.name, sem.label, sec.label, sub.code
             """),
             {"year_id": year_id}
