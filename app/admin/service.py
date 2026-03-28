@@ -159,6 +159,9 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
         if old_staff_id == new_staff_id:
             return {"success": False, "message": "New staff is the same as current staff"}
         
+        # Log the staff ID we're looking up for debugging
+        logger.info(f"Override: looking up new staff id={new_staff_id}")
+        
         # Load new staff with full details
         new_staff = session.execute(
             text("""
@@ -169,6 +172,7 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
         ).fetchone()
         
         if new_staff is None:
+            logger.error(f"Override failed: staff id={new_staff_id} not found in database")
             return {"success": False, "message": "New staff not found or inactive"}
         
         new_staff_name = new_staff[1]

@@ -88,6 +88,8 @@ async def override_allocation(
     Override an allocation: reassign a subject to a different faculty.
     Validates shift compatibility, workload capacity, and multi-section constraint.
     """
+    logger.info(f"Override request: allocation_id={allocation_id}, new_staff_id={request.new_staff_id}")
+    
     result = admin_service.override_allocation(
         allocation_id=allocation_id,
         new_staff_id=request.new_staff_id,
