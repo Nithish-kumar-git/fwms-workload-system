@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/debug", tags=["debug"])
 
 
 @router.get("/db-state")
-async def debug_db_state(staff_id: int = Depends(get_current_staff_id)):
+async def debug_db_state():
     """
     Diagnostic endpoint to check database state.
     Returns counts and samples from key tables.
@@ -77,6 +77,24 @@ async def debug_db_state(staff_id: int = Depends(get_current_staff_id)):
             LIMIT 30
         """)).fetchall()
         
+        # Duplicate sections
+        dup_sections = session.execute(text("""
+            SELECT label, COUNT(*), array_agg(id ORDER BY id) as ids
+            FROM section 
+            GROUP BY label 
+            HAVING COUNT(*) > 1 
+            ORDER BY label
+        """)).fetchall()
+        
+        # Duplicate offerings
+        dup_offerings = session.execute(text("""
+            SELECT subject_id, program_id, semester_id, section_id, COUNT(*), array_agg(id ORDER BY id)
+            FROM subject_offering 
+            GROUP BY subject_id, program_id, semester_id, section_id
+            HAVING COUNT(*) > 1 
+            LIMIT 10
+        """)).fetchall()
+        
         return {
             "subject_offering_total": so_count,
             "subject_offering_grouped": [
@@ -108,5 +126,13 @@ async def debug_db_state(staff_id: int = Depends(get_current_staff_id)):
             "sample_sem2_offerings": [
                 {"id": r[0], "program": r[1], "semester": r[2], "section": r[3], "code": r[4], "name": r[5]}
                 for r in sample_offerings
+            ],
+            "duplicate_sections": [
+                {"label": r[0], "count": r[1], "ids": r[2]}
+                for r in dup_sections
+            ],
+            "duplicate_offerings_sample": [
+                {"count": r[4], "ids": r[5]}
+                for r in dup_offerings
             ]
         }
