@@ -81,7 +81,7 @@ export default function PreferencesPage() {
                 getPreferenceStatus(),
                 getPrefWindowStatus(),
             ]);
-            setPreferences(prefsRes.data.preferences || []);
+            setPreferences(Array.isArray(prefsRes.data) ? prefsRes.data : prefsRes.data.preferences || []);
             setStatus(statusRes.data);
             setWindowOpen(winRes.data.is_open);
             setWindowRemaining(winRes.data.remaining_seconds || 0);
@@ -125,8 +125,11 @@ export default function PreferencesPage() {
         [...new Set(offerings.map((o) => o.program))].sort(),
         [offerings]
     );
-    // Fixed semester options - always show all 6 semesters regardless of data
-    const semesters = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+    // Dynamic semester options - only show semesters that have data
+    const semesters = useMemo(() => {
+        const available = [...new Set(offerings.map((o) => o.semester))].sort();
+        return available;
+    }, [offerings]);
 
     const filteredOfferings = useMemo(() => {
         let result = offerings;

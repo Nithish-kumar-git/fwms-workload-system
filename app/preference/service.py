@@ -157,8 +157,8 @@ def validate_preference(staff_id: int, subject_offering_id: int, preference_numb
             ct_shift = staff[6]
             
             # Check if offering matches class teacher's class
-            offering_program = offering[8]    # program_name
-            offering_semester = offering[7]   # semester_label
+            offering_program = offering[7]    # program_name
+            offering_semester = offering[8]   # semester_label
             offering_section = offering[9]    # section_label
             offering_shift_val = offering[1]  # shift
             
