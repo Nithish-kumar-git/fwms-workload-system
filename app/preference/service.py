@@ -237,18 +237,26 @@ def submit_preference(staff_id: int, subject_offering_id: int, preference_number
             "rule": "WINDOW-CLOSED"
         }
     
-    # Query active cycle_id
+    # Query cycle_id for this subject's semester
     with get_transaction() as session:
         cycle_result = session.execute(
-            text("SELECT id FROM cycle WHERE status = 'OPEN' LIMIT 1")
+            text("""
+                SELECT c.id 
+                FROM cycle c
+                JOIN subject_offering so ON so.academic_year_id = c.academic_year_id
+                                        AND so.semester_id = c.semester_id
+                WHERE so.id = :offering_id
+                LIMIT 1
+            """),
+            {"offering_id": subject_offering_id}
         )
         cycle_row = cycle_result.fetchone()
         if not cycle_row:
             return {
                 "success": False,
-                "message": "No active academic cycle found",
+                "message": "No cycle found for this subject's semester",
                 "preference_id": None,
-                "rule": "NO-ACTIVE-CYCLE"
+                "rule": "CYCLE"
             }
         active_cycle_id = cycle_row[0]
     
@@ -311,16 +319,11 @@ def submit_preference(staff_id: int, subject_offering_id: int, preference_number
 
 def list_preferences(staff_id: int) -> list[dict]:
     """
-    List all preferences for a faculty member with subject details for the active cycle.
+    List all preferences for a faculty member across all cycles.
     
     Returns:
         List of preference dicts with joined subject info.
     """
-    from app.admin.cycle_service_new import get_active_cycle
-    active_cycle = get_active_cycle()
-    if not active_cycle:
-        return []
-
     with get_transaction() as session:
         rows = session.execute(
             text("""
@@ -336,10 +339,9 @@ def list_preferences(staff_id: int) -> list[dict]:
                 JOIN semester sem ON sem.id = so.semester_id
                 JOIN program p ON p.id = so.program_id
                 WHERE fp.staff_id = :staff_id
-                  AND fp.cycle_id = :cid
                 ORDER BY fp.preference_number
             """),
-            {"staff_id": staff_id, "cid": active_cycle["id"]}
+            {"staff_id": staff_id}
         ).fetchall()
     
     return [
