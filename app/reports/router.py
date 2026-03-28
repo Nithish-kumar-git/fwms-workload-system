@@ -226,7 +226,8 @@ async def export_master_workload(
             semester_id=semester_id,
         )
     except Exception as e:
-        logger.error(f"Master workload Excel generation failed: {e}")
+        import traceback
+        logger.error(f"Master workload Excel generation failed: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Excel generation error: {str(e)}")
 
     return StreamingResponse(
@@ -265,7 +266,8 @@ async def export_pdf(
             semester_id=semester_id,
         )
     except Exception as e:
-        logger.error(f"PDF generation failed: {e}")
+        import traceback
+        logger.error(f"PDF generation failed: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"PDF generation error: {str(e)}")
 
     return StreamingResponse(

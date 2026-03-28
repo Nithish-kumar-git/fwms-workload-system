@@ -100,6 +100,8 @@ ROMAN = {"1": "I", "2": "II", "3": "III", "4": "IV", "5": "V", "6": "VI",
 
 def _to_roman(sem_value: str) -> str:
     """Convert semester label to Roman numeral if it's a digit."""
+    if sem_value is None or sem_value == "":
+        return ""
     s = str(sem_value).strip()
     return ROMAN.get(s, s)
 

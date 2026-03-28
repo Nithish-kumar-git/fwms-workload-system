@@ -1,4 +1,65 @@
-## Latest Update - March 28, 2026
+## Latest Update - March 29, 2026
+
+### Export 500 Error Diagnosis - COMPLETE ✅
+
+**Problem**: After Railway deployment of commit 31e0709, regular Excel export works but Master Workload Excel and PDF still return 500 errors.
+
+**Root Cause Analysis**:
+
+**PDF Export** (`/api/reports/export/workload.pdf`):
+- **Crash Line**: `app/reports/pdf_generator.py` line 170
+- **Code**: `table = Table(table_data, colWidths=col_widths_scaled, repeatRows=1)`
+- **Exception**: `IndexError` or `ValueError` from reportlab Table
+- **Root Cause**: When `snapshot_data=[]` (no allocations exist), `table_data` only has header row (1 row total). Setting `repeatRows=1` tells reportlab to repeat the first row on every page, but with only 1 row this causes an error.
+- **Fix**: Change `repeatRows=1` to `repeatRows=0`
+
+**Master Workload Excel** (`/api/reports/export/master-workload.xlsx`):
+- **Likely Crash**: `app/reports/master_workload_excel.py` line 650-665 (Sheet 2 creation)
+- **Code**: `_to_roman(subj.get("semester", ""))` in loop
+- **Exception**: `AttributeError` if `semester` is None instead of empty string
+- **Root Cause**: If `snapshot_data` contains blocks but subject data has None values where strings expected, `_to_roman(None)` may fail. If `snapshot_data=[]`, generator handles it correctly (creates valid Excel with headers only).
+- **Fix**: Add defensive None checks in Sheet 2/3 creation loops
+
+**Both Endpoints**:
+- Both call `_get_snapshot_or_live_data()` (fixed in commit 31e0709)
+- Both use `_build_snapshot_data()` which returns list of dicts
+- PDF crash is CONFIRMED (repeatRows parameter issue)
+- Excel crash is LIKELY (None value handling in Sheet 2/3)
+
+**Next Steps**:
+1. Fix PDF: Change `repeatRows=1` to `repeatRows=0` in line 170
+2. Fix Excel: Add None checks in Sheet 2/3 loops (defensive)
+3. Test both exports after fixes
+4. Commit and push
+
+---
+
+## Previous Update - March 28, 2026
+
+### Git Deployment - COMPLETE ✅
+
+**Commit**: 31e0709
+**Message**: "fix: CORS expose headers for file downloads, override cycle state, export 500 error"
+
+**Files Staged and Committed**:
+- app/main.py (CORS expose_headers + Vercel URL)
+- app/admin/service.py (override allocation cycle state fix)
+- app/reports/router.py (export 500 error fix)
+- app/reports/snapshot_service.py (cycle status query fixes)
+- PROGRESS.md (documentation)
+
+**Push Status**: ✅ SUCCESS
+- Pushed to origin/main
+- 10 objects written (4.03 KiB)
+- 8 deltas resolved
+- Railway will auto-redeploy from commit 31e0709
+
+**Changes Summary**:
+- 5 files changed
+- 195 insertions(+)
+- 63 deletions(-)
+
+---
 
 ### Reports Export Buttons Fix - COMPLETE ✅
 

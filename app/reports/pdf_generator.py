@@ -166,7 +166,9 @@ def generate_pdf_from_snapshot(
     total_units = sum(col_widths)
     col_widths_scaled = [(w / total_units) * available_w for w in col_widths]
 
-    table = Table(table_data, colWidths=col_widths_scaled, repeatRows=1)
+    # Prevent crash when table has only header row (no data)
+    repeat = 1 if len(table_data) > 1 else 0
+    table = Table(table_data, colWidths=col_widths_scaled, repeatRows=repeat)
 
     style = TableStyle([
         # Header row
