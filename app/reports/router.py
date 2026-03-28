@@ -111,9 +111,7 @@ async def approve_workload(
 # ─── Debug Endpoints (Temporary) ──────────────────────────────────────────────
 
 @router.get("/export/debug-test")
-async def debug_export_test(
-    coordinator_id: int = Depends(get_current_coordinator_id),
-):
+async def debug_export_test():
     """Temporary debug endpoint - returns JSON with traceback instead of file"""
     import traceback as tb_module
     try:
@@ -140,9 +138,7 @@ async def debug_export_test(
 
 
 @router.get("/export/debug-pdf")
-async def debug_pdf_test(
-    coordinator_id: int = Depends(get_current_coordinator_id),
-):
+async def debug_pdf_test():
     """Temporary debug endpoint - tests PDF generation, returns JSON"""
     import traceback as tb_module
     try:
@@ -170,9 +166,7 @@ async def debug_pdf_test(
 
 
 @router.get("/export/debug-excel")
-async def debug_excel_test(
-    coordinator_id: int = Depends(get_current_coordinator_id),
-):
+async def debug_excel_test():
     """Temporary debug endpoint - tests master workload Excel generation"""
     import traceback as tb_module
     try:

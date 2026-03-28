@@ -35,7 +35,7 @@ def _resolve_active_cycle(session) -> tuple[str, int]:
     """
     row = session.execute(
         text("""
-            SELECT ay.name, c.semester_id
+            SELECT ay.label, c.semester_id
             FROM cycle c
             JOIN academic_year ay ON ay.id = c.academic_year_id
             WHERE c.status = 'OPEN'

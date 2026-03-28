@@ -61,6 +61,22 @@ def create_app() -> FastAPI:
         expose_headers=['Content-Disposition', 'Content-Type', 'Content-Length']
     )
     
+    # Global exception handler - ensure CORS headers on 500 errors
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+    
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        import traceback
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(exc), "traceback": traceback.format_exc()},
+            headers={
+                "Access-Control-Allow-Origin": "https://fwms-workload-system.vercel.app",
+                "Access-Control-Allow-Credentials": "true",
+            },
+        )
+    
     # Add middleware (order matters: last added = first executed)
     app.add_middleware(CorrelationIDMiddleware)
     
