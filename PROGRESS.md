@@ -1,103 +1,37 @@
 ## Latest Update - March 28, 2026
 
-### BUG 1: "Your Preferences" always empty - FIXED
+### Subject Data Analysis (Read-Only)
 
-**Changed in frontend/src/pages/PreferencesPage.tsx** (Line 84):
+#### Data Source
+All subject data comes from SQL migrations only. No external syllabus documents (.docx, .pdf, .xlsx) found in project.
 
-BEFORE:
-```typescript
-setPreferences(prefsRes.data.preferences || []);
-```
+#### Semester Distribution in migrations/019_real_subjects_final.sql
+Production database contains subject_offerings for EVEN semesters ONLY:
 
-AFTER:
-```typescript
-setPreferences(Array.isArray(prefsRes.data) ? prefsRes.data : prefsRes.data.preferences || []);
-```
+**Semester 2 (MCA Sem II)**: ~78 offerings
+- Programs: MCA(General+BD), MCA(General+CC), MCA(BD), MCA(General), MCA(CC)
+- Sections: A, B
+- Example subjects: CCA42006 (Machine Learning), CCA42007 (Full Stack Web Dev), CCA42008 (Advanced DB)
 
-Backend returns plain array, not nested object.
+**Semester 4 (MCA Sem IV / BCA Sem IV)**: ~60 offerings  
+- MCA: CCA42802 (Project Work) for MCA(General), MCA(BD+CC)
+- BCA: ACA31011 (Software Engineering), ACA31015 (E-Commerce), ACA31012 (Mobile App Dev), ACA31014 (Digital Marketing)
+- Programs: BCA(General), BCA(General+DB), BCA(DB+MM), BCA(Cyber+MM)
 
----
+**Semester 6 (BCA Sem VI)**: ~56 offerings
+- Programs: BCA(General), BCA(DB+MM), BCA(DB), BCA(MM)
+- Sections: A, B, A+B (combined sections)
+- Example subjects: ACA31017 (IoT), ACA31018 (Web Services), ACA31801 (Project), ACA31525 (Animation)
 
-### STEP 1: Get cycle_id by matching subject's semester - FIXED
+**Odd Semesters (1, 3, 5)**: ZERO offerings
 
-**Changed in app/preference/service.py** (Line 241-256):
+#### Academic Structure (migrations/006_academic_seed.sql)
+- MCA program: Semesters I-IV
+- BCA program: Semesters I-VI
+- Sections: A, B, C, D, E, F (varies by program)
 
-BEFORE:
-```python
-# Query active cycle_id
-with get_transaction() as session:
-    cycle_result = session.execute(
-        text("SELECT id FROM cycle WHERE status = 'OPEN' LIMIT 1")
-    )
-    cycle_row = cycle_result.fetchone()
-    if not cycle_row:
-        return {"success": False, "message": "No active academic cycle found", 
-                "preference_id": None, "rule": "NO-ACTIVE-CYCLE"}
-    active_cycle_id = cycle_row[0]
-```
+#### Faculty Data (migrations/007_faculty_seed.sql)
+27 faculty members seeded with class teacher assignments
 
-AFTER:
-```python
-# Query cycle_id for this subject's semester
-with get_transaction() as session:
-    cycle_result = session.execute(
-        text("""
-            SELECT c.id 
-            FROM cycle c
-            JOIN subject_offering so ON so.academic_year_id = c.academic_year_id
-                                    AND so.semester_id = c.semester_id
-            WHERE so.id = :offering_id
-            LIMIT 1
-        """),
-        {"offering_id": subject_offering_id}
-    )
-    cycle_row = cycle_result.fetchone()
-    if not cycle_row:
-        return {"success": False, "message": "No cycle found for this subject's semester",
-                "preference_id": None, "rule": "CYCLE"}
-    active_cycle_id = cycle_row[0]
-```
-
----
-
-### STEP 2: Cycle guard check - NO CHANGE NEEDED
-
-**Found**: `require_cycle_unlocked()` at line 220
-- This checks if cycle is FROZEN (after HOD approval)
-- Does NOT block CLOSED cycles
-- Only blocks FROZEN state
-- No change needed - already allows CLOSED cycles
-
----
-
-### STEP 3: Remove active cycle filter from list_preferences - FIXED
-
-**Changed in app/preference/service.py** (Line 312-343):
-
-BEFORE:
-```python
-from app.admin.cycle_service_new import get_active_cycle
-active_cycle = get_active_cycle()
-if not active_cycle:
-    return []
-
-WHERE fp.staff_id = :staff_id
-  AND fp.cycle_id = :cid
-{"staff_id": staff_id, "cid": active_cycle["id"]}
-```
-
-AFTER:
-```python
-WHERE fp.staff_id = :staff_id
-ORDER BY fp.preference_number
-{"staff_id": staff_id}
-```
-
-Removed active_cycle filter - now shows ALL preferences regardless of cycle.
-
----
-
-### Commit
-- Hash: e25b2fd
-- Message: "Fix: allow preferences for all semesters not just active cycle"
-- Pushed to main
+### Conclusion
+The production database architecture is designed for EVEN semester cycles only. Odd semesters have no subject_offering data and should remain CLOSED.
