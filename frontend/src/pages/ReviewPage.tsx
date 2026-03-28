@@ -90,9 +90,13 @@ export default function ReviewPage() {
     useEffect(() => { loadData(); loadStaffList(); }, []);
 
     const handleOverride = async () => {
-        if (!selected || !selectedStaffId) return;
+        if (!selected || !selectedStaffId) {
+            addToast('Please select a staff member', 'error');
+            return;
+        }
         setOverriding(true);
         try {
+            console.log(`Overriding allocation ${selected.allocation_id} to staff ${selectedStaffId}`);
             await overrideAllocation(selected.allocation_id, selectedStaffId);
             addToast('Allocation overridden successfully', 'success');
             setSelected(null);
