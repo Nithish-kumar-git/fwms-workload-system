@@ -45,7 +45,7 @@ def get_pipeline_status() -> dict:
         # Get active cycle (OPEN, ALLOCATED, or FROZEN)
         cycle = session.execute(
             text("""
-                SELECT c.id, ay.label, c.semester_id, c.status
+                SELECT c.id, ay.name, c.semester_id, c.status
                 FROM cycle c
                 JOIN academic_year ay ON ay.id = c.academic_year_id
                 WHERE c.status IN ('OPEN', 'ALLOCATED', 'FROZEN')
@@ -358,7 +358,7 @@ def create_snapshot(approved_by: int) -> dict:
         # Get active cycle (OPEN or ALLOCATED, not FROZEN)
         cycle = session.execute(
             text("""
-                SELECT c.id, ay.label, c.semester_id, c.status
+                SELECT c.id, ay.name, c.semester_id, c.status
                 FROM cycle c
                 JOIN academic_year ay ON ay.id = c.academic_year_id
                 WHERE c.status IN ('OPEN', 'ALLOCATED')
@@ -478,7 +478,7 @@ def get_snapshot() -> dict:
         # Get active cycle (prefer FROZEN, then ALLOCATED, then OPEN)
         cycle = session.execute(
             text("""
-                SELECT ay.label, c.semester_id
+                SELECT ay.name, c.semester_id
                 FROM cycle c
                 JOIN academic_year ay ON ay.id = c.academic_year_id
                 WHERE c.status IN ('OPEN', 'ALLOCATED', 'FROZEN')

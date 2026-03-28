@@ -210,7 +210,7 @@ def _get_snapshot_or_live_data() -> tuple[dict | None, str, int]:
         # Check for any cycle that's OPEN, ALLOCATED, or FROZEN
         cycle_row = session.execute(
             text("""
-                SELECT c.id, ay.label, c.semester_id, c.status
+                SELECT c.id, ay.name, c.semester_id, c.status
                 FROM cycle c
                 JOIN academic_year ay ON c.academic_year_id = ay.id
                 WHERE c.status IN ('OPEN', 'ALLOCATED', 'FROZEN')
