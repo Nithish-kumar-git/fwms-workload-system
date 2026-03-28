@@ -86,13 +86,23 @@ async def debug_db_state():
             ORDER BY label
         """)).fetchall()
         
-        # Duplicate offerings
+        # Duplicate offerings with details
         dup_offerings = session.execute(text("""
-            SELECT subject_id, program_id, semester_id, section_id, COUNT(*), array_agg(id ORDER BY id)
-            FROM subject_offering 
-            GROUP BY subject_id, program_id, semester_id, section_id
+            SELECT 
+                sub.code, 
+                p.name as program, 
+                sem.label as semester, 
+                sec.label as section,
+                COUNT(*), 
+                array_agg(so.id ORDER BY so.id) as ids
+            FROM subject_offering so
+            JOIN subject sub ON sub.id = so.subject_id
+            JOIN program p ON p.id = so.program_id
+            JOIN semester sem ON sem.id = so.semester_id
+            JOIN section sec ON sec.id = so.section_id
+            GROUP BY sub.code, p.name, sem.label, sec.label
             HAVING COUNT(*) > 1 
-            LIMIT 10
+            LIMIT 20
         """)).fetchall()
         
         return {
@@ -132,7 +142,7 @@ async def debug_db_state():
                 for r in dup_sections
             ],
             "duplicate_offerings_sample": [
-                {"count": r[4], "ids": r[5]}
+                {"code": r[0], "program": r[1], "semester": r[2], "section": r[3], "count": r[4], "ids": r[5]}
                 for r in dup_offerings
             ]
         }
