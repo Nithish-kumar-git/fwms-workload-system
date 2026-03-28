@@ -125,7 +125,7 @@ def _get_snapshot_or_live_data() -> tuple[dict | None, str, int]:
         # Check for any cycle that's OPEN, ALLOCATED, or FROZEN
         cycle_row = session.execute(
             text("""
-                SELECT c.id, ay.name, c.semester_id, c.status
+                SELECT c.id, ay.label, c.semester_id, c.status
                 FROM cycle c
                 JOIN academic_year ay ON c.academic_year_id = ay.id
                 WHERE c.status IN ('OPEN', 'ALLOCATED', 'FROZEN')
@@ -227,8 +227,9 @@ async def export_master_workload(
         )
     except Exception as e:
         import traceback
-        logger.error(f"Master workload Excel generation failed: {e}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Excel generation error: {str(e)}")
+        tb = traceback.format_exc()
+        logger.error(f"Master workload Excel generation failed: {e}\n{tb}")
+        raise HTTPException(status_code=500, detail=f"Excel error: {str(e)}\n\nTraceback:\n{tb}")
 
     return StreamingResponse(
         io.BytesIO(excel_bytes),
@@ -267,8 +268,9 @@ async def export_pdf(
         )
     except Exception as e:
         import traceback
-        logger.error(f"PDF generation failed: {e}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"PDF generation error: {str(e)}")
+        tb = traceback.format_exc()
+        logger.error(f"PDF generation failed: {e}\n{tb}")
+        raise HTTPException(status_code=500, detail=f"PDF error: {str(e)}\n\nTraceback:\n{tb}")
 
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
