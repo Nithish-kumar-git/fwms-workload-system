@@ -188,7 +188,7 @@ def _build_snapshot_data(session, ay: str, sem_id: int) -> list[dict]:
             LEFT JOIN workload_summary ws
                 ON ws.staff_id = s.id
                AND ws.academic_year = :year
-               AND ws.semester_id = :sem_id
+               AND ws.semester_type = CASE WHEN :sem_id IN (1, 3, 5) THEN 'ODD' ELSE 'EVEN' END
             WHERE so.academic_year = :year
               AND so.semester_id = :sem_id
               AND s.is_active = true
@@ -241,7 +241,7 @@ def _build_snapshot_data(session, ay: str, sem_id: int) -> list[dict]:
             LEFT JOIN workload_summary ws
                 ON ws.staff_id = s.id
                AND ws.academic_year = :year
-               AND ws.semester_id = :sem_id
+               AND ws.semester_type = CASE WHEN :sem_id IN (1, 3, 5) THEN 'ODD' ELSE 'EVEN' END
             WHERE s.emp_code IS NOT NULL
               AND s.is_active = true
               AND s.id NOT IN (
