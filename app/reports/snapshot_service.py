@@ -42,13 +42,19 @@ def get_pipeline_status() -> dict:
         }
     """
     with get_transaction() as session:
-        # Get active cycle
+        # Get active cycle (OPEN, ALLOCATED, or FROZEN)
         cycle = session.execute(
             text("""
                 SELECT c.id, ay.label, c.semester_id, c.status
                 FROM cycle c
                 JOIN academic_year ay ON ay.id = c.academic_year_id
-                WHERE c.status = 'OPEN'
+                WHERE c.status IN ('OPEN', 'ALLOCATED', 'FROZEN')
+                ORDER BY 
+                    CASE c.status
+                        WHEN 'FROZEN' THEN 1
+                        WHEN 'ALLOCATED' THEN 2
+                        WHEN 'OPEN' THEN 3
+                    END
                 LIMIT 1
             """)
         ).fetchone()
@@ -349,13 +355,18 @@ def create_snapshot(approved_by: int) -> dict:
         RuntimeError on validation failure
     """
     with get_transaction() as session:
-        # Get active cycle
+        # Get active cycle (OPEN or ALLOCATED, not FROZEN)
         cycle = session.execute(
             text("""
                 SELECT c.id, ay.label, c.semester_id, c.status
                 FROM cycle c
                 JOIN academic_year ay ON ay.id = c.academic_year_id
-                WHERE c.status = 'OPEN'
+                WHERE c.status IN ('OPEN', 'ALLOCATED')
+                ORDER BY 
+                    CASE c.status
+                        WHEN 'ALLOCATED' THEN 1
+                        WHEN 'OPEN' THEN 2
+                    END
                 LIMIT 1
             """)
         ).fetchone()
@@ -464,12 +475,19 @@ def get_snapshot() -> dict:
         RuntimeError if no active cycle or no snapshot exists.
     """
     with get_transaction() as session:
+        # Get active cycle (prefer FROZEN, then ALLOCATED, then OPEN)
         cycle = session.execute(
             text("""
                 SELECT ay.label, c.semester_id
                 FROM cycle c
                 JOIN academic_year ay ON ay.id = c.academic_year_id
-                WHERE c.status = 'OPEN'
+                WHERE c.status IN ('OPEN', 'ALLOCATED', 'FROZEN')
+                ORDER BY 
+                    CASE c.status
+                        WHEN 'FROZEN' THEN 1
+                        WHEN 'ALLOCATED' THEN 2
+                        WHEN 'OPEN' THEN 3
+                    END
                 LIMIT 1
             """)
         ).fetchone()

@@ -112,45 +112,70 @@ async def approve_workload(
 
 def _get_snapshot_or_live_data() -> tuple[dict | None, str, int]:
     """
-    Get snapshot if it exists (FROZEN state), otherwise prepare for live data (ALLOCATED state).
+    Get snapshot if it exists (FROZEN state), otherwise prepare for live data (ALLOCATED or OPEN state).
     Returns (snapshot_or_none, academic_year, semester_id).
-    Raises HTTP 400 if no semesters are ALLOCATED or FROZEN.
+    Raises HTTP 400 if no semesters are ALLOCATED, OPEN, or FROZEN.
     """
     from app.reports.snapshot_service import get_snapshot
-    from app.admin.cycle_service_new import get_active_cycle
     from app.db.session import get_transaction
     from sqlalchemy import text
     
-    # Try to get snapshot first
-    try:
-        snapshot = get_snapshot()
-        semester_id = snapshot.get("semester_id", 1)
-        return snapshot, snapshot["academic_year"], semester_id
-    except RuntimeError:
-        # No snapshot - check if any semester is ALLOCATED
-        active_cycle = get_active_cycle()
-        if not active_cycle:
+    # Try to get snapshot first (for FROZEN cycles)
+    with get_transaction() as session:
+        # Check for any cycle that's OPEN, ALLOCATED, or FROZEN
+        cycle_row = session.execute(
+            text("""
+                SELECT c.id, ay.name, c.semester_id, c.status
+                FROM cycle c
+                JOIN academic_year ay ON c.academic_year_id = ay.id
+                WHERE c.status IN ('OPEN', 'ALLOCATED', 'FROZEN')
+                ORDER BY 
+                    CASE c.status
+                        WHEN 'FROZEN' THEN 1
+                        WHEN 'ALLOCATED' THEN 2
+                        WHEN 'OPEN' THEN 3
+                    END
+                LIMIT 1
+            """)
+        ).fetchone()
+        
+        if not cycle_row:
             raise HTTPException(
                 status_code=400,
-                detail="No active academic cycle found"
+                detail="No active academic cycle found. Cycle must be OPEN, ALLOCATED, or FROZEN."
             )
         
-        with get_transaction() as session:
-            allocated_count = session.execute(
-                text("""
-                    SELECT COUNT(*)
-                    FROM semester
-                    WHERE state IN ('ALLOCATED', 'FROZEN')
-                """)
-            ).scalar()
-            
-            if allocated_count == 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Cannot export: No semesters are ALLOCATED or FROZEN. Run allocation first."
-                )
+        cycle_id, academic_year, semester_id, status = cycle_row
         
-        return None, active_cycle["academic_year"], active_cycle["semester_id"]
+        # If FROZEN, try to get snapshot
+        if status == 'FROZEN':
+            try:
+                snapshot = get_snapshot()
+                return snapshot, snapshot["academic_year"], snapshot.get("semester_id", semester_id)
+            except RuntimeError:
+                # No snapshot even though FROZEN - fall through to live data
+                pass
+        
+        # For OPEN or ALLOCATED (or FROZEN without snapshot), use live data
+        # Check if there's any allocation data
+        allocated_count = session.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM allocation a
+                JOIN subject_offering so ON so.id = a.subject_offering_id
+                WHERE so.academic_year = :year
+                  AND so.semester_id = :sem_id
+            """),
+            {"year": academic_year, "sem_id": semester_id}
+        ).scalar()
+        
+        if allocated_count == 0 and status != 'OPEN':
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot export: No allocation data found. Run allocation first."
+            )
+        
+        return None, academic_year, semester_id
 
 
 @router.get("/export/workload.xlsx")

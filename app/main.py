@@ -52,11 +52,13 @@ def create_app() -> FastAPI:
             'http://localhost:5175',
             'http://localhost:5176',
             'http://localhost:3000',
+            'https://fwms-workload-system.vercel.app',
             frontend_url
         ],
         allow_credentials=True,
         allow_methods=['*'],
-        allow_headers=['*']
+        allow_headers=['*'],
+        expose_headers=['Content-Disposition', 'Content-Type', 'Content-Length']
     )
     
     # Add middleware (order matters: last added = first executed)

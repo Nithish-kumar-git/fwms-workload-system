@@ -115,10 +115,10 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
                 "message": "Cannot override allocation: Cycle is FROZEN (finalized by HOD)"
             }
         
-        if cycle_status != "ALLOCATED":
+        if cycle_status not in ("OPEN", "ALLOCATED"):
             return {
                 "success": False,
-                "message": f"Cannot override allocation: Cycle must be ALLOCATED (currently {cycle_status})"
+                "message": f"Cannot override allocation: Cycle must be OPEN or ALLOCATED (currently {cycle_status})"
             }
         
         # Load existing allocation with full details
