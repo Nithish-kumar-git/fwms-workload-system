@@ -108,6 +108,97 @@ async def approve_workload(
     }
 
 
+# ─── Debug Endpoints (Temporary) ──────────────────────────────────────────────
+
+@router.get("/export/debug-test")
+async def debug_export_test(
+    coordinator_id: int = Depends(get_current_coordinator_id),
+):
+    """Temporary debug endpoint - returns JSON with traceback instead of file"""
+    import traceback as tb_module
+    try:
+        snapshot, academic_year, semester_id = _get_snapshot_or_live_data()
+        
+        from app.reports.snapshot_service import _build_snapshot_data
+        from app.db.session import get_transaction
+        with get_transaction() as session:
+            snapshot_data = _build_snapshot_data(session, academic_year, semester_id)
+        
+        return {
+            "status": "ok",
+            "academic_year": academic_year,
+            "semester_id": semester_id,
+            "snapshot_data_count": len(snapshot_data),
+            "first_row_keys": list(snapshot_data[0].keys()) if snapshot_data else [],
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": tb_module.format_exc()
+        }
+
+
+@router.get("/export/debug-pdf")
+async def debug_pdf_test(
+    coordinator_id: int = Depends(get_current_coordinator_id),
+):
+    """Temporary debug endpoint - tests PDF generation, returns JSON"""
+    import traceback as tb_module
+    try:
+        snapshot, academic_year, semester_id = _get_snapshot_or_live_data()
+        
+        from app.reports.snapshot_service import _build_snapshot_data
+        from app.reports.pdf_generator import generate_pdf_from_snapshot
+        from app.db.session import get_transaction
+        with get_transaction() as session:
+            snapshot_data = _build_snapshot_data(session, academic_year, semester_id)
+        
+        pdf_bytes = generate_pdf_from_snapshot(
+            snapshot_data=snapshot_data,
+            academic_year=academic_year,
+            semester_id=semester_id,
+        )
+        
+        return {"status": "ok", "pdf_size_bytes": len(pdf_bytes)}
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": tb_module.format_exc()
+        }
+
+
+@router.get("/export/debug-excel")
+async def debug_excel_test(
+    coordinator_id: int = Depends(get_current_coordinator_id),
+):
+    """Temporary debug endpoint - tests master workload Excel generation"""
+    import traceback as tb_module
+    try:
+        snapshot, academic_year, semester_id = _get_snapshot_or_live_data()
+        
+        from app.reports.snapshot_service import _build_snapshot_data
+        from app.reports.master_workload_excel import generate_from_snapshot
+        from app.db.session import get_transaction
+        with get_transaction() as session:
+            snapshot_data = _build_snapshot_data(session, academic_year, semester_id)
+        
+        excel_bytes = generate_from_snapshot(
+            snapshot_data=snapshot_data,
+            academic_year=academic_year,
+            semester_id=semester_id,
+        )
+        
+        return {"status": "ok", "excel_size_bytes": len(excel_bytes)}
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": tb_module.format_exc()
+        }
+
+
 # ─── Snapshot-Enforced Exports ───────────────────────────────────────────────
 
 def _get_snapshot_or_live_data() -> tuple[dict | None, str, int]:
