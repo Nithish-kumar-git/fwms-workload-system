@@ -583,10 +583,11 @@ def run_allocation(
             "allocations": [], "unallocated": [], "workload_summary": [],
         }
     
-    if current_state != SemesterState.CLOSED:
+    # ALLOW OPEN status - this is the normal state when preferences are collected
+    if current_state not in (SemesterState.OPEN, SemesterState.CLOSED):
         return {
             "success": False,
-            "message": f"Cannot run allocation: Semester must be CLOSED (currently {current_state})",
+            "message": f"Cannot run allocation: Semester must be OPEN or CLOSED (currently {current_state})",
             "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
             "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
             "allocations": [], "unallocated": [], "workload_summary": [],
@@ -814,15 +815,20 @@ def run_allocation(
         logger.info("=" * 60)
     
     # ================================================================
-    # PHASE 2: Mark ALL semesters as ALLOCATED
+    # PHASE 2: Mark ALL semesters as ALLOCATED and update cycle status
     # ================================================================
     with get_transaction() as session:
         session.execute(
             text("UPDATE semester SET state = 'ALLOCATED', allocated_at = now()")
         )
+        # Update cycle status to ALLOCATED after successful allocation
+        session.execute(
+            text("UPDATE cycle SET status = 'ALLOCATED' WHERE id = :cid"),
+            {"cid": cycle_id}
+        )
         session.commit()
     
-    logger.info("All semesters marked as ALLOCATED")
+    logger.info("All semesters marked as ALLOCATED, cycle status updated to ALLOCATED")
     
     return {
         "success": True,
