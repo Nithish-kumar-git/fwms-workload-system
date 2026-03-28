@@ -23,6 +23,13 @@ interface Allocation {
     ltp_total: number;
 }
 
+interface StaffMember {
+    id: number;
+    name: string;
+    emp_code: string;
+    designation: string;
+}
+
 type GroupedAllocations = Record<string, Record<string, Record<string, Allocation[]>>>;
 
 function groupAllocations(allocs: Allocation[]): GroupedAllocations {
@@ -46,6 +53,9 @@ export default function ReviewPage() {
     const [selected, setSelected] = useState<Allocation | null>(null);
     const [newStaffId, setNewStaffId] = useState('');
     const [overriding, setOverriding] = useState(false);
+    const [staffList, setStaffList] = useState<StaffMember[]>([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedStaffId, setSelectedStaffId] = useState<number | null>(null);
     const { toasts, addToast, removeToast } = useToast();
 
     const loadData = async () => {
@@ -63,16 +73,31 @@ export default function ReviewPage() {
         }
     };
 
-    useEffect(() => { loadData(); }, []);
+    const loadStaffList = async () => {
+        try {
+            const res = await fetch('/api/admin/staff/list', {
+                credentials: 'include',
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setStaffList(data);
+            }
+        } catch (err) {
+            console.error('Failed to load staff list:', err);
+        }
+    };
+
+    useEffect(() => { loadData(); loadStaffList(); }, []);
 
     const handleOverride = async () => {
-        if (!selected || !newStaffId) return;
+        if (!selected || !selectedStaffId) return;
         setOverriding(true);
         try {
-            await overrideAllocation(selected.allocation_id, parseInt(newStaffId));
+            await overrideAllocation(selected.allocation_id, selectedStaffId);
             addToast('Allocation overridden successfully', 'success');
             setSelected(null);
-            setNewStaffId('');
+            setSelectedStaffId(null);
+            setSearchTerm('');
             loadData();
         } catch (err: any) {
             addToast(err.response?.data?.detail || 'Override failed', 'error');
@@ -201,7 +226,7 @@ export default function ReviewPage() {
             )}
 
             {/* Override Modal */}
-            <Modal isOpen={!!selected} onClose={() => setSelected(null)} title="Override Allocation">
+            <Modal isOpen={!!selected} onClose={() => { setSelected(null); setSearchTerm(''); setSelectedStaffId(null); }} title="Override Allocation">
                 {selected && (
                     <div>
                         <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '1rem' }}>
@@ -209,17 +234,67 @@ export default function ReviewPage() {
                         </p>
                         <div style={{ marginBottom: '1rem' }}>
                             <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', marginBottom: '0.375rem' }}>
-                                New Staff ID
+                                Select Staff Member
                             </label>
                             <input
-                                type="number" className="form-input" value={newStaffId}
-                                onChange={(e) => setNewStaffId(e.target.value)}
-                                placeholder="Enter staff ID" style={{ width: '100%' }}
+                                type="text"
+                                className="form-input"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="Search by name or emp code..."
+                                style={{ width: '100%', marginBottom: '0.5rem' }}
                             />
+                            <div style={{ 
+                                maxHeight: '200px', 
+                                overflowY: 'auto', 
+                                border: '1px solid #e5e7eb', 
+                                borderRadius: '0.375rem',
+                                backgroundColor: '#fff'
+                            }}>
+                                {staffList
+                                    .filter(staff => 
+                                        searchTerm === '' ||
+                                        staff.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                        staff.emp_code.toLowerCase().includes(searchTerm.toLowerCase())
+                                    )
+                                    .map(staff => (
+                                        <div
+                                            key={staff.id}
+                                            onClick={() => {
+                                                setSelectedStaffId(staff.id);
+                                                setSearchTerm(`${staff.emp_code} - ${staff.name}`);
+                                            }}
+                                            style={{
+                                                padding: '0.5rem',
+                                                cursor: 'pointer',
+                                                backgroundColor: selectedStaffId === staff.id ? '#eff6ff' : 'transparent',
+                                                borderBottom: '1px solid #f3f4f6'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                if (selectedStaffId !== staff.id) {
+                                                    e.currentTarget.style.backgroundColor = '#f9fafb';
+                                                }
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (selectedStaffId !== staff.id) {
+                                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                                }
+                                            }}
+                                        >
+                                            <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>
+                                                {staff.emp_code} - {staff.name}
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                                                {staff.designation}
+                                            </div>
+                                        </div>
+                                    ))
+                                }
+                            </div>
                         </div>
                         <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                            <button onClick={() => setSelected(null)} className="btn btn-outline">Cancel</button>
-                            <button onClick={handleOverride} className="btn btn-primary" disabled={overriding || !newStaffId}>
+                            <button onClick={() => { setSelected(null); setSearchTerm(''); setSelectedStaffId(null); }} className="btn btn-outline">Cancel</button>
+                            <button onClick={handleOverride} className="btn btn-primary" disabled={overriding || !selectedStaffId}>
                                 {overriding ? 'Overriding...' : 'Confirm Override'}
                             </button>
                         </div>

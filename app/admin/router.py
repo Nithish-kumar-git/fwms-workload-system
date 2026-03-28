@@ -31,6 +31,38 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
+@router.get("/staff/list")
+async def get_staff_list(
+    coordinator_id: int = Depends(get_current_coordinator_id),
+):
+    """
+    Get list of all staff with emp_code for override dropdown.
+    Returns staff sorted by emp_code.
+    """
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    with get_transaction() as session:
+        rows = session.execute(
+            text("""
+                SELECT id, name, emp_code, designation 
+                FROM staff 
+                WHERE emp_code IS NOT NULL 
+                ORDER BY emp_code
+            """)
+        ).fetchall()
+        
+        return [
+            {
+                "id": r[0],
+                "name": r[1],
+                "emp_code": r[2],
+                "designation": r[3]
+            }
+            for r in rows
+        ]
+
+
 @router.get("/allocations", response_model=AllocationReviewResponse)
 async def list_allocations(
     coordinator_id: int = Depends(get_current_coordinator_id),
