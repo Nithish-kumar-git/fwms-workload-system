@@ -2,7 +2,8 @@
 
 ## Task 9: Override "New staff not found" - FIXED ✅
 
-**Commit**: (pending)
+**Commit**: 09d4957
+**Message**: "fix: replace undefined logger with console.log in override handler"
 **Status**: Fixed undefined logger causing ReferenceError
 
 ### ROOT CAUSE FOUND:
