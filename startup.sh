@@ -46,6 +46,7 @@ run_migration 023_fix_active_cycle.sql
 run_migration 024_fix_preference_window.sql
 run_migration 025_open_all_even_cycles.sql
 run_migration 026_odd_semester_subjects.sql
+run_migration 027_cleanup_odd_semester_offerings.sql
 
 echo "All migrations done. Starting server..."
 # Use PORT from environment, default to 8000 if not set
