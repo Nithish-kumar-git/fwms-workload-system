@@ -1,37 +1,42 @@
 ## Latest Update - March 28, 2026
 
-### Subject Data Analysis (Read-Only)
+### Migration 026: Odd Semester Subjects Created
 
-#### Data Source
-All subject data comes from SQL migrations only. No external syllabus documents (.docx, .pdf, .xlsx) found in project.
+#### What Was Done
+Created `migrations/026_odd_semester_subjects.sql` to populate odd semester subject offerings:
 
-#### Semester Distribution in migrations/019_real_subjects_final.sql
-Production database contains subject_offerings for EVEN semesters ONLY:
+**MCA Odd Semesters**:
+- Semester I: 7 core subjects (Statistics, Accounting, OOP, Networking, Software Engineering, Data Structures, Python)
+- Semester III: 5 subjects (Testing, Cryptography, Communication Skills, Research Paper, Internship)
+- 3 sections each (A, B, C)
 
-**Semester 2 (MCA Sem II)**: ~78 offerings
-- Programs: MCA(General+BD), MCA(General+CC), MCA(BD), MCA(General), MCA(CC)
-- Sections: A, B
-- Example subjects: CCA42006 (Machine Learning), CCA42007 (Full Stack Web Dev), CCA42008 (Advanced DB)
+**BCA Odd Semesters**:
+- Semester I: 7 core subjects (Computer Fundamentals, Problem Solving, Data Structures, Math, Communication, Tamil, Environment)
+- Semester III: 6 subjects (Computer Networks, Full Stack Web, Public Speaking, Indian Knowledge, CSR, Internship)
+- Semester V: 6 Cyber Security subjects (Python for Cyber, Ethical Hacking, SIEM, Security Ethics, Lab, Threat Management)
+- 6 sections each (A, B, C, D, E, F)
 
-**Semester 4 (MCA Sem IV / BCA Sem IV)**: ~60 offerings  
-- MCA: CCA42802 (Project Work) for MCA(General), MCA(BD+CC)
-- BCA: ACA31011 (Software Engineering), ACA31015 (E-Commerce), ACA31012 (Mobile App Dev), ACA31014 (Digital Marketing)
-- Programs: BCA(General), BCA(General+DB), BCA(DB+MM), BCA(Cyber+MM)
+**Expected Totals**:
+- Semester I: ~63 offerings (21 MCA + 42 BCA)
+- Semester III: ~45 offerings (15 MCA + 30 BCA)
+- Semester V: ~36 offerings (BCA Cyber only)
+- Total odd semester offerings: ~144
 
-**Semester 6 (BCA Sem VI)**: ~56 offerings
-- Programs: BCA(General), BCA(DB+MM), BCA(DB), BCA(MM)
-- Sections: A, B, A+B (combined sections)
-- Example subjects: ACA31017 (IoT), ACA31018 (Web Services), ACA31801 (Project), ACA31525 (Animation)
+#### Changes Made
+- Created `migrations/026_odd_semester_subjects.sql`
+- Added to `startup.sh` after migration 025
+- Committed: d5aae8a "Add migration 026: odd semester subjects scaffold"
+- Pushed to Railway
 
-**Odd Semesters (1, 3, 5)**: ZERO offerings
+#### Next Step
+Wait 3 minutes for Railway deployment, then run:
+```
+railway logs --tail 30
+```
+Look for NOTICE lines showing:
+- "026: Semester I offerings=X"
+- "026: Semester III offerings=X"
+- "026: Semester V offerings=X"
+- "026: Total odd semester offerings=X"
 
-#### Academic Structure (migrations/006_academic_seed.sql)
-- MCA program: Semesters I-IV
-- BCA program: Semesters I-VI
-- Sections: A, B, C, D, E, F (varies by program)
-
-#### Faculty Data (migrations/007_faculty_seed.sql)
-27 faculty members seeded with class teacher assignments
-
-### Conclusion
-The production database architecture is designed for EVEN semester cycles only. Odd semesters have no subject_offering data and should remain CLOSED.
+Paste the verification output to confirm data loaded correctly.
