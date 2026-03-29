@@ -309,107 +309,107 @@ def _run_allocation_for_semester(
         if preference_based_count > 0:
             # Only run final pass if at least some preference allocations succeeded
             for oid in remaining_offerings:
-            offering = offering_map[oid]
-            offer_tch = offering["tch"] or 0
-            
-            # Skip offerings with 0 TCH (e.g., internships, projects)
-            if offer_tch == 0:
-                unallocated.append({
-                    "subject_offering_id": oid,
-                    "subject_code": offering["code"],
-                    "subject_name": offering["name"],
-                    "section_label": offering["section_label"],
-                    "semester_label": offering["semester_label"],
-                    "program_name": offering["program_name"],
-                    "tch": offer_tch,
-                    "reason": "Zero TCH (internship/project/non-credit)",
-                })
-                continue
-            
-            # Sort candidates: underloaded first, then by lowest load
-            candidates = sorted(
-                staff_map.values(),
-                key=lambda s: (
-                    0 if s["tch_assigned"] < s["tch_norm"] else 1,  # Underloaded first
-                    s["tch_assigned"]  # Then by lowest load
+                offering = offering_map[oid]
+                offer_tch = offering["tch"] or 0
+                
+                # Skip offerings with 0 TCH (e.g., internships, projects)
+                if offer_tch == 0:
+                    unallocated.append({
+                        "subject_offering_id": oid,
+                        "subject_code": offering["code"],
+                        "subject_name": offering["name"],
+                        "section_label": offering["section_label"],
+                        "semester_label": offering["semester_label"],
+                        "program_name": offering["program_name"],
+                        "tch": offer_tch,
+                        "reason": "Zero TCH (internship/project/non-credit)",
+                    })
+                    continue
+                
+                # Sort candidates: underloaded first, then by lowest load
+                candidates = sorted(
+                    staff_map.values(),
+                    key=lambda s: (
+                        0 if s["tch_assigned"] < s["tch_norm"] else 1,  # Underloaded first
+                        s["tch_assigned"]  # Then by lowest load
+                    )
                 )
-            )
-            
-            allocated = False
-            
-            # PASS 1: Strict constraints (no overload, no relaxation)
-            for candidate in candidates:
-                if try_allocate(candidate["id"], oid, "FINAL_PASS", 
-                               relaxed_shift=False, relaxed_multi_section=False, 
-                               allow_overload=False):
-                    final_count += 1
-                    allocated = True
-                    break
-            
-            if allocated:
-                continue
-            
-            # PASS 2: Relax shift constraint (allow SHIFT2 → SHIFT1)
-            for candidate in candidates:
-                if try_allocate(candidate["id"], oid, "FINAL_PASS_RELAXED_SHIFT", 
-                               relaxed_shift=True, relaxed_multi_section=False, 
-                               allow_overload=False):
-                    final_count += 1
-                    allocated = True
-                    break
-            
-            if allocated:
-                continue
-            
-            # PASS 3: Relax multi-section constraint
-            for candidate in candidates:
-                if try_allocate(candidate["id"], oid, "FINAL_PASS_RELAXED_MULTI", 
-                               relaxed_shift=True, relaxed_multi_section=True, 
-                               allow_overload=False):
-                    final_count += 1
-                    allocated = True
-                    break
-            
-            if allocated:
-                continue
-            
-            # PASS 4: Allow 10% overload (prioritize underloaded faculty)
-            underloaded_candidates = [
-                c for c in candidates 
-                if c["tch_assigned"] < c["tch_norm"]
-            ]
-            
-            for candidate in underloaded_candidates:
-                if try_allocate(candidate["id"], oid, "FINAL_PASS_OVERLOAD_10", 
-                               relaxed_shift=True, relaxed_multi_section=True, 
-                               allow_overload=True, max_overload_pct=0.10):
-                    final_count += 1
-                    allocated = True
-                    break
-            
-            if allocated:
-                continue
-            
-            # PASS 5: Allow 20% overload for all faculty (MAXIMUM ALLOWED)
-            for candidate in candidates:
-                if try_allocate(candidate["id"], oid, "FINAL_PASS_OVERLOAD_20", 
-                               relaxed_shift=True, relaxed_multi_section=True, 
-                               allow_overload=True, max_overload_pct=0.20):
-                    final_count += 1
-                    allocated = True
-                    break
-            
-            if not allocated:
-                unallocated.append({
-                    "subject_offering_id": oid,
-                    "subject_code": offering["code"],
-                    "subject_name": offering["name"],
-                    "section_label": offering["section_label"],
-                    "semester_label": offering["semester_label"],
-                    "program_name": offering["program_name"],
-                    "tch": offer_tch,
-                    "reason": "No compatible faculty with available capacity (even with 20% overload)",
-                })
+                
+                allocated = False
+                
+                # PASS 1: Strict constraints (no overload, no relaxation)
+                for candidate in candidates:
+                    if try_allocate(candidate["id"], oid, "FINAL_PASS", 
+                                   relaxed_shift=False, relaxed_multi_section=False, 
+                                   allow_overload=False):
+                        final_count += 1
+                        allocated = True
+                        break
+                
+                if allocated:
+                    continue
+                
+                # PASS 2: Relax shift constraint (allow SHIFT2 → SHIFT1)
+                for candidate in candidates:
+                    if try_allocate(candidate["id"], oid, "FINAL_PASS_RELAXED_SHIFT", 
+                                   relaxed_shift=True, relaxed_multi_section=False, 
+                                   allow_overload=False):
+                        final_count += 1
+                        allocated = True
+                        break
+                
+                if allocated:
+                    continue
+                
+                # PASS 3: Relax multi-section constraint
+                for candidate in candidates:
+                    if try_allocate(candidate["id"], oid, "FINAL_PASS_RELAXED_MULTI", 
+                                   relaxed_shift=True, relaxed_multi_section=True, 
+                                   allow_overload=False):
+                        final_count += 1
+                        allocated = True
+                        break
+                
+                if allocated:
+                    continue
+                
+                # PASS 4: Allow 10% overload (prioritize underloaded faculty)
+                underloaded_candidates = [
+                    c for c in candidates 
+                    if c["tch_assigned"] < c["tch_norm"]
+                ]
+                
+                for candidate in underloaded_candidates:
+                    if try_allocate(candidate["id"], oid, "FINAL_PASS_OVERLOAD_10", 
+                                   relaxed_shift=True, relaxed_multi_section=True, 
+                                   allow_overload=True, max_overload_pct=0.10):
+                        final_count += 1
+                        allocated = True
+                        break
+                
+                if allocated:
+                    continue
+                
+                # PASS 5: Allow 20% overload for all faculty (MAXIMUM ALLOWED)
+                for candidate in candidates:
+                    if try_allocate(candidate["id"], oid, "FINAL_PASS_OVERLOAD_20", 
+                                   relaxed_shift=True, relaxed_multi_section=True, 
+                                   allow_overload=True, max_overload_pct=0.20):
+                        final_count += 1
+                        allocated = True
+                        break
+                
+                if not allocated:
+                    unallocated.append({
+                        "subject_offering_id": oid,
+                        "subject_code": offering["code"],
+                        "subject_name": offering["name"],
+                        "section_label": offering["section_label"],
+                        "semester_label": offering["semester_label"],
+                        "program_name": offering["program_name"],
+                        "tch": offer_tch,
+                        "reason": "No compatible faculty with available capacity (even with 20% overload)",
+                    })
             
             logger.info(f"  Semester {semester_label}: Final pass: {final_count} allocated, {len(unallocated)} unallocated")
         else:
