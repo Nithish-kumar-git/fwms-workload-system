@@ -1,6 +1,34 @@
 # PROGRESS LOG
 
-## Task 9: Three Bugs Fixed - Override Modal + Backend Lookup ✅
+## Task 10: Clear Test Preference Submissions ✅
+
+**Commit**: 417cedd
+**Message**: "data: clear test preference submissions for fresh staff testing"
+**Status**: Migration created to clear faculty_preference table
+
+### MIGRATION CREATED:
+**File**: migrations/032_clear_test_preferences.sql
+**Operations**:
+1. ✓ `DELETE FROM faculty_preference;` - Clears all test preference submissions
+2. ✓ `UPDATE preference_window SET is_open = true` - Reopens preference window for fresh submissions
+3. ✓ Verification queries included (count preferences, check window status)
+
+### TABLES PRESERVED:
+- ✓ staff (all faculty data intact)
+- ✓ subject_offering (all subjects intact)
+- ✓ allocation (all allocations intact)
+- ✓ cycle (all cycles intact)
+- ✓ Only faculty_preference cleared
+
+### STARTUP.SH UPDATED:
+Added migration 032 after migration 030 (line 51)
+Migration will run automatically on next Railway deployment
+
+**Result**: Staff can now submit fresh preferences without old test data
+
+---
+
+## Previous: Task 9 - Three Bugs Fixed - Override Modal + Backend Lookup ✅
 
 **Commit**: 1d03f4a
 **Message**: "fix: override modal dropdown renders correctly, staff lookup error detail"
