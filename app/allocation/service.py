@@ -287,8 +287,12 @@ def _run_allocation_for_semester(
         
         logger.info(f"  Semester {semester_label}: Stage 2 (pref=2-5): {stage2_count} allocated")
         
+        # Track preference-based allocations for FINAL PASS guard
+        preference_based_count = stage1_count + stage2_count
+        
         # ================================================================
         # FINAL PASS: Assign unallocated to compatible faculty
+        # FIX 2: Only run if at least some preference-based allocations succeeded
         # Multi-pass strategy with progressive relaxation:
         #   PASS 1: Strict (no overload, no shift/multi-section relaxation)
         #   PASS 2: Relax shift constraint (SHIFT2 → SHIFT1)
@@ -302,7 +306,9 @@ def _run_allocation_for_semester(
             if oid not in assigned_offerings
         ]
         
-        for oid in remaining_offerings:
+        if preference_based_count > 0:
+            # Only run final pass if at least some preference allocations succeeded
+            for oid in remaining_offerings:
             offering = offering_map[oid]
             offer_tch = offering["tch"] or 0
             
@@ -404,8 +410,24 @@ def _run_allocation_for_semester(
                     "tch": offer_tch,
                     "reason": "No compatible faculty with available capacity (even with 20% overload)",
                 })
-        
-        logger.info(f"  Semester {semester_label}: Final pass: {final_count} allocated, {len(unallocated)} unallocated")
+            
+            logger.info(f"  Semester {semester_label}: Final pass: {final_count} allocated, {len(unallocated)} unallocated")
+        else:
+            # No preference-based allocations succeeded - skip final pass
+            logger.info(f"  Semester {semester_label}: Skipping final pass - no preference allocations made")
+            # Mark all remaining offerings as unallocated
+            for oid in remaining_offerings:
+                offering = offering_map[oid]
+                unallocated.append({
+                    "subject_offering_id": oid,
+                    "subject_code": offering["code"],
+                    "subject_name": offering["name"],
+                    "section_label": offering["section_label"],
+                    "semester_label": offering["semester_label"],
+                    "program_name": offering["program_name"],
+                    "tch": offering["tch"] or 0,
+                    "reason": "No preference-based allocations succeeded - final pass skipped",
+                })
     
     return {
         "allocations": allocations,
@@ -592,6 +614,26 @@ def run_allocation(
             "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
             "allocations": [], "unallocated": [], "workload_summary": [],
         }
+    
+    # ================================================================
+    # FIX 1: CHECK IF ANY PREFERENCES EXIST BEFORE RUNNING ALLOCATION
+    # ================================================================
+    with get_transaction() as session:
+        pref_count = session.execute(
+            text("SELECT COUNT(*) FROM faculty_preference WHERE cycle_id = :cid"),
+            {"cid": cycle_id}
+        ).scalar()
+        
+        if pref_count == 0:
+            return {
+                "success": False,
+                "message": "No preferences submitted yet. Ask faculty to submit preferences before running allocation.",
+                "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
+                "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
+                "allocations": [], "unallocated": [], "workload_summary": [],
+            }
+        
+        logger.info(f"Found {pref_count} preferences for cycle {cycle_id}")
     
     # ================================================================
     # LOAD STAFF CAPACITY (SINGLE SEMESTER SCOPE)

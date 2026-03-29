@@ -105,3 +105,60 @@ async def get_active_cycle_endpoint():
     if cycle is None:
         raise HTTPException(status_code=404, detail="No active academic cycle")
     return CycleResponse(**cycle)
+
+
+@router.post("/archive/{cycle_id}", response_model=ActionResponse)
+async def archive_cycle_endpoint(
+    cycle_id: int,
+    _coordinator_id: int = Depends(get_current_coordinator_id),
+):
+    """
+    Archive a cycle by setting its status to FROZEN.
+    This marks the cycle as finalized and prevents further modifications.
+    Coordinator-only.
+    """
+    from app.admin.cycle_service_new import archive_cycle
+    result = archive_cycle(cycle_id)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return ActionResponse(**result)
+
+
+@router.get("/history", response_model=list[CycleResponse])
+async def get_cycle_history_endpoint(
+    _coordinator_id: int = Depends(get_current_coordinator_id),
+):
+    """
+    Get all archived cycles (status FROZEN or ALLOCATED).
+    Shows historical cycles with allocation counts.
+    Coordinator-only.
+    """
+    from app.admin.cycle_service_new import get_cycle_history
+    return [CycleResponse(**c) for c in get_cycle_history()]
+
+
+class NewSemesterRequest(BaseModel):
+    academic_year: str = Field(..., description="e.g. 2025-2026")
+    semester_id: int = Field(..., description="Semester ID (1-6 for I-VI)")
+
+
+@router.post("/new-semester", response_model=ActionResponse)
+async def create_new_semester_cycle_endpoint(
+    body: NewSemesterRequest,
+    _coordinator_id: int = Depends(get_current_coordinator_id),
+):
+    """
+    Create a new OPEN cycle for a given semester.
+    Before creating, sets any existing OPEN cycle for the same semester to CLOSED.
+    This allows starting fresh for a new academic year.
+    Coordinator-only.
+    """
+    from app.admin.cycle_service_new import create_new_semester_cycle
+    result = create_new_semester_cycle(
+        academic_year=body.academic_year,
+        semester_id=body.semester_id,
+    )
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return ActionResponse(**result)
+
