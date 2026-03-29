@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, Shield, User, Crown } from 'lucide-react';
+import { Shield, User, Crown } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
