@@ -161,11 +161,12 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
         
         # Log the staff ID we're looking up for debugging
         logger.info(f"Override: looking up new staff id={new_staff_id}")
+        print(f"OVERRIDE: querying staff id={new_staff_id} type={type(new_staff_id)}", flush=True)
         
-        # Load new staff with full details
+        # Load new staff with full details (with fallback values for missing columns)
         new_staff = session.execute(
             text("""
-                SELECT id, name, emp_code, shift, COALESCE(tch_norm, 40) AS tch_norm
+                SELECT id, name, emp_code, COALESCE(shift, 'SHIFT1') as shift, COALESCE(tch_norm, 16) AS tch_norm
                 FROM staff WHERE id = :sid
             """),
             {"sid": new_staff_id}
@@ -173,7 +174,8 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
         
         if new_staff is None:
             logger.error(f"Override failed: staff id={new_staff_id} not found in database")
-            return {"success": False, "message": "New staff not found or inactive"}
+            print(f"OVERRIDE: staff id={new_staff_id} NOT FOUND in database", flush=True)
+            return {"success": False, "message": f"Staff with id={new_staff_id} not found in database"}
         
         new_staff_name = new_staff[1]
         new_emp_code = new_staff[2]

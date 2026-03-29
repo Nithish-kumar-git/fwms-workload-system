@@ -51,7 +51,6 @@ export default function ReviewPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [selected, setSelected] = useState<Allocation | null>(null);
-    const [newStaffId, setNewStaffId] = useState('');
     const [overriding, setOverriding] = useState(false);
     const [staffList, setStaffList] = useState<StaffMember[]>([]);
     const [searchTerm, setSearchTerm] = useState('');

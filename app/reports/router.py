@@ -36,6 +36,39 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
+# ─── DEBUG Endpoint (public, no auth) ───────────────────────────────────────
+
+@router.get("/export/staff-debug")
+async def get_staff_debug():
+    """
+    PUBLIC DEBUG endpoint - Get list of all staff with is_active status.
+    No authentication required for debugging.
+    """
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    with get_transaction() as session:
+        rows = session.execute(
+            text("""
+                SELECT id, name, emp_code, designation, is_active 
+                FROM staff 
+                WHERE emp_code IS NOT NULL 
+                ORDER BY emp_code
+            """)
+        ).fetchall()
+        
+        return [
+            {
+                "id": r[0],
+                "name": r[1],
+                "emp_code": r[2],
+                "designation": r[3],
+                "is_active": r[4]
+            }
+            for r in rows
+        ]
+
+
 # ─── Live Report Endpoints (view only, not for export) ───────────────────────
 
 @router.get("/faculty-workload", response_model=FacultyWorkloadResponse)
