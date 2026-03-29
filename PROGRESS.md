@@ -1,6 +1,86 @@
 # PROGRESS LOG
 
-## Task 9: Override "New staff not found" - FIXED ✅
+## Task 9: Override Debug Logging Added 🔍
+
+**Commit**: 7e9a577
+**Message**: "debug: add override request logging and staff-list-debug endpoint"
+**Status**: Debug logging added to track staff_id flow
+
+### DEBUG CHANGES APPLIED:
+
+**Backend Debug (app/admin/router.py)**:
+1. Added print statements to override endpoint (line 88-97):
+   ```python
+   print(f"OVERRIDE DEBUG: allocation_id={allocation_id}, new_staff_id={request.new_staff_id}, type={type(request.new_staff_id)}", flush=True)
+   
+   # Check if staff exists in database
+   with get_transaction() as session:
+       check = session.execute(
+           text("SELECT id, name, is_active FROM staff WHERE id = :sid"),
+           {"sid": request.new_staff_id}
+       ).fetchone()
+       print(f"OVERRIDE DEBUG: staff lookup result = {check}", flush=True)
+   ```
+
+2. Added public debug endpoint GET /api/admin/staff/list-debug (no auth):
+   - Returns: id, name, emp_code, designation, is_active
+   - Can be tested in browser without authentication
+
+**Frontend Debug (frontend/src/pages/ReviewPage.tsx)**:
+1. Staff list load logging (line 75-82):
+   ```typescript
+   const data = await res.json();
+   console.log('Staff list loaded:', data.length, 'items', data.slice(0, 3));
+   ```
+
+2. Staff click handler logging (line 253):
+   ```typescript
+   onClick={() => {
+       console.log('Staff clicked:', staff.id, staff.emp_code, staff.name, 'type:', typeof staff.id);
+       setSelectedStaffId(staff.id);  // ✓ Uses staff.id (database ID)
+       setSearchTerm(`${staff.emp_code} - ${staff.name}`);
+   }}
+   ```
+
+3. Override handler logging (line 91):
+   ```typescript
+   console.log('Selected staff id:', selectedStaffId, 'type:', typeof selectedStaffId);
+   ```
+
+### CODE VERIFICATION:
+
+**Staff List Fetch** (line 74):
+```typescript
+const res = await fetch('/api/admin/staff/list', {
+    credentials: 'include',
+});
+```
+✓ Fetches from /api/admin/staff/list
+✓ Returns array of {id, name, emp_code, designation}
+
+**Staff Selection** (line 253-256):
+```typescript
+setSelectedStaffId(staff.id);  // ✓ CORRECT - uses staff.id (database ID)
+setSearchTerm(`${staff.emp_code} - ${staff.name}`);
+```
+✓ Sets selectedStaffId to staff.id (NOT emp_code)
+✓ Only updates search term display text
+
+**Override Call** (line 94):
+```typescript
+await overrideAllocation(selected.allocation_id, selectedStaffId);
+```
+✓ Passes selectedStaffId (number) to API
+
+### NEXT STEPS:
+1. Check Railway logs for "OVERRIDE DEBUG" output
+2. Test /api/admin/staff/list-debug in browser to see all staff IDs
+3. Compare staff IDs in dropdown vs database
+4. Verify selectedStaffId type is number, not string
+
+---
+
+## Previous: Task 9 - Override "New staff not found" - FIXED ✅
 
 **Commit**: 09d4957
 **Message**: "fix: replace undefined logger with console.log in override handler"
