@@ -164,6 +164,7 @@ def list_cycles() -> list[dict]:
                 "allocated_at": row[7].isoformat() if row[7] else None,
                 "frozen_at": row[8].isoformat() if row[8] else None,
                 "created_at": row[9].isoformat() if row[9] else None,
+                "allocation_count": None,  # Not included in list_cycles, only in get_cycle_history
             }
             for row in rows
         ]
@@ -215,6 +216,7 @@ def get_active_cycle() -> dict | None:
             "allocated_at": row[7].isoformat() if row[7] else None,
             "frozen_at": row[8].isoformat() if row[8] else None,
             "created_at": row[9].isoformat() if row[9] else None,
+            "allocation_count": None,  # Not included for active cycle
         }
 
 
