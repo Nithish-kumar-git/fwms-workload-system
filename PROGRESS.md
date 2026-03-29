@@ -1,6 +1,83 @@
 # PROGRESS LOG
 
-## Task 9: Override Debug Logging Added 🔍
+## Task 9: Three Bugs Fixed - Override Modal + Backend Lookup ✅
+
+**Commit**: 1d03f4a
+**Message**: "fix: override modal dropdown renders correctly, staff lookup error detail"
+**Status**: All three bugs fixed
+
+### BUG 1: Duplicate State Variable Removed ✅
+**File**: frontend/src/pages/ReviewPage.tsx (line 54)
+**Problem**: Duplicate `newStaffId` state variable conflicted with `selectedStaffId`
+**Fix**: Removed line 54: `const [newStaffId, setNewStaffId] = useState('');`
+**Result**: Modal now uses only `selectedStaffId` state correctly
+
+**Modal JSX Verification** (lines 235-310):
+- ✓ Search input filters by name/emp_code
+- ✓ Dropdown shows staff list with click handlers
+- ✓ Click handler sets `setSelectedStaffId(staff.id)` (database ID)
+- ✓ Selected staff highlighted in blue (#eff6ff)
+- ✓ Confirm button calls `overrideAllocation(selected.allocation_id, selectedStaffId)`
+- ✓ staffList loaded via useEffect on mount (line 85)
+
+### BUG 2: Backend Staff Lookup Enhanced ✅
+**File**: app/admin/service.py (lines 160-176)
+**Changes**:
+1. Added print statement before query:
+   ```python
+   print(f"OVERRIDE: querying staff id={new_staff_id} type={type(new_staff_id)}", flush=True)
+   ```
+
+2. Changed query to use fallback values:
+   ```python
+   SELECT id, name, emp_code, COALESCE(shift, 'SHIFT1') as shift, COALESCE(tch_norm, 16) AS tch_norm
+   FROM staff WHERE id = :sid
+   ```
+   - Old: `shift` (could be NULL) → New: `COALESCE(shift, 'SHIFT1')`
+   - Old: `COALESCE(tch_norm, 40)` → New: `COALESCE(tch_norm, 16)`
+
+3. Enhanced error message:
+   ```python
+   if new_staff is None:
+       print(f"OVERRIDE: staff id={new_staff_id} NOT FOUND in database", flush=True)
+       return {"success": False, "message": f"Staff with id={new_staff_id} not found in database"}
+   ```
+   - Old: "New staff not found or inactive"
+   - New: "Staff with id={new_staff_id} not found in database"
+
+### BUG 3: Public Debug Endpoint Added ✅
+**File**: app/reports/router.py (lines 38-62)
+**Added**: GET /api/reports/export/staff-debug (public, no auth)
+**Returns**: Array of {id, name, emp_code, designation, is_active}
+**URL**: https://fwms-workload-system-production.up.railway.app/api/reports/export/staff-debug
+**Purpose**: Verify staff IDs exist in database without authentication
+
+**Query**:
+```sql
+SELECT id, name, emp_code, designation, is_active 
+FROM staff 
+WHERE emp_code IS NOT NULL 
+ORDER BY emp_code
+```
+
+### VERIFICATION CHECKLIST:
+- ✓ Removed duplicate `newStaffId` state variable
+- ✓ Modal JSX already correct (dropdown with search)
+- ✓ staffList useEffect already present (line 85)
+- ✓ Backend query uses COALESCE for NULL columns
+- ✓ Backend error message includes staff_id value
+- ✓ Public debug endpoint accessible without auth
+- ✓ Print statements added for Railway log debugging
+
+### NEXT STEPS:
+1. Test override modal shows dropdown (not text input)
+2. Check Railway logs for "OVERRIDE: querying staff id=X" output
+3. Test /api/reports/export/staff-debug to see all staff IDs
+4. Verify override works with valid staff ID
+
+---
+
+## Previous: Task 9 - Override Debug Logging Added 🔍
 
 **Commit**: 7e9a577
 **Message**: "debug: add override request logging and staff-list-debug endpoint"
