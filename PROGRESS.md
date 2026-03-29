@@ -1,6 +1,21 @@
 # PROGRESS LOG
 
-## Task 11: Elegant Login Page Redesign ✅
+## Task 11b: Fix Vercel Build - Remove Unused Import ✅
+
+**Commit**: f54ebd1
+**Message**: "fix: remove unused BookOpen import in LoginPage"
+**Status**: Vercel build failure fixed
+
+### CHANGE:
+**File**: frontend/src/pages/LoginPage.tsx (line 2)
+**Old**: `import { BookOpen, AlertCircle, Shield, User, Crown } from 'lucide-react';`
+**New**: `import { AlertCircle, Shield, User, Crown } from 'lucide-react';`
+
+**Result**: Removed unused BookOpen import, Vercel build should now succeed
+
+---
+
+## Previous: Task 11 - Elegant Login Page Redesign ✅
 
 **Commit**: 7336b1c
 **Message**: "ui: elegant login page redesign, OAuth logic untouched"
