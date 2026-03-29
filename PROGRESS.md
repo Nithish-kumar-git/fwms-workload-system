@@ -1,6 +1,35 @@
 # PROGRESS LOG
 
-## Task 10: Clear Test Preference Submissions ✅
+## Task 11: Elegant Login Page Redesign ✅
+
+**Commit**: 7336b1c
+**Message**: "ui: elegant login page redesign, OAuth logic untouched"
+**Status**: Login page redesigned with modern dark theme
+
+### FILE EDITED:
+**frontend/src/pages/LoginPage.tsx** - Visual redesign only
+
+### OAUTH LOGIC PRESERVED:
+- ✓ `handleGoogleLogin` function unchanged (lines 12-32)
+- ✓ `onClick={handleGoogleLogin}` handler unchanged
+- ✓ API call to `/api/auth/login` unchanged
+- ✓ `window.location.href = data.authorization_url` unchanged
+- ✓ `VITE_API_URL` environment variable usage unchanged
+- ✓ Dev login handlers unchanged (lines 34-68)
+
+### VISUAL CHANGES:
+- Dark gradient background (#0f172a to #1e3a5f)
+- Glassmorphism card with backdrop blur
+- Gradient "FWMS" title (blue to purple)
+- Elegant divider line
+- White Google button with subtle shadow
+- Redesigned dev mode buttons (dark theme)
+
+**Result**: Modern, elegant login page with all OAuth functionality intact
+
+---
+
+## Previous: Task 10 - Clear Test Preference Submissions ✅
 
 **Commit**: 417cedd
 **Message**: "data: clear test preference submissions for fresh staff testing"
