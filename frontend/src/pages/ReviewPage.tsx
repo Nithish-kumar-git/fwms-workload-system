@@ -80,6 +80,7 @@ export default function ReviewPage() {
             });
             if (res.ok) {
                 const data = await res.json();
+                console.log('Staff list loaded:', data.length, 'items', data.slice(0, 3));
                 setStaffList(data);
             }
         } catch (err) {
@@ -94,6 +95,7 @@ export default function ReviewPage() {
             addToast('Please select a staff member', 'error');
             return;
         }
+        console.log('Selected staff id:', selectedStaffId, 'type:', typeof selectedStaffId);
         setOverriding(true);
         try {
             console.log(`Overriding allocation ${selected.allocation_id} to staff ${selectedStaffId}`);
@@ -265,6 +267,7 @@ export default function ReviewPage() {
                                         <div
                                             key={staff.id}
                                             onClick={() => {
+                                                console.log('Staff clicked:', staff.id, staff.emp_code, staff.name, 'type:', typeof staff.id);
                                                 setSelectedStaffId(staff.id);
                                                 setSearchTerm(`${staff.emp_code} - ${staff.name}`);
                                             }}

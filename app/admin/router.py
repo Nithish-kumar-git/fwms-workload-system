@@ -63,6 +63,37 @@ async def get_staff_list(
         ]
 
 
+@router.get("/staff/list-debug")
+async def get_staff_list_debug():
+    """
+    PUBLIC DEBUG endpoint - Get list of all staff with is_active status.
+    No authentication required for debugging.
+    """
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    with get_transaction() as session:
+        rows = session.execute(
+            text("""
+                SELECT id, name, emp_code, designation, is_active 
+                FROM staff 
+                WHERE emp_code IS NOT NULL 
+                ORDER BY emp_code
+            """)
+        ).fetchall()
+        
+        return [
+            {
+                "id": r[0],
+                "name": r[1],
+                "emp_code": r[2],
+                "designation": r[3],
+                "is_active": r[4]
+            }
+            for r in rows
+        ]
+
+
 @router.get("/allocations", response_model=AllocationReviewResponse)
 async def list_allocations(
     coordinator_id: int = Depends(get_current_coordinator_id),
@@ -88,7 +119,19 @@ async def override_allocation(
     Override an allocation: reassign a subject to a different faculty.
     Validates shift compatibility, workload capacity, and multi-section constraint.
     """
+    # DEBUG: Log incoming request
+    print(f"OVERRIDE DEBUG: allocation_id={allocation_id}, new_staff_id={request.new_staff_id}, type={type(request.new_staff_id)}", flush=True)
     logger.info(f"Override request: allocation_id={allocation_id}, new_staff_id={request.new_staff_id}")
+    
+    # DEBUG: Check if staff exists in database
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    with get_transaction() as session:
+        check = session.execute(
+            text("SELECT id, name, is_active FROM staff WHERE id = :sid"),
+            {"sid": request.new_staff_id}
+        ).fetchone()
+        print(f"OVERRIDE DEBUG: staff lookup result = {check}", flush=True)
     
     result = admin_service.override_allocation(
         allocation_id=allocation_id,
