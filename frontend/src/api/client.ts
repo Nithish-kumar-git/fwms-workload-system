@@ -159,4 +159,22 @@ export const downloadWorkloadPdf = () =>
 export const getCurrentUser = () => api.get('/auth/me');
 export const logout = () => api.post('/auth/logout');
 
+// ─── Subject Management ───
+export const getSubjectOfferings = (semesterId?: number, programId?: number) =>
+    api.get('/subjects/offerings', { params: { semester_id: semesterId, program_id: programId } });
+
+export const createSubjectOffering = (data: any) => api.post('/subjects/offerings', data);
+
+export const deleteSubjectOffering = (id: number) => api.delete(`/subjects/offerings/${id}`);
+
+export const getSubjectPrograms = () => api.get('/subjects/programs');
+
+export const getSubjectSections = () => api.get('/subjects/sections');
+
+export const getSubjectSemesters = () => api.get('/subjects/semesters');
+
+export const createSection = (data: any) => api.post('/subjects/sections', data);
+
+export const createProgram = (data: any) => api.post('/subjects/programs', data);
+
 export default api;
