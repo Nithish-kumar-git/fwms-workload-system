@@ -49,6 +49,7 @@ class SubjectSummaryRecord(BaseModel):
     program: str
     semester: str
     section: str
+    shift: int
     faculty_name: Optional[str] = None
     faculty_emp_code: Optional[str] = None
     tch: int

@@ -149,7 +149,7 @@ def get_subject_summary(
         rows = session.execute(
             text("""
                 SELECT so.id, sub.code, sub.name, p.name AS program,
-                       sem.label AS semester, sec.label AS section,
+                       sem.label AS semester, sec.label AS section, so.shift,
                        s.name AS faculty_name, s.emp_code,
                        COALESCE(sub.tch, 0) AS tch,
                        CASE WHEN a.id IS NOT NULL THEN true ELSE false END AS allocated
@@ -176,9 +176,9 @@ def get_subject_summary(
         {
             "subject_offering_id": r[0],
             "course_code": r[1], "course_name": r[2], "program": r[3],
-            "semester": r[4], "section": r[5],
-            "faculty_name": r[6], "faculty_emp_code": r[7],
-            "tch": r[8], "allocated": r[9],
+            "semester": r[4], "section": r[5], "shift": r[6],
+            "faculty_name": r[7], "faculty_emp_code": r[8],
+            "tch": r[9], "allocated": r[10],
         }
         for r in rows
     ]

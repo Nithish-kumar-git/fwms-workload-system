@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { getMyPreferences, submitPreference, deletePreference, getPreferenceStatus, getPrefWindowStatus, getSubjectSummary } from '../api/client';
 import { useToast } from '../hooks/useToast';
 import ToastContainer from '../components/ToastContainer';
-import { Trash2, Clock, AlertCircle, RefreshCw, Search, Filter, BookOpen, CheckCircle2, XCircle } from 'lucide-react';
+import { Trash2, Clock, AlertCircle, RefreshCw, Search, Filter, BookOpen, CheckCircle2, XCircle, X } from 'lucide-react';
 
 interface Preference {
     id: number;
@@ -29,6 +29,7 @@ interface SubjectOffering {
     program: string;
     semester: string;
     section: string;
+    shift: number;
     tch: number;
     allocated: boolean;
     faculty_name: string | null;
@@ -52,6 +53,7 @@ export default function PreferencesPage() {
     const [filterProgram, setFilterProgram] = useState('');
     const [filterSemester, setFilterSemester] = useState('');
     const [searchText, setSearchText] = useState('');
+    const [showInfoBanner, setShowInfoBanner] = useState(true);
 
     // ── IDs and pref numbers already used ──
     const usedOfferingIds = useMemo(
@@ -106,7 +108,6 @@ export default function PreferencesPage() {
             setOfferings(res.data.records || []);
         } catch (err) {
             console.error('Failed to load subject offerings:', err);
-            // Offerings are supplementary
         } finally {
             setOfferingsLoading(false);
         }
@@ -125,6 +126,7 @@ export default function PreferencesPage() {
         [...new Set(offerings.map((o) => o.program))].sort(),
         [offerings]
     );
+    
     // Dynamic semester options - only show semesters that have data
     const semesters = useMemo(() => {
         const available = [...new Set(offerings.map((o) => o.semester))].sort();
@@ -133,7 +135,6 @@ export default function PreferencesPage() {
 
     const filteredOfferings = useMemo(() => {
         let result = offerings;
-        console.log('Total offerings before filter:', offerings.length);
         if (filterProgram) result = result.filter((o) => o.program === filterProgram);
         if (filterSemester) result = result.filter((o) => o.semester === filterSemester);
         if (searchText) {
@@ -143,7 +144,6 @@ export default function PreferencesPage() {
                 o.course_name.toLowerCase().includes(q)
             );
         }
-        console.log('Filtered offerings count:', result.length);
         return result;
     }, [offerings, filterProgram, filterSemester, searchText]);
 
@@ -176,7 +176,6 @@ export default function PreferencesPage() {
         e.preventDefault();
         if (!offeringId || !prefNum) return;
 
-        // Client-side duplicate check
         const dupMsg = validateSelection(offeringId, prefNum);
         if (dupMsg) {
             setDuplicateError(dupMsg);
@@ -212,7 +211,6 @@ export default function PreferencesPage() {
             await loadData();
             await loadOfferings();
 
-            // Scroll to submit form and briefly highlight it
             const formEl = document.getElementById('submit-form');
             if (formEl) {
                 formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -232,14 +230,13 @@ export default function PreferencesPage() {
     const allFilled = preferences.length >= 5;
 
     const handleRowClick = (o: SubjectOffering) => {
-        if (allFilled) return; // all 5 filled — lock UI
-        if (usedOfferingIds.has(o.subject_offering_id)) return; // already selected — ignore
+        if (allFilled) return;
+        if (usedOfferingIds.has(o.subject_offering_id)) return;
         setOfferingId(String(o.subject_offering_id));
         setDuplicateError('');
         document.getElementById('submit-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
 
-    // ── Submit button state ──
     const canSubmit = !!offeringId && !!prefNum && windowOpen && !submitting && !status?.is_complete;
     const submitLabel = !windowOpen
         ? 'Window Closed'
@@ -286,6 +283,23 @@ export default function PreferencesPage() {
                     </span>
                 )}
             </div>
+
+            {/* Info Banner */}
+            {showInfoBanner && (
+                <div className="glass-card" style={{ padding: '1rem 1.5rem', marginBottom: '1.5rem', borderLeft: '4px solid #3b82f6', display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(59, 130, 246, 0.05)' }}>
+                    <AlertCircle size={18} style={{ color: '#3b82f6', flexShrink: 0 }} />
+                    <span style={{ color: '#374151', fontSize: '0.8125rem', flex: 1 }}>
+                        Showing subjects from all currently open semesters. Give 5 preferences per semester.
+                    </span>
+                    <button
+                        onClick={() => setShowInfoBanner(false)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', padding: '2px', lineHeight: 0 }}
+                        title="Dismiss"
+                    >
+                        <X size={16} />
+                    </button>
+                </div>
+            )}
 
             {/* Window Status Banner */}
             {!windowOpen && (
@@ -403,6 +417,45 @@ export default function PreferencesPage() {
                     </button>
                 </div>
 
+                {/* Semester Filter Tabs */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                    <button
+                        onClick={() => setFilterSemester('')}
+                        style={{
+                            padding: '0.5rem 1rem',
+                            borderRadius: '20px',
+                            border: filterSemester === '' ? '2px solid #2563eb' : '1px solid #e5e7eb',
+                            background: filterSemester === '' ? 'rgba(37, 99, 235, 0.1)' : '#fff',
+                            color: filterSemester === '' ? '#2563eb' : '#6b7280',
+                            fontWeight: filterSemester === '' ? 600 : 500,
+                            fontSize: '0.8125rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                        }}
+                    >
+                        All Semesters
+                    </button>
+                    {semesters.map((sem) => (
+                        <button
+                            key={sem}
+                            onClick={() => setFilterSemester(sem)}
+                            style={{
+                                padding: '0.5rem 1rem',
+                                borderRadius: '20px',
+                                border: filterSemester === sem ? '2px solid #2563eb' : '1px solid #e5e7eb',
+                                background: filterSemester === sem ? 'rgba(37, 99, 235, 0.1)' : '#fff',
+                                color: filterSemester === sem ? '#2563eb' : '#6b7280',
+                                fontWeight: filterSemester === sem ? 600 : 500,
+                                fontSize: '0.8125rem',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                            }}
+                        >
+                            Semester {sem}
+                        </button>
+                    ))}
+                </div>
+
                 {/* Filters Row */}
                 <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
                     <Filter size={14} style={{ color: '#9ca3af' }} />
@@ -410,21 +463,11 @@ export default function PreferencesPage() {
                         id="filter-program"
                         className="form-select"
                         value={filterProgram}
-                        onChange={(e) => { setFilterProgram(e.target.value); setFilterSemester(''); }}
+                        onChange={(e) => setFilterProgram(e.target.value)}
                         style={{ minWidth: '160px', fontSize: '0.875rem' }}
                     >
                         <option value="">All Programs</option>
                         {programs.map((p) => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                    <select
-                        id="filter-semester"
-                        className="form-select"
-                        value={filterSemester}
-                        onChange={(e) => setFilterSemester(e.target.value)}
-                        style={{ minWidth: '160px', fontSize: '0.875rem' }}
-                    >
-                        <option value="">All Semesters</option>
-                        {semesters.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <div style={{ position: 'relative', flex: '1 1 200px', minWidth: '180px' }}>
                         <Search size={14} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', pointerEvents: 'none' }} />
@@ -515,9 +558,21 @@ export default function PreferencesPage() {
                                                         <span style={{ color: '#d1d5db' }}>•</span>
                                                         <span style={{ fontSize: '0.875rem', fontWeight: 500, color: isAlreadyUsed ? '#6b7280' : '#374151' }}>{o.course_name}</span>
                                                     </div>
-                                                    <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem', color: '#6b7280' }}>
+                                                    <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem', color: '#6b7280', alignItems: 'center' }}>
                                                         <span>ID {o.subject_offering_id}</span>
                                                         <span>Sec {o.section}</span>
+                                                        <span
+                                                            style={{
+                                                                padding: '2px 8px',
+                                                                borderRadius: '12px',
+                                                                fontSize: '0.6875rem',
+                                                                fontWeight: 600,
+                                                                background: o.shift === 1 ? 'rgba(37, 99, 235, 0.1)' : 'rgba(249, 115, 22, 0.1)',
+                                                                color: o.shift === 1 ? '#2563eb' : '#f97316',
+                                                            }}
+                                                        >
+                                                            Shift {o.shift}
+                                                        </span>
                                                         <span>TCH {o.tch}</span>
                                                         {o.allocated && o.faculty_name && (
                                                             <span style={{ color: '#16a34a' }}>✓ {o.faculty_name}</span>
@@ -570,28 +625,27 @@ export default function PreferencesPage() {
                     {selectedOffering && (
                         <div style={{
                             display: 'flex', alignItems: 'center', gap: '0.75rem',
-                            padding: '0.625rem 1rem', marginBottom: '1rem', borderRadius: '8px',
-                            background: 'rgba(37, 99, 235, 0.06)', border: '1px solid rgba(37, 99, 235, 0.15)',
+                            padding: '0.75rem 1rem', borderRadius: '8px',
+                            background: 'rgba(37, 99, 235, 0.05)', border: '1px solid rgba(37, 99, 235, 0.2)',
+                            marginBottom: '1rem',
                         }}>
-                            <BookOpen size={16} style={{ color: '#2563eb', flexShrink: 0 }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
-                                <span style={{ fontWeight: 600, fontSize: '0.875rem', color: '#111827' }}>
-                                    {selectedOffering.course_code}
-                                </span>
-                                <span style={{ color: '#d1d5db', margin: '0 0.375rem' }}>•</span>
-                                <span style={{ fontSize: '0.875rem', color: '#374151' }}>
-                                    {selectedOffering.course_name}
-                                </span>
-                                <span style={{ color: '#6b7280', fontSize: '0.75rem', marginLeft: '0.5rem' }}>
-                                    ({selectedOffering.program}, {selectedOffering.semester}, Sec {selectedOffering.section})
-                                </span>
+                                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#111827' }}>
+                                    {selectedOffering.course_code} — {selectedOffering.course_name}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                                    {selectedOffering.program} • {selectedOffering.semester} • Sec {selectedOffering.section} • Shift {selectedOffering.shift}
+                                </div>
                             </div>
                             <button
-                                onClick={() => { setOfferingId(''); setDuplicateError(''); }}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', lineHeight: 0 }}
+                                onClick={() => setOfferingId('')}
+                                style={{
+                                    background: 'none', border: 'none', cursor: 'pointer',
+                                    color: '#6b7280', padding: '4px', lineHeight: 0,
+                                }}
                                 title="Clear selection"
                             >
-                                <XCircle size={16} />
+                                <XCircle size={18} />
                             </button>
                         </div>
                     )}
@@ -599,94 +653,50 @@ export default function PreferencesPage() {
                     {/* Duplicate error */}
                     {duplicateError && (
                         <div style={{
-                            padding: '0.625rem 1rem', marginBottom: '1rem', borderRadius: '8px',
-                            background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)',
-                            color: '#dc2626', fontSize: '0.8125rem', fontWeight: 500,
-                            display: 'flex', alignItems: 'center', gap: '0.5rem',
+                            padding: '0.75rem 1rem', borderRadius: '8px',
+                            background: 'rgba(220, 38, 38, 0.05)', border: '1px solid rgba(220, 38, 38, 0.2)',
+                            marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem',
                         }}>
-                            <AlertCircle size={15} style={{ flexShrink: 0 }} />
-                            {duplicateError}
+                            <AlertCircle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
+                            <span style={{ fontSize: '0.8125rem', color: '#dc2626' }}>{duplicateError}</span>
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                            <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>
-                                Subject Offering ID
-                            </label>
-                            <input
-                                type="number" className="form-input" value={offeringId}
-                                onChange={(e) => { setOfferingId(e.target.value); setDuplicateError(''); }}
-                                placeholder="Click a subject above"
-                                style={{ width: '180px' }}
-                            />
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                            <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>
+                    <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end' }}>
+                        <div style={{ flex: 1 }}>
+                            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', marginBottom: '0.375rem' }}>
                                 Preference Number
                             </label>
                             <select
                                 className="form-select"
                                 value={prefNum}
-                                onChange={(e) => { setPrefNum(e.target.value); setDuplicateError(''); }}
-                                style={{ width: '150px' }}
+                                onChange={(e) => setPrefNum(e.target.value)}
+                                disabled={!offeringId || availablePrefNumbers.length === 0}
+                                style={{ width: '100%' }}
                             >
-                                <option value="">Select</option>
+                                <option value="">Select...</option>
                                 {availablePrefNumbers.map((n) => (
-                                    <option key={n} value={n}>Pref {n}</option>
+                                    <option key={n} value={n}>Preference {n}</option>
                                 ))}
                             </select>
                         </div>
-                        <button type="submit" className="btn btn-primary" disabled={!canSubmit}>
+                        <button
+                            type="submit"
+                            className="btn btn-primary"
+                            disabled={!canSubmit}
+                            style={{ padding: '0.625rem 1.5rem' }}
+                        >
                             {submitLabel}
                         </button>
                     </form>
+
+                    {!offeringId && (
+                        <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.75rem', textAlign: 'center' }}>
+                            Click a subject from the catalog above to select it
+                        </p>
+                    )}
                 </div>
             )}
-
-            {/* Current Preferences Table */}
-            <div className="glass-card" style={{ overflow: 'hidden', marginBottom: '1.5rem' }}>
-                <table className="data-table">
-                    <thead>
-                        <tr>
-                            <th>Pref #</th>
-                            <th>Code</th>
-                            <th>Subject</th>
-                            <th>Program</th>
-                            <th>Sem</th>
-                            <th>Section</th>
-                            <th>TCH</th>
-                            <th style={{ width: '60px' }}></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {preferences.length === 0 ? (
-                            <tr>
-                                <td colSpan={8} style={{ textAlign: 'center', color: '#6b7280', padding: '2rem' }}>
-                                    No preferences submitted yet
-                                </td>
-                            </tr>
-                        ) : (
-                            preferences.map((p) => (
-                                <tr key={p.id}>
-                                    <td><span className="badge badge-info">{p.preference_number}</span></td>
-                                    <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#111827' }}>{p.subject_code}</td>
-                                    <td>{p.subject_name}</td>
-                                    <td>{p.program}</td>
-                                    <td>{p.semester}</td>
-                                    <td>{p.section}</td>
-                                    <td>{p.tch}</td>
-                                    <td>
-                                        <button onClick={() => handleDelete(p.id)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem' }}>
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
         </div>
     );
 }
