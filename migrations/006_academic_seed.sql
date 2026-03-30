@@ -22,7 +22,8 @@ ALTER TABLE subject ALTER COLUMN specialization_id DROP NOT NULL;
 
 INSERT INTO program (id, name, ug_pg) VALUES
 (1, 'MCA', 'PG'),
-(2, 'BCA', 'UG');
+(2, 'BCA', 'UG')
+ON CONFLICT (id) DO NOTHING;
 
 SELECT setval('program_id_seq', 2, true);
 
@@ -36,7 +37,8 @@ INSERT INTO semester (id, label) VALUES
 (3, 'III'),
 (4, 'IV'),
 (5, 'V'),
-(6, 'VI');
+(6, 'VI')
+ON CONFLICT (id) DO NOTHING;
 
 SELECT setval('semester_id_seq', 6, true);
 
@@ -52,7 +54,8 @@ INSERT INTO section (id, label, shift) VALUES
 (3, 'C', 1),
 (4, 'D', 1),
 (5, 'E', 1),
-(6, 'F', 1);
+(6, 'F', 1)
+ON CONFLICT (id) DO NOTHING;
 
 SELECT setval('section_id_seq', 6, true);
 
@@ -73,7 +76,8 @@ INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_
 ('CCA42002', 'Data Communication and Networking', 2, 1, 0, 3, 3, 'PC', 'TH'),
 ('CCA42003', 'Software Engineering Concepts', 3, 0, 0, 3, 3, 'PC', 'TH'),
 ('CCA42004', 'Advanced Data Structures and Algorithms', 3, 0, 2, 4, 5, 'PC', 'TP'),
-('CCA42005', 'Python Programming', 2, 0, 2, 3, 4, 'PC', 'TP');
+('CCA42005', 'Python Programming', 2, 0, 2, 3, 4, 'PC', 'TP')
+ON CONFLICT (code) DO NOTHING;
 
 -- MCA Semester II
 INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_type) VALUES
@@ -81,7 +85,8 @@ INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_
 ('CCA42007', 'Full Stack Web Development', 2, 0, 2, 3, 4, 'PC', 'TP'),
 ('CCA42008', 'Advanced Database Technologies', 2, 0, 2, 3, 4, 'PC', 'TP'),
 ('CCA42009', 'Research Methodology and IPR', 3, 0, 0, 3, 3, 'BS', 'TH'),
-('CCA42400', 'Software Design Project', 0, 0, 4, 2, 4, 'PC', 'PR');
+('CCA42400', 'Software Design Project', 0, 0, 4, 2, 4, 'PC', 'PR')
+ON CONFLICT (code) DO NOTHING;
 
 -- MCA Semester III
 INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_type) VALUES
@@ -89,11 +94,13 @@ INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_
 ('CCA42011', 'Cryptography and Network Security', 3, 0, 2, 4, 5, 'PC', 'TP'),
 ('CEL42001', 'Communication Skills and Professional Development', 2, 0, 2, 3, 4, 'BS', 'TP'),
 ('CCA42800', 'Research Paper Review', 0, 0, 6, 3, 6, 'PC', 'PR'),
-('CCA42801', 'Internship', 0, 0, 0, 2, 0, 'PC', 'IN');
+('CCA42801', 'Internship', 0, 0, 0, 2, 0, 'PC', 'IN')
+ON CONFLICT (code) DO NOTHING;
 
 -- MCA Semester IV
 INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_type) VALUES
-('CCA42802', 'Project Work', 0, 0, 40, 20, 40, 'PC', 'PJ');
+('CCA42802', 'Project Work', 0, 0, 40, 20, 40, 'PC', 'PJ')
+ON CONFLICT (code) DO NOTHING;
 
 -- ============================================================================
 -- STEP 4b: Subjects — MCA Department Electives
@@ -105,7 +112,8 @@ INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_
 ('CCA42500', 'Cloud Computing Concepts', 3, 0, 0, 3, 3, 'DE', 'TH'),
 ('CCA42501', 'Internet of Things', 3, 0, 0, 3, 3, 'DE', 'TH'),
 ('CCA42502', 'Big Data Framework', 3, 0, 0, 3, 3, 'DE', 'TH'),
-('CCA42503', 'Virtualization Techniques', 3, 0, 0, 3, 3, 'DE', 'TH');
+('CCA42503', 'Virtualization Techniques', 3, 0, 0, 3, 3, 'DE', 'TH')
+ON CONFLICT (code) DO NOTHING;
 
 -- DE-2 (Semester II)
 INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_type) VALUES
@@ -113,14 +121,16 @@ INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_
 ('CCA42505', 'BlockChain Technology', 2, 0, 2, 3, 4, 'DE', 'TP'),
 ('CCA42506', 'R Programming', 2, 0, 2, 3, 4, 'DE', 'TP'),
 ('CCA42507', 'Cloud Application Development', 2, 0, 2, 3, 4, 'DE', 'TP'),
-('CCA42508', 'Cloud Managed Services', 2, 0, 2, 3, 4, 'DE', 'TP');
+('CCA42508', 'Cloud Managed Services', 2, 0, 2, 3, 4, 'DE', 'TP')
+ON CONFLICT (code) DO NOTHING;
 
 -- DE-3 (Semester III)
 INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_type) VALUES
 ('CCA42509', 'Natural Language Processing', 2, 0, 2, 3, 4, 'DE', 'TP'),
 ('CCA42510', 'Principles of Deep Learning', 2, 0, 2, 3, 4, 'DE', 'TP'),
 ('CCA42511', 'Data Classification Methods and Evaluation', 2, 0, 2, 3, 4, 'DE', 'TP'),
-('CCA42512', 'Cloud Computing with Web Services', 2, 0, 2, 3, 4, 'DE', 'TP');
+('CCA42512', 'Cloud Computing with Web Services', 2, 0, 2, 3, 4, 'DE', 'TP')
+ON CONFLICT (code) DO NOTHING;
 
 -- DE-4 (Semester III)
 INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_type) VALUES
@@ -128,7 +138,8 @@ INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_
 ('CCA42514', 'Big Data Analytics', 2, 0, 2, 3, 4, 'DE', 'TP'),
 ('CCA42515', 'Predictive Analytics', 2, 0, 2, 3, 4, 'DE', 'TP'),
 ('CCA42516', 'Cloud Security', 2, 0, 2, 3, 4, 'DE', 'TP'),
-('CCA42517', 'Cloud Platform Essentials', 2, 0, 2, 3, 4, 'DE', 'TP');
+('CCA42517', 'Cloud Platform Essentials', 2, 0, 2, 3, 4, 'DE', 'TP')
+ON CONFLICT (code) DO NOTHING;
 
 -- ============================================================================
 -- STEP 4c: Subjects — BCA Core (Semesters I-VI)
@@ -151,7 +162,8 @@ INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_
 ('AVC31401', 'Fine Arts', 0, 0, 2, 1, 2, 'VA', 'PR'),
 ('GGE51401', 'Outreach (NCC) Level-I', 0, 0, 2, 1, 2, 'HS', 'PR'),
 ('GGE51402', 'Outreach (NSS) Level-I', 0, 0, 2, 1, 2, 'HS', 'PR'),
-('ASS21001', 'Community Development', 1, 0, 1, 0, 2, 'NC', 'TP');
+('ASS21001', 'Community Development', 1, 0, 1, 0, 2, 'NC', 'TP')
+ON CONFLICT (code) DO NOTHING;
 
 -- BCA Semester II
 INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_type) VALUES
@@ -164,7 +176,8 @@ INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_
 ('GLS51008', 'Tamil', 2, 0, 0, 2, 2, 'HS', 'TH'),
 ('GLS51009', 'Hindi', 2, 0, 0, 2, 2, 'HS', 'TH'),
 ('GLS51010', 'Telugu', 2, 0, 0, 2, 2, 'HS', 'TH'),
-('GLS11002', 'Advanced Tamil', 2, 0, 0, 2, 2, 'HS', 'TH');
+('GLS11002', 'Advanced Tamil', 2, 0, 0, 2, 2, 'HS', 'TH')
+ON CONFLICT (code) DO NOTHING;
 
 -- BCA Semester III
 INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_type) VALUES
@@ -179,7 +192,8 @@ INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_
 ('GLS51005', 'Public Speaking', 1, 0, 1, 1, 2, 'HS', 'TP'),
 ('GGE51015', 'Indian Knowledge System', 3, 0, 0, 0, 3, 'NC', 'TH'),
 ('ABB31001', 'CSR and SDG', 1, 0, 2, 0, 3, 'NC', 'TP'),
-('ACA31800', 'Internship', 0, 0, 0, 4, 0, 'SI', 'IN');
+('ACA31800', 'Internship', 0, 0, 0, 4, 0, 'SI', 'IN')
+ON CONFLICT (code) DO NOTHING;
 
 -- BCA Semester IV
 INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_type) VALUES
@@ -203,7 +217,8 @@ INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_
 ('ACY31003', 'Cyber Security and SIEM', 3, 0, 2, 4, 5, 'CC', 'TP'),
 ('ACY31004', 'Security Ethics', 3, 0, 2, 4, 5, 'CC', 'TP'),
 ('ACY31400', 'Python Programming Laboratory', 0, 0, 2, 1, 2, 'CC', 'PR'),
-('ACY31005', 'Industrial Cyber Threat Management', 2, 0, 0, 2, 2, 'CC', 'TH');
+('ACY31005', 'Industrial Cyber Threat Management', 2, 0, 0, 2, 2, 'CC', 'TH')
+ON CONFLICT (code) DO NOTHING;
 
 -- BCA Semester VI (Cyber Security specialization)
 INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_type) VALUES
@@ -211,7 +226,8 @@ INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_
 ('ACY31007', 'Secure Coding Practices', 3, 1, 0, 4, 4, 'CC', 'TH'),
 ('ACY31008', 'Industrial Access Control Models and Practices', 2, 0, 0, 2, 2, 'NC', 'TH'),
 ('GGE51001', 'Universal Human Values', 2, 0, 0, 2, 2, 'HS', 'TH'),
-('ACY31800', 'Project', 0, 0, 14, 7, 14, 'RP', 'PJ');
+('ACY31800', 'Project', 0, 0, 14, 7, 14, 'RP', 'PJ')
+ON CONFLICT (code) DO NOTHING;
 
 -- ============================================================================
 -- STEP 4d: Subjects — BCA Electives
@@ -225,7 +241,8 @@ INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_
 ('ACA31502', 'Graphic Design', 2, 0, 2, 3, 4, 'DE', 'TP'),
 ('ACA31503', 'Digital Media and Visual Effects', 2, 0, 2, 3, 4, 'DE', 'TP'),
 ('ACA31504', 'Advanced Database Technologies', 2, 0, 2, 3, 4, 'DE', 'TP'),
-('ACA31505', 'Data Science Tools', 2, 0, 2, 3, 4, 'DE', 'TP');
+('ACA31505', 'Data Science Tools', 2, 0, 2, 3, 4, 'DE', 'TP')
+ON CONFLICT (code) DO NOTHING;
 
 -- DE-2 (Semester IV)
 INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_type) VALUES
@@ -234,17 +251,20 @@ INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_
 ('ACA31510', '2-D Animation and Editing', 2, 0, 2, 3, 4, 'DE', 'TP'),
 ('ACA31511', '3-D Architectural Visualization and Visual FX', 2, 0, 2, 3, 4, 'DE', 'TP'),
 ('ACA31512', 'Data Modelling and Integration', 2, 0, 2, 3, 4, 'DE', 'TP'),
-('ACA31513', 'Databases in R Programming', 2, 0, 2, 3, 4, 'DE', 'TP');
+('ACA31513', 'Databases in R Programming', 2, 0, 2, 3, 4, 'DE', 'TP')
+ON CONFLICT (code) DO NOTHING;
 
 -- DE-3 (Semester V — Cyber)
 INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_type) VALUES
 ('ACY31500', 'Principles of Computer Security', 2, 0, 2, 3, 4, 'DE', 'TP'),
-('ACY31501', 'Cyber Forensics', 2, 0, 2, 3, 4, 'DE', 'TP');
+('ACY31501', 'Cyber Forensics', 2, 0, 2, 3, 4, 'DE', 'TP')
+ON CONFLICT (code) DO NOTHING;
 
 -- DE-4 (Semester VI — Cyber)
 INSERT INTO subject (code, name, l, t, p, credits, tch, course_category, course_type) VALUES
 ('ACY31502', 'Cyber Security Techniques and Tools', 2, 0, 2, 3, 4, 'DE', 'TP'),
-('ACY31503', 'IOT Security', 2, 0, 2, 3, 4, 'DE', 'TP');
+('ACY31503', 'IOT Security', 2, 0, 2, 3, 4, 'DE', 'TP')
+ON CONFLICT (code) DO NOTHING;
 
 -- ============================================================================
 -- STEP 5: Subject Offerings
@@ -260,7 +280,8 @@ SELECT s.id, 1, 1, sec.id, 1, '2025-2026', 'EVEN'
 FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('CMA42001','CCM42001','CCA42001','CCA42002','CCA42003','CCA42004','CCA42005')
-AND sec.id <= 3;
+AND sec.id <= 3
+ON CONFLICT DO NOTHING;
 
 -- MCA Semester II offerings (5 core + elective slots × 3 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -268,7 +289,8 @@ SELECT s.id, 1, 2, sec.id, 1, '2025-2026', 'EVEN'
 FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('CCA42006','CCA42007','CCA42008','CCA42009','CCA42400')
-AND sec.id <= 3;
+AND sec.id <= 3
+ON CONFLICT DO NOTHING;
 
 -- MCA Semester II electives (DE-1 pool × 3 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -277,7 +299,8 @@ FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('CCA42500','CCA42501','CCA42502','CCA42503',
                  'CCA42504','CCA42505','CCA42506','CCA42507','CCA42508')
-AND sec.id <= 3;
+AND sec.id <= 3
+ON CONFLICT DO NOTHING;
 
 -- MCA Semester III offerings (5 core × 3 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -285,7 +308,8 @@ SELECT s.id, 1, 3, sec.id, 1, '2025-2026', 'EVEN'
 FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('CCA42010','CCA42011','CEL42001','CCA42800','CCA42801')
-AND sec.id <= 3;
+AND sec.id <= 3
+ON CONFLICT DO NOTHING;
 
 -- MCA Semester III electives (DE-3/DE-4 pool × 3 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -294,7 +318,8 @@ FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('CCA42509','CCA42510','CCA42511','CCA42512',
                  'CCA42513','CCA42514','CCA42515','CCA42516','CCA42517')
-AND sec.id <= 3;
+AND sec.id <= 3
+ON CONFLICT DO NOTHING;
 
 -- MCA Semester IV offerings (1 project × 3 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -302,7 +327,8 @@ SELECT s.id, 1, 4, sec.id, 1, '2025-2026', 'EVEN'
 FROM subject s
 CROSS JOIN section sec
 WHERE s.code = 'CCA42802'
-AND sec.id <= 3;
+AND sec.id <= 3
+ON CONFLICT DO NOTHING;
 
 -- BCA Semester I offerings (core subjects × 6 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -310,7 +336,8 @@ SELECT s.id, 2, 1, sec.id, 1, '2025-2026', 'EVEN'
 FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('ACA31002','ACA31003','ACA31004','GMA31001','GLS51001','GLS11001','GGE51003')
-AND sec.id <= 6;
+AND sec.id <= 6
+ON CONFLICT DO NOTHING;
 
 -- BCA Semester II offerings (core subjects × 6 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -318,7 +345,8 @@ SELECT s.id, 2, 2, sec.id, 1, '2025-2026', 'EVEN'
 FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('ACA31005','ACA31006','ACA31007','ACA31008','GLS51002','ACA31001')
-AND sec.id <= 6;
+AND sec.id <= 6
+ON CONFLICT DO NOTHING;
 
 -- BCA Semester III offerings (core + language subjects × 6 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -326,7 +354,8 @@ SELECT s.id, 2, 3, sec.id, 1, '2025-2026', 'EVEN'
 FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('ACA31010','ACA31009','GLS51005','GGE51015','ABB31001')
-AND sec.id <= 6;
+AND sec.id <= 6
+ON CONFLICT DO NOTHING;
 
 -- BCA Semester III electives (DE-1 × 6 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -334,7 +363,8 @@ SELECT s.id, 2, 3, sec.id, 1, '2025-2026', 'EVEN'
 FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('ACA31500','ACA31501','ACA31502','ACA31503','ACA31504','ACA31505')
-AND sec.id <= 6;
+AND sec.id <= 6
+ON CONFLICT DO NOTHING;
 
 -- BCA Semester IV offerings (core × 6 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -342,7 +372,8 @@ SELECT s.id, 2, 4, sec.id, 1, '2025-2026', 'EVEN'
 FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('ACA31011','ACA31015','ACA31012','ACA31014','ACM31001','GLS51006')
-AND sec.id <= 6;
+AND sec.id <= 6
+ON CONFLICT DO NOTHING;
 
 -- BCA Semester IV electives (DE-2 × 6 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -350,7 +381,8 @@ SELECT s.id, 2, 4, sec.id, 1, '2025-2026', 'EVEN'
 FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('ACA31508','ACA31509','ACA31510','ACA31511','ACA31512','ACA31513')
-AND sec.id <= 6;
+AND sec.id <= 6
+ON CONFLICT DO NOTHING;
 
 -- BCA Semester V offerings (Cyber core × 6 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -358,7 +390,8 @@ SELECT s.id, 2, 5, sec.id, 1, '2025-2026', 'EVEN'
 FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('ACY31001','ACY31002','ACY31003','ACY31004','ACY31400','ACY31005')
-AND sec.id <= 6;
+AND sec.id <= 6
+ON CONFLICT DO NOTHING;
 
 -- BCA Semester V electives (DE-3 × 6 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -366,7 +399,8 @@ SELECT s.id, 2, 5, sec.id, 1, '2025-2026', 'EVEN'
 FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('ACY31500','ACY31501')
-AND sec.id <= 6;
+AND sec.id <= 6
+ON CONFLICT DO NOTHING;
 
 -- BCA Semester VI offerings (core × 6 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -374,7 +408,8 @@ SELECT s.id, 2, 6, sec.id, 1, '2025-2026', 'EVEN'
 FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('ACY31006','ACY31007','ACY31008','GGE51001','ACY31800')
-AND sec.id <= 6;
+AND sec.id <= 6
+ON CONFLICT DO NOTHING;
 
 -- BCA Semester VI electives (DE-4 × 6 sections)
 INSERT INTO subject_offering (subject_id, program_id, semester_id, section_id, shift, academic_year, semester_type)
@@ -382,7 +417,8 @@ SELECT s.id, 2, 6, sec.id, 1, '2025-2026', 'EVEN'
 FROM subject s
 CROSS JOIN section sec
 WHERE s.code IN ('ACY31502','ACY31503')
-AND sec.id <= 6;
+AND sec.id <= 6
+ON CONFLICT DO NOTHING;
 
 -- ============================================================================
 -- STEP 6: Verification
