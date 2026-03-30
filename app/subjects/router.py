@@ -4,11 +4,9 @@ Provides endpoints for TT Coordinator to manage subject offerings, programs, and
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 
-from app.db.session import get_db
 from app.auth.dependencies import get_current_coordinator_id
 from app.subjects import service
 
@@ -42,80 +40,95 @@ class ProgramCreate(BaseModel):
 
 @router.get("/programs")
 def list_programs(
-    session: Session = Depends(get_db),
     coordinator_id: int = Depends(get_current_coordinator_id)
 ):
     """Get all active programs."""
-    return service.get_all_programs(session)
+    from app.db.session import get_transaction
+    with get_transaction() as session:
+        return service.get_all_programs(session)
 
 
 @router.get("/sections")
 def list_sections(
-    session: Session = Depends(get_db),
     coordinator_id: int = Depends(get_current_coordinator_id)
 ):
     """Get all sections."""
-    return service.get_all_sections(session)
+    from app.db.session import get_transaction
+    with get_transaction() as session:
+        return service.get_all_sections(session)
 
 
 @router.get("/semesters")
 def list_semesters(
-    session: Session = Depends(get_db),
     coordinator_id: int = Depends(get_current_coordinator_id)
 ):
     """Get all semesters."""
-    return service.get_all_semesters(session)
+    from app.db.session import get_transaction
+    with get_transaction() as session:
+        return service.get_all_semesters(session)
 
 
 @router.get("/offerings")
 def list_offerings(
     semester_id: Optional[int] = None,
     program_id: Optional[int] = None,
-    session: Session = Depends(get_db),
     coordinator_id: int = Depends(get_current_coordinator_id)
 ):
     """Get all subject offerings with optional filters."""
-    return service.get_all_offerings(session, semester_id, program_id)
+    from app.db.session import get_transaction
+    with get_transaction() as session:
+        return service.get_all_offerings(session, semester_id, program_id)
 
 
 @router.post("/offerings")
 def create_offering(
     data: OfferingCreate,
-    session: Session = Depends(get_db),
     coordinator_id: int = Depends(get_current_coordinator_id)
 ):
     """Create a new subject offering."""
-    result = service.create_offering(session, data.dict())
-    if not result["success"]:
-        raise HTTPException(status_code=400, detail=result["message"])
-    return result
+    from app.db.session import get_transaction
+    with get_transaction() as session:
+        result = service.create_offering(session, data.dict())
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["message"])
+        session.commit()
+        return result
 
 
 @router.delete("/offerings/{offering_id}")
 def delete_offering(
     offering_id: int,
-    session: Session = Depends(get_db),
     coordinator_id: int = Depends(get_current_coordinator_id)
 ):
     """Delete or archive a subject offering."""
-    return service.delete_offering(session, offering_id)
+    from app.db.session import get_transaction
+    with get_transaction() as session:
+        result = service.delete_offering(session, offering_id)
+        session.commit()
+        return result
 
 
 @router.post("/sections")
 def create_section(
     data: SectionCreate,
-    session: Session = Depends(get_db),
     coordinator_id: int = Depends(get_current_coordinator_id)
 ):
     """Create a new section."""
-    return service.add_section(session, data.label, data.shift)
+    from app.db.session import get_transaction
+    with get_transaction() as session:
+        result = service.add_section(session, data.label, data.shift)
+        session.commit()
+        return result
 
 
 @router.post("/programs")
 def create_program(
     data: ProgramCreate,
-    session: Session = Depends(get_db),
     coordinator_id: int = Depends(get_current_coordinator_id)
 ):
     """Create a new program."""
-    return service.add_program(session, data.name, data.ug_pg)
+    from app.db.session import get_transaction
+    with get_transaction() as session:
+        result = service.add_program(session, data.name, data.ug_pg)
+        session.commit()
+        return result
