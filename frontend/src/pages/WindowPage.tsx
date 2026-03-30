@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { openPrefWindow, closePrefWindow, getPrefWindowStatus } from '../api/client';
+import { closePrefWindow, getPrefWindowStatus } from '../api/client';
 import { useToast } from '../hooks/useToast';
 import ToastContainer from '../components/ToastContainer';
 import { Clock, DoorOpen, DoorClosed, RefreshCw, AlertCircle, Settings } from 'lucide-react';
+import axios from 'axios';
 
 export default function WindowPage() {
     const [status, setStatus] = useState<any>(null);
@@ -10,7 +11,7 @@ export default function WindowPage() {
     const [submitting, setSubmitting] = useState(false);
     const { toasts, addToast, removeToast } = useToast();
     const [year, setYear] = useState('2025-2026');
-    const [semesterId, setSemesterId] = useState(2); // Default to Semester II
+    const [semesterGroup, setSemesterGroup] = useState<'ODD' | 'EVEN'>('EVEN');
     const [startTime, setStartTime] = useState('');
     const [endTime, setEndTime] = useState('');
     const [error, setError] = useState('');
@@ -50,12 +51,25 @@ export default function WindowPage() {
         if (!startTime || !endTime) return;
         setSubmitting(true);
         try {
-            await openPrefWindow({
-                academic_year: year, semester_id: semesterId,
+            const baseURL = import.meta.env.VITE_API_URL 
+                ? `${import.meta.env.VITE_API_URL}/api`
+                : '/api';
+            const token = localStorage.getItem('jwt_token');
+            
+            await axios.post(`${baseURL}/pref-window/open-group`, {
+                semester_group: semesterGroup,
+                academic_year: year,
                 start_time: new Date(startTime).toISOString(),
                 end_time: new Date(endTime).toISOString(),
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                withCredentials: true,
             });
-            addToast('Preference window opened', 'success');
+            
+            addToast(`Preference window opened for ${semesterGroup} semesters`, 'success');
             loadStatus();
         } catch (err: any) {
             addToast(err.response?.data?.detail || 'Failed to open window', 'error');
@@ -140,8 +154,10 @@ export default function WindowPage() {
                             <div style={{ fontSize: '0.875rem', fontWeight: 500, color: '#111827' }}>{status.end_time}</div>
                         </div>
                         <div className="stat-card glass-card flex flex-col justify-center">
-                            <div className="stat-label mb-1">Year / Semester</div>
-                            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: '#111827' }}>{status.academic_year} / Semester {status.semester_id}</div>
+                            <div className="stat-label mb-1">Year / Semesters</div>
+                            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: '#111827' }}>
+                                {status.academic_year} / {status.semester_id && (status.semester_id % 2 === 0 ? 'EVEN (II, IV, VI)' : 'ODD (I, III, V)')}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -166,17 +182,40 @@ export default function WindowPage() {
                                 <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>Academic Year</label>
                                 <input className="form-input w-40" value={year} onChange={(e) => setYear(e.target.value)} />
                             </div>
-                            <div className="flex flex-col gap-1.5">
-                                <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>Semester</label>
-                                <select className="form-select w-32" value={semesterId} onChange={(e) => setSemesterId(Number(e.target.value))}>
-                                    <option value={1}>I</option>
-                                    <option value={2}>II</option>
-                                    <option value={3}>III</option>
-                                    <option value={4}>IV</option>
-                                    <option value={5}>V</option>
-                                    <option value={6}>VI</option>
-                                </select>
+                            
+                            {/* Semester Group Selection */}
+                            <div style={{ flex: '1 1 100%', marginBottom: '8px' }}>
+                                <label style={{ fontWeight: 600, color: '#374151', display: 'block', marginBottom: '8px', fontSize: '0.8125rem', paddingLeft: '0.25rem' }}>Semester Group</label>
+                                <div style={{ display: 'flex', gap: '12px' }}>
+                                    <div
+                                        onClick={() => setSemesterGroup('ODD')}
+                                        style={{
+                                            flex: 1, padding: '16px', border: '2px solid',
+                                            borderColor: semesterGroup === 'ODD' ? '#2563eb' : '#e5e7eb',
+                                            borderRadius: '10px', cursor: 'pointer', textAlign: 'center',
+                                            background: semesterGroup === 'ODD' ? '#eff6ff' : 'white',
+                                            transition: 'all 0.2s ease',
+                                        }}
+                                    >
+                                        <div style={{ fontWeight: 700, color: '#1d4ed8', fontSize: '16px' }}>ODD Semesters</div>
+                                        <div style={{ color: '#6b7280', fontSize: '13px', marginTop: '4px' }}>I, III, V</div>
+                                    </div>
+                                    <div
+                                        onClick={() => setSemesterGroup('EVEN')}
+                                        style={{
+                                            flex: 1, padding: '16px', border: '2px solid',
+                                            borderColor: semesterGroup === 'EVEN' ? '#7c3aed' : '#e5e7eb',
+                                            borderRadius: '10px', cursor: 'pointer', textAlign: 'center',
+                                            background: semesterGroup === 'EVEN' ? '#f5f3ff' : 'white',
+                                            transition: 'all 0.2s ease',
+                                        }}
+                                    >
+                                        <div style={{ fontWeight: 700, color: '#7c3aed', fontSize: '16px' }}>EVEN Semesters</div>
+                                        <div style={{ color: '#6b7280', fontSize: '13px', marginTop: '4px' }}>II, IV, VI</div>
+                                    </div>
+                                </div>
                             </div>
+                            
                             <div className="flex flex-col gap-1.5">
                                 <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem' }}>Start Time</label>
                                 <input type="datetime-local" className="form-input" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
@@ -189,7 +228,7 @@ export default function WindowPage() {
                         <div className="pt-2 border-t border-gray-100">
                             <button type="submit" className="btn btn-primary mt-4" disabled={submitting || !startTime || !endTime}>
                                 <DoorOpen size={16} />
-                                {submitting ? 'Opening...' : 'Open Window'}
+                                {submitting ? 'Opening...' : `Open Window for ${semesterGroup} Semesters`}
                             </button>
                         </div>
                     </form>
