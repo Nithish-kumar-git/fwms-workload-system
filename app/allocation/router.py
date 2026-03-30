@@ -192,3 +192,100 @@ async def run_allocation(
         unallocated=unalloc_records,
         workload_summary=wl_summaries,
     )
+
+
+@router.post("/run-all")
+async def run_all_open_semesters(
+    coordinator_id: int = Depends(get_current_coordinator_id),
+):
+    """
+    Run allocation for ALL open cycles at once.
+    Processes all cycles with status='OPEN' regardless of academic year.
+    """
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    # Get all open cycles
+    with get_transaction() as session:
+        open_cycles = session.execute(
+            text("""
+                SELECT c.id, c.semester_id, ay.name as academic_year
+                FROM cycle c
+                JOIN academic_year ay ON ay.id = c.academic_year_id
+                WHERE c.status = 'OPEN'
+                ORDER BY c.semester_id
+            """)
+        ).fetchall()
+        
+        if not open_cycles:
+            raise HTTPException(
+                status_code=400,
+                detail="No open cycles found. Please open cycles first."
+            )
+        
+        # Reset all non-FROZEN semesters and clear allocations
+        session.execute(
+            text("UPDATE semester SET state = 'CLOSED', allocated_at = NULL WHERE state != 'FROZEN'")
+        )
+        session.execute(
+            text("""
+                DELETE FROM allocation 
+                WHERE subject_offering_id IN (
+                    SELECT so.id FROM subject_offering so
+                    JOIN semester sem ON sem.id = so.semester_id
+                    WHERE sem.state != 'FROZEN'
+                )
+            """)
+        )
+        session.commit()
+    
+    logger.info(f"Running allocation for {len(open_cycles)} open cycles")
+    
+    # Run allocation for each open cycle
+    results = []
+    total_assigned = 0
+    total_unassigned = 0
+    
+    for cycle_row in open_cycles:
+        try:
+            result = allocation_service.run_allocation(
+                academic_year=cycle_row.academic_year,
+                semester_type=None,
+                academic_cycle_id=None,
+                program_id=None,
+                semester_id=cycle_row.semester_id
+            )
+            
+            results.append({
+                "semester_id": cycle_row.semester_id,
+                "status": "success",
+                "assigned": result["subjects_assigned"],
+                "unassigned": result["subjects_unassigned"],
+            })
+            
+            total_assigned += result["subjects_assigned"]
+            total_unassigned += result["subjects_unassigned"]
+            
+        except Exception as e:
+            logger.error(f"Failed to allocate semester {cycle_row.semester_id}: {e}")
+            results.append({
+                "semester_id": cycle_row.semester_id,
+                "status": "error",
+                "error": str(e),
+            })
+    
+    # Mark all semesters as ALLOCATED
+    with get_transaction() as session:
+        session.execute(
+            text("UPDATE semester SET state = 'ALLOCATED', allocated_at = now()")
+        )
+        session.commit()
+    
+    return {
+        "success": True,
+        "message": f"Allocated {len(open_cycles)} semesters: {total_assigned} assigned, {total_unassigned} unassigned",
+        "semesters_processed": len(open_cycles),
+        "total_assigned": total_assigned,
+        "total_unassigned": total_unassigned,
+        "results": results,
+    }

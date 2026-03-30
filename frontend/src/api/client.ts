@@ -69,7 +69,7 @@ export const runAllocation = (data: { academic_year: string; semester_id: number
     api.post('/allocation/run', data);
 
 export const runAllocationForAllSemesters = (data: { academic_year: string }) =>
-    api.post('/allocation/run', data);
+    api.post('/allocation/run-all', data);
 
 // ─── Admin ───
 export const getAdminAllocations = () => api.get('/admin/allocations');
