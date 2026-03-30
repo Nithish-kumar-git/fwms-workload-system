@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { getMyPreferences, submitPreference, deletePreference, getPreferenceStatus, getPrefWindowStatus, getSubjectSummary } from '../api/client';
 import { useToast } from '../hooks/useToast';
 import ToastContainer from '../components/ToastContainer';
-import { Trash2, Clock, AlertCircle, RefreshCw, Search, Filter, BookOpen, CheckCircle2, XCircle, X } from 'lucide-react';
+import { Clock, AlertCircle, RefreshCw, Search, Filter, BookOpen, CheckCircle2, XCircle, X } from 'lucide-react';
 
 interface Preference {
     id: number;
