@@ -19,6 +19,7 @@ const coordinatorItems = [
     { path: '/preferences', label: 'My Preferences', icon: BookOpen },
     { path: '/admin/window', label: 'Window', icon: Clock },
     { path: '/admin/cycles', label: 'Cycles', icon: CalendarDays },
+    { path: '/admin/subjects', label: 'Subjects', icon: Upload },
     { path: '/admin/allocation', label: 'Allocation', icon: Settings },
     { path: '/admin/review', label: 'Review', icon: FileText },
     { path: '/admin/reports', label: 'Reports', icon: FileText },

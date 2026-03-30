@@ -144,6 +144,7 @@ export default function App() {
                             <Route path="/admin/reports" element={<ReportsPage />} />
                             <Route path="/admin/window" element={<WindowPage />} />
                             <Route path="/admin/cycles" element={<CyclesPage />} />
+                            <Route path="/admin/subjects" element={<CurriculumUploadPage />} />
                         </Route>
 
                         {/* HOD-only routes */}
