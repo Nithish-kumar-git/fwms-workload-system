@@ -68,6 +68,9 @@ export const getPreferenceStatus = () => api.get('/preferences/status');
 export const runAllocation = (data: { academic_year: string; semester_id: number; program_id: number | null }) =>
     api.post('/allocation/run', data);
 
+export const runAllocationForAllSemesters = (data: { academic_year: string }) =>
+    api.post('/allocation/run', data);
+
 // ─── Admin ───
 export const getAdminAllocations = () => api.get('/admin/allocations');
 
@@ -144,6 +147,11 @@ export const activateCycle = (cycle_id: number) =>
 export const listCycles = () => api.get('/cycles');
 
 export const getActiveCycle = () => api.get('/cycles/active');
+
+export const activateSemesterGroup = (data: {
+    academic_year: string;
+    semester_group: 'ODD' | 'EVEN';
+}) => api.post('/cycles/activate-group', data);
 
 // ─── Pipeline & Approval ───
 export const getPipelineStatus = () => api.get('/reports/pipeline-status');

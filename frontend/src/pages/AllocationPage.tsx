@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { runAllocation, getActiveCycle } from '../api/client';
+import { runAllocation, runAllocationForAllSemesters, getActiveCycle } from '../api/client';
 import { useToast } from '../hooks/useToast';
 import ToastContainer from '../components/ToastContainer';
-import { Play, CheckCircle, AlertTriangle, AlertCircle, Calendar } from 'lucide-react';
+import { Play, CheckCircle, AlertTriangle, AlertCircle, Calendar, Zap } from 'lucide-react';
 
 interface AllocResult {
     success: boolean;
@@ -61,6 +61,30 @@ export default function AllocationPage() {
             
             // Show summary toast
             const summary = `Allocation complete: ${res.data.subjects_assigned} assigned, ${res.data.subjects_unassigned} unallocated`;
+            addToast(summary, res.data.subjects_unassigned > 0 ? 'info' : 'success');
+        } catch (err: any) {
+            const msg = err.response?.data?.detail || 'Allocation failed';
+            addToast(msg, 'error');
+        } finally {
+            setRunning(false);
+        }
+    };
+
+    const handleRunAll = async () => {
+        if (!cycleYear) {
+            addToast('No active academic cycle found', 'error');
+            return;
+        }
+        setRunning(true);
+        setResult(null);
+        try {
+            const res = await runAllocationForAllSemesters({
+                academic_year: cycleYear,
+            });
+            setResult(res.data);
+            
+            // Show summary toast
+            const summary = `All open semesters allocated: ${res.data.subjects_assigned} assigned, ${res.data.subjects_unassigned} unallocated`;
             addToast(summary, res.data.subjects_unassigned > 0 ? 'info' : 'success');
         } catch (err: any) {
             const msg = err.response?.data?.detail || 'Allocation failed';
@@ -132,13 +156,22 @@ export default function AllocationPage() {
                         </select>
                     </div>
                     <div className="ml-2">
-                        <button onClick={handleRun} className="btn btn-primary" disabled={running}>
+                        <button onClick={handleRunAll} className="btn" disabled={running} style={{ background: '#16a34a', color: '#fff', marginBottom: '0.75rem', width: '100%', padding: '0.75rem 1.25rem', fontSize: '0.9375rem', fontWeight: 600 }}>
                             {running ? (
                                 <span className="flex items-center gap-2">
                                     <div className="spinner w-4 h-4 border-2" /> Running...
                                 </span>
                             ) : (
-                                <><Play size={16} /> Run Allocation Engine</>
+                                <><Zap size={18} /> Run All Open Semesters</>
+                            )}
+                        </button>
+                        <button onClick={handleRun} className="btn btn-primary" disabled={running} style={{ width: '100%' }}>
+                            {running ? (
+                                <span className="flex items-center gap-2">
+                                    <div className="spinner w-4 h-4 border-2" /> Running...
+                                </span>
+                            ) : (
+                                <><Play size={16} /> Run Single Semester</>
                             )}
                         </button>
                     </div>
