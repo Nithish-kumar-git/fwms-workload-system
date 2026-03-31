@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { createCycle, activateCycle, listCycles, activateSemesterGroup } from '../api/client';
 import { useToast } from '../hooks/useToast';
 import ToastContainer from '../components/ToastContainer';
-import { CalendarDays, CheckCircle, Plus, Layers } from 'lucide-react';
+import { CalendarDays, CheckCircle, Plus } from 'lucide-react';
 
 interface Cycle {
     id: number;

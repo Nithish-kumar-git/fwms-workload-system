@@ -132,3 +132,34 @@ def create_program(
         result = service.add_program(session, data.name, data.ug_pg)
         session.commit()
         return result
+
+
+
+@router.delete("/sections/{section_id}")
+def delete_section(
+    section_id: int,
+    coordinator_id: int = Depends(get_current_coordinator_id)
+):
+    """Delete a section if not used in any active subject offerings."""
+    from app.db.session import get_transaction
+    with get_transaction() as session:
+        result = service.delete_section(session, section_id)
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["message"])
+        session.commit()
+        return result
+
+
+@router.delete("/programs/{program_id}")
+def delete_program(
+    program_id: int,
+    coordinator_id: int = Depends(get_current_coordinator_id)
+):
+    """Delete a program if not used in any active subject offerings."""
+    from app.db.session import get_transaction
+    with get_transaction() as session:
+        result = service.delete_program(session, program_id)
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["message"])
+        session.commit()
+        return result

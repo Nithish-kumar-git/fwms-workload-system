@@ -185,4 +185,8 @@ export const createSection = (data: any) => api.post('/subjects/sections', data)
 
 export const createProgram = (data: any) => api.post('/subjects/programs', data);
 
+export const deleteSection = (id: number) => api.delete(`/subjects/sections/${id}`);
+
+export const deleteProgram = (id: number) => api.delete(`/subjects/programs/${id}`);
+
 export default api;

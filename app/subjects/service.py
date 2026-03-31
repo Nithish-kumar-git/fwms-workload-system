@@ -247,3 +247,60 @@ def add_program(session, name: str, ug_pg: str):
         "id": row.id,
         "message": f"Program {name} created"
     }
+
+
+
+def delete_section(session, section_id: int):
+    """Delete a section if not used in any active subject offerings."""
+    count = session.execute(
+        text("""
+            SELECT COUNT(*) FROM subject_offering 
+            WHERE section_id = :id AND is_active = true
+        """),
+        {"id": section_id}
+    ).scalar()
+    
+    if count > 0:
+        return {
+            "success": False,
+            "message": f"Cannot delete: used in {count} active subject offerings"
+        }
+    
+    session.execute(
+        text("DELETE FROM section WHERE id = :id"),
+        {"id": section_id}
+    )
+    session.commit()
+    
+    return {
+        "success": True,
+        "message": "Section deleted"
+    }
+
+
+def delete_program(session, program_id: int):
+    """Delete a program if not used in any active subject offerings."""
+    count = session.execute(
+        text("""
+            SELECT COUNT(*) FROM subject_offering 
+            WHERE program_id = :id AND is_active = true
+        """),
+        {"id": program_id}
+    ).scalar()
+    
+    if count > 0:
+        return {
+            "success": False,
+            "message": f"Cannot delete: used in {count} active subject offerings"
+        }
+    
+    session.execute(
+        text("DELETE FROM program WHERE id = :id"),
+        {"id": program_id}
+    )
+    session.commit()
+    
+    return {
+        "success": True,
+        "message": "Program deleted"
+    }

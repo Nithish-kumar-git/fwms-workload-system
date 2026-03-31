@@ -6,7 +6,7 @@ import Modal from '../components/Modal';
 import {
     getSubjectOfferings, createSubjectOffering, deleteSubjectOffering,
     getSubjectPrograms, getSubjectSections, getSubjectSemesters,
-    createSection, createProgram
+    createSection, createProgram, deleteSection, deleteProgram
 } from '../api/client';
 
 interface Offering {
@@ -154,6 +154,32 @@ export default function CurriculumUploadPage() {
             loadData();
         } catch (err: any) {
             addToast(err.response?.data?.detail || 'Failed to create section', 'error');
+        }
+    };
+
+    const handleDeleteProgram = async (id: number, name: string) => {
+        if (!confirm(`Delete program "${name}"? This will fail if the program is used in any active subject offerings.`)) {
+            return;
+        }
+        try {
+            await deleteProgram(id);
+            addToast('Program deleted successfully', 'success');
+            loadData();
+        } catch (err: any) {
+            addToast(err.response?.data?.detail || 'Failed to delete program', 'error');
+        }
+    };
+
+    const handleDeleteSection = async (id: number, label: string) => {
+        if (!confirm(`Delete section "${label}"? This will fail if the section is used in any active subject offerings.`)) {
+            return;
+        }
+        try {
+            await deleteSection(id);
+            addToast('Section deleted successfully', 'success');
+            loadData();
+        } catch (err: any) {
+            addToast(err.response?.data?.detail || 'Failed to delete section', 'error');
         }
     };
 
@@ -343,8 +369,17 @@ export default function CurriculumUploadPage() {
                             <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                                 {programs.map(p => (
                                     <div key={p.id} style={{ padding: '0.5rem', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <span style={{ fontWeight: 500 }}>{p.name}</span>
-                                        <span className="badge badge-info">{p.ug_pg}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <span style={{ fontWeight: 500 }}>{p.name}</span>
+                                            <span className="badge badge-info">{p.ug_pg}</span>
+                                        </div>
+                                        <button
+                                            onClick={() => handleDeleteProgram(p.id, p.name)}
+                                            className="btn btn-danger"
+                                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
                                     </div>
                                 ))}
                             </div>
@@ -390,8 +425,17 @@ export default function CurriculumUploadPage() {
                             <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                                 {sections.map(s => (
                                     <div key={s.id} style={{ padding: '0.5rem', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <span style={{ fontWeight: 500 }}>{s.label}</span>
-                                        <span className="badge badge-warning">Shift {s.shift}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <span style={{ fontWeight: 500 }}>{s.label}</span>
+                                            <span className="badge badge-warning">Shift {s.shift}</span>
+                                        </div>
+                                        <button
+                                            onClick={() => handleDeleteSection(s.id, s.label)}
+                                            className="btn btn-danger"
+                                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
                                     </div>
                                 ))}
                             </div>
