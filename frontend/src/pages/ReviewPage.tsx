@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getAdminAllocations, overrideAllocation, freezeAllocation, unfreezeAllocation } from '../api/client';
+import { getAdminAllocations, overrideAllocation, freezeAllocation, unfreezeAllocation, getStaffList } from '../api/client';
 import { useToast } from '../hooks/useToast';
 import ToastContainer from '../components/ToastContainer';
 import Modal from '../components/Modal';
@@ -74,14 +74,9 @@ export default function ReviewPage() {
 
     const loadStaffList = async () => {
         try {
-            const res = await fetch('/api/admin/staff/list', {
-                credentials: 'include',
-            });
-            if (res.ok) {
-                const data = await res.json();
-                console.log('Staff list loaded:', data.length, 'items', data.slice(0, 3));
-                setStaffList(data);
-            }
+            const res = await getStaffList();
+            console.log('Staff list loaded:', res.data.length, 'items', res.data.slice(0, 3));
+            setStaffList(res.data);
         } catch (err) {
             console.error('Failed to load staff list:', err);
         }

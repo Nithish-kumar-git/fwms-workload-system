@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { createCycle, activateCycle, listCycles, activateSemesterGroup } from '../api/client';
+import { createCycle, activateCycle, listCycles, activateSemesterGroup, getCycleHistory } from '../api/client';
 import { useToast } from '../hooks/useToast';
 import ToastContainer from '../components/ToastContainer';
-import { CalendarDays, CheckCircle, Plus } from 'lucide-react';
+import { CalendarDays, CheckCircle, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Cycle {
     id: number;
@@ -20,6 +20,8 @@ interface Cycle {
 
 export default function CyclesPage() {
     const [cycles, setCycles] = useState<Cycle[]>([]);
+    const [history, setHistory] = useState<Cycle[]>([]);
+    const [showHistory, setShowHistory] = useState(false);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const { toasts, addToast, removeToast } = useToast();
@@ -34,7 +36,13 @@ export default function CyclesPage() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(() => { loadCycles(); }, []);
+    const loadHistory = () => {
+        getCycleHistory()
+            .then((r) => setHistory(r.data.filter((c: Cycle) => c.status === 'FROZEN' || c.status === 'ALLOCATED')))
+            .catch(() => console.error('Failed to load history'));
+    };
+
+    useEffect(() => { loadCycles(); loadHistory(); }, []);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -229,6 +237,49 @@ export default function CyclesPage() {
                     </tbody>
                 </table>
             </div>
+
+            {/* Cycle History Section */}
+            {history.length > 0 && (
+                <div className="glass-card" style={{ overflow: 'hidden', marginTop: '1.5rem' }}>
+                    <div 
+                        style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                        onClick={() => setShowHistory(!showHistory)}
+                    >
+                        <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 600, color: '#6b7280' }}>
+                            Cycle History ({history.length} archived)
+                        </h3>
+                        {showHistory ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </div>
+                    {showHistory && (
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Academic Year</th>
+                                    <th>Semester</th>
+                                    <th>Status</th>
+                                    <th>Frozen Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {history.map((c) => (
+                                    <tr key={c.id}>
+                                        <td style={{ fontWeight: 500 }}>{c.academic_year}</td>
+                                        <td>{c.semester_name}</td>
+                                        <td>
+                                            <span className={`badge ${c.status === 'FROZEN' ? 'badge-info' : 'badge-success'}`}>
+                                                {c.status}
+                                            </span>
+                                        </td>
+                                        <td style={{ fontSize: '0.8125rem', color: '#6b7280' }}>
+                                            {c.frozen_at?.slice(0, 10) || c.allocated_at?.slice(0, 10) || '-'}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

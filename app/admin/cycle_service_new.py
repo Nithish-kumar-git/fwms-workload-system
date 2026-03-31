@@ -391,3 +391,89 @@ def create_new_semester_cycle(academic_year: str, semester_id: int) -> dict:
             "message": f"New semester cycle created for {academic_year} Semester {semester_id}",
             "cycle_id": cycle_id
         }
+
+
+def activate_semester_group(academic_year: str, semester_group: str) -> dict:
+    """
+    Activate all cycles for a semester group (ODD or EVEN).
+    Creates cycles if they don't exist, then opens them all.
+    
+    Args:
+        academic_year: e.g. "2025-2026"
+        semester_group: "ODD" (I, III, V) or "EVEN" (II, IV, VI)
+    
+    Returns:
+        {"success": bool, "message": str, "opened_cycles": list[int]}
+    """
+    with get_transaction() as session:
+        # Ensure academic_year exists
+        year_row = session.execute(
+            text("SELECT id FROM academic_year WHERE name = :name"),
+            {"name": academic_year}
+        ).fetchone()
+        
+        if not year_row:
+            session.execute(
+                text("INSERT INTO academic_year (name) VALUES (:name)"),
+                {"name": academic_year}
+            )
+            year_row = session.execute(
+                text("SELECT id FROM academic_year WHERE name = :name"),
+                {"name": academic_year}
+            ).fetchone()
+        
+        academic_year_id = year_row[0]
+        
+        # Determine which semesters to open
+        if semester_group.upper() == "ODD":
+            semester_ids = [1, 3, 5]  # I, III, V
+        elif semester_group.upper() == "EVEN":
+            semester_ids = [2, 4, 6]  # II, IV, VI
+        else:
+            return {"success": False, "message": "Invalid semester_group. Use 'ODD' or 'EVEN'", "opened_cycles": []}
+        
+        opened_cycles = []
+        
+        # Close all currently OPEN cycles
+        session.execute(
+            text("UPDATE cycle SET status = 'CLOSED', closed_at = NOW() WHERE status = 'OPEN'")
+        )
+        
+        # Create and open cycles for each semester in the group
+        for sem_id in semester_ids:
+            # Check if cycle exists
+            existing = session.execute(
+                text("SELECT id FROM cycle WHERE academic_year_id = :year_id AND semester_id = :sem_id"),
+                {"year_id": academic_year_id, "sem_id": sem_id}
+            ).fetchone()
+            
+            if existing:
+                cycle_id = existing[0]
+                # Update to OPEN
+                session.execute(
+                    text("UPDATE cycle SET status = 'OPEN', opened_at = NOW() WHERE id = :id"),
+                    {"id": cycle_id}
+                )
+            else:
+                # Create new cycle with OPEN status
+                result = session.execute(
+                    text("""
+                        INSERT INTO cycle (academic_year_id, semester_id, status, opened_at)
+                        VALUES (:year_id, :sem_id, 'OPEN', NOW())
+                        RETURNING id
+                    """),
+                    {"year_id": academic_year_id, "sem_id": sem_id}
+                )
+                cycle_id = result.fetchone()[0]
+            
+            opened_cycles.append(cycle_id)
+            logger.info(f"Opened cycle {cycle_id} for {academic_year} Semester {sem_id}")
+        
+        session.commit()
+        
+        semester_labels = "I, III, V" if semester_group.upper() == "ODD" else "II, IV, VI"
+        return {
+            "success": True,
+            "message": f"Opened {semester_group} semester cycles ({semester_labels}) for {academic_year}",
+            "opened_cycles": opened_cycles
+        }

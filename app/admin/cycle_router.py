@@ -51,6 +51,7 @@ class CycleResponse(BaseModel):
     frozen_at: str | None = None
     is_active: bool
     created_at: str
+    allocation_count: int | None = None  # Optional field for history endpoint
 
 
 class ActionResponse(BaseModel):
@@ -162,3 +163,35 @@ async def create_new_semester_cycle_endpoint(
         raise HTTPException(status_code=400, detail=result["message"])
     return ActionResponse(**result)
 
+
+
+class ActivateSemesterGroupRequest(BaseModel):
+    academic_year: str = Field(..., description="e.g. 2025-2026")
+    semester_group: str = Field(..., description="ODD (I,III,V) or EVEN (II,IV,VI)")
+
+
+class ActivateSemesterGroupResponse(BaseModel):
+    success: bool
+    message: str
+    opened_cycles: list[int]
+
+
+@router.post("/activate-group", response_model=ActivateSemesterGroupResponse)
+async def activate_semester_group_endpoint(
+    body: ActivateSemesterGroupRequest,
+    _coordinator_id: int = Depends(get_current_coordinator_id),
+):
+    """
+    Activate all cycles for a semester group (ODD or EVEN).
+    Creates cycles if they don't exist, then opens them all.
+    This allows opening I, III, V together or II, IV, VI together.
+    Coordinator-only.
+    """
+    from app.admin.cycle_service_new import activate_semester_group
+    result = activate_semester_group(
+        academic_year=body.academic_year,
+        semester_group=body.semester_group,
+    )
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return ActivateSemesterGroupResponse(**result)

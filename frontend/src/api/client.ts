@@ -112,7 +112,7 @@ export const closePrefWindow = () => api.post('/pref-window/close');
 export const getPrefWindowStatus = () => api.get('/pref-window/status');
 
 // ─── Staff Management ───
-export const getStaffList = () => api.get('/admin/staff');
+export const getStaffList = () => api.get('/admin/staff/list');
 
 export const createStaff = (data: {
     emp_code: string; name: string; email: string;
@@ -145,6 +145,8 @@ export const activateCycle = (cycle_id: number) =>
     api.post('/cycles/activate', { cycle_id });
 
 export const listCycles = () => api.get('/cycles');
+
+export const getCycleHistory = () => api.get('/cycles/history');
 
 export const getActiveCycle = () => api.get('/cycles/active');
 

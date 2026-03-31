@@ -64,7 +64,7 @@ _check_required_env_vars()
 
 class Settings(BaseSettings):
     # Environment
-    ENV: Literal["development", "staging", "production"] = "development"
+    ENV: Literal["development", "staging", "production", "test"] = "development"
     
     # Database
     DATABASE_URL: str
