@@ -155,6 +155,7 @@ export default function StaffPage() {
             await updateStaffRole(selectedStaffId, selectedRole);
             addToast('Role updated successfully', 'success');
             setShowRoleModal(false);
+            setSelectedStaffId(null);
             load();
         } catch (err: any) {
             const msg = err.response?.data?.detail || 'Role update failed';
