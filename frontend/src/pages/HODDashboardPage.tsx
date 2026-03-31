@@ -1,11 +1,18 @@
 import { useAuth } from '../context/AuthContext';
-import { Users, BookOpen, CheckCircle, BarChart3 } from 'lucide-react';
+import { Users, BookOpen, CheckCircle, BarChart3, Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function HODDashboardPage() {
     const { user } = useAuth();
 
     const cards = [
+        {
+            title: 'My Preferences',
+            desc: 'Submit your subject teaching preferences',
+            icon: Heart,
+            path: '/preferences',
+            color: '#dc2626',
+        },
         {
             title: 'Staff Management',
             desc: 'Add, edit, or deactivate faculty members',

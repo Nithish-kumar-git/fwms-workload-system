@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 
 const hodItems = [
     { path: '/hod-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/preferences', label: 'My Preferences', icon: BookOpen },
     { path: '/hod/staff', label: 'Staff Management', icon: Users },
     { path: '/hod/curriculum', label: 'Curriculum Upload', icon: Upload },
     { path: '/hod/approval', label: 'Final Approval', icon: CheckCircle },
