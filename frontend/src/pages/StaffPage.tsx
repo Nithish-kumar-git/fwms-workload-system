@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getStaffList, createStaff, updateStaff, deactivateStaff, updateStaffRole } from '../api/client';
+import { getStaffList, createStaff, updateStaff, deactivateStaff, updateStaffRole, getSubjectPrograms, getSubjectSections } from '../api/client';
 import { useToast } from '../hooks/useToast';
 import ToastContainer from '../components/ToastContainer';
 import Modal from '../components/Modal';
@@ -48,6 +48,10 @@ export default function StaffPage() {
     const [selectedStaffId, setSelectedStaffId] = useState<number | null>(null);
     const [selectedRole, setSelectedRole] = useState('faculty');
 
+    // Programs and sections for CT dropdowns
+    const [programs, setPrograms] = useState<any[]>([]);
+    const [sections, setSections] = useState<any[]>([]);
+
     const load = () => {
         setLoading(true);
         setError('');
@@ -61,7 +65,12 @@ export default function StaffPage() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => { 
+        load(); 
+        // Load programs and sections for CT dropdowns
+        getSubjectPrograms().then(r => setPrograms(r.data)).catch(() => {});
+        getSubjectSections().then(r => setSections(r.data)).catch(() => {});
+    }, []);
 
     const filtered = staff.filter((s) => {
         const q = search.toLowerCase();
@@ -222,10 +231,40 @@ export default function StaffPage() {
             </div>
             {form.is_class_teacher && (
                 <div className="flex flex-wrap gap-4 pt-4 border-t border-gray-100">
-                    <div className="flex-1 min-w-[100px]"><label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem', display: 'block', marginBottom: '0.25rem' }}>Program</label><input className="form-input w-full" value={form.ct_program} onChange={(e) => setField('ct_program', e.target.value)} /></div>
-                    <div className="flex-1 min-w-[100px]"><label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem', display: 'block', marginBottom: '0.25rem' }}>Section</label><input className="form-input w-full" value={form.ct_section} onChange={(e) => setField('ct_section', e.target.value)} /></div>
-                    <div className="flex-1 min-w-[100px]"><label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem', display: 'block', marginBottom: '0.25rem' }}>Semester</label><input className="form-input w-full" value={form.ct_semester} onChange={(e) => setField('ct_semester', e.target.value)} /></div>
-                    <div className="flex-1 min-w-[100px]"><label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem', display: 'block', marginBottom: '0.25rem' }}>Shift</label><input className="form-input w-full" value={form.ct_shift} onChange={(e) => setField('ct_shift', e.target.value)} /></div>
+                    <div className="flex-1 min-w-[100px]">
+                        <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem', display: 'block', marginBottom: '0.25rem' }}>Program</label>
+                        <select className="form-select w-full" value={form.ct_program} onChange={(e) => setField('ct_program', e.target.value)}>
+                            <option value="">Select Program</option>
+                            {programs.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex-1 min-w-[100px]">
+                        <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem', display: 'block', marginBottom: '0.25rem' }}>Section</label>
+                        <select className="form-select w-full" value={form.ct_section} onChange={(e) => setField('ct_section', e.target.value)}>
+                            <option value="">Select Section</option>
+                            {sections.map(s => <option key={s.id} value={s.label}>{s.label}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex-1 min-w-[100px]">
+                        <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem', display: 'block', marginBottom: '0.25rem' }}>Semester</label>
+                        <select className="form-select w-full" value={form.ct_semester} onChange={(e) => setField('ct_semester', e.target.value)}>
+                            <option value="">Select Semester</option>
+                            <option value="I">Semester I</option>
+                            <option value="II">Semester II</option>
+                            <option value="III">Semester III</option>
+                            <option value="IV">Semester IV</option>
+                            <option value="V">Semester V</option>
+                            <option value="VI">Semester VI</option>
+                        </select>
+                    </div>
+                    <div className="flex-1 min-w-[100px]">
+                        <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem', display: 'block', marginBottom: '0.25rem' }}>Shift</label>
+                        <select className="form-select w-full" value={form.ct_shift} onChange={(e) => setField('ct_shift', e.target.value)}>
+                            <option value="">Select Shift</option>
+                            <option value="1">Shift 1</option>
+                            <option value="2">Shift 2</option>
+                        </select>
+                    </div>
                 </div>
             )}
             <div className="pt-4 border-t border-gray-100 mt-2 flex justify-end">
@@ -257,6 +296,15 @@ export default function StaffPage() {
     return (
         <div className="page-container">
             <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+            {/* Warning banner for CT assignments */}
+            <div style={{background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '10px', padding: '14px 18px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px'}}>
+                <span style={{fontSize: '20px'}}>⚠️</span>
+                <div>
+                    <div style={{fontWeight: '600', color: '#92400e', fontSize: '14px'}}>Before opening preferences: Update Class Teacher assignments for this semester</div>
+                    <div style={{color: '#b45309', fontSize: '13px', marginTop: '2px'}}>Class teachers must be assigned to the correct program, section, and semester each academic cycle.</div>
+                </div>
+            </div>
 
             <div className="page-header">
                 <div>
@@ -343,7 +391,14 @@ export default function StaffPage() {
                                     <span className={`badge ${s.role === 'hod' ? 'badge-danger' : s.role === 'tt_coordinator' ? 'badge-warning' : 'badge-success'}`} style={{ marginRight: '0.25rem' }}>
                                         {s.role === 'hod' ? 'HOD' : s.role === 'tt_coordinator' ? 'Coordinator' : 'Faculty'}
                                     </span>
-                                    {s.is_class_teacher && <span className="badge badge-info">CT</span>}
+                                    {s.is_class_teacher && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.25rem' }}>
+                                            <span className="badge badge-info">CT</span>
+                                            <span style={{ fontSize: '0.75rem', color: '#6b7280', fontFamily: 'monospace' }}>
+                                                {s.ct_program}-{s.ct_section}-{s.ct_semester}-S{s.ct_shift}
+                                            </span>
+                                        </div>
+                                    )}
                                 </td>
                                 <td>
                                     {s.is_active

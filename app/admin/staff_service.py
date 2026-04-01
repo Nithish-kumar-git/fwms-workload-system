@@ -135,6 +135,15 @@ def update_staff(
     ct_shift: str | None = None,
 ) -> dict:
     """Update staff fields (only provided fields)."""
+    
+    # Validate CT assignment: if is_class_teacher=true, must have program, section, semester
+    if is_class_teacher:
+        if not ct_program or not ct_section or not ct_semester:
+            return {
+                "success": False,
+                "message": "Class teacher must have program, section, and semester assigned"
+            }
+    
     updates = []
     params: dict = {"sid": staff_id}
 
