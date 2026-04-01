@@ -193,7 +193,7 @@ export default function PreferencesPage() {
             addToast('Preference saved successfully', 'success');
             setOfferingId('');
             setPrefNum('');
-            loadData();
+            await loadData();  // Refresh preferences and status immediately
             loadOfferings();
         } catch (err: any) {
             const msg = err.response?.data?.detail || 'Submission failed';

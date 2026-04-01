@@ -120,33 +120,9 @@ def validate_preference(staff_id: int, subject_offering_id: int, preference_numb
                 "rule": "PREF-DUP"
             }
         
-        # Rule 4 (SHIFT-01): Shift compatibility
-        staff_shift = staff[1]  # shift column
-        offering_shift = offering[1]  # shift column
-        
-        if staff_shift and offering_shift:
-            # Normalize shift values
-            staff_shift_str = str(staff_shift).upper().strip()
-            offering_shift_int = int(offering_shift)
-            
-            # SHIFT1+SHIFT2 faculty can teach both
-            if "SHIFT1+SHIFT2" not in staff_shift_str and "BOTH" not in staff_shift_str:
-                if "2" in staff_shift_str or "SECOND" in staff_shift_str:
-                    # SHIFT2 faculty
-                    if offering_shift_int == 1:
-                        return {
-                            "valid": False,
-                            "error": "SHIFT2 faculty cannot select SHIFT1 subjects",
-                            "rule": "SHIFT-01"
-                        }
-                elif "1" in staff_shift_str or "FIRST" in staff_shift_str:
-                    # SHIFT1 faculty
-                    if offering_shift_int == 2:
-                        return {
-                            "valid": False,
-                            "error": "SHIFT1 faculty cannot select SHIFT2 subjects",
-                            "rule": "SHIFT-01"
-                        }
+        # Rule 4 (SHIFT-01): Shift compatibility - DISABLED
+        # Shift constraint removed to allow faculty to select subjects from any shift
+        # Shift data is still stored and displayed but does not block selection
         
         # Rule 5 (CT-01): Class teacher first preference
         is_class_teacher = staff[2]
@@ -330,8 +306,9 @@ def list_preferences(staff_id: int) -> list[dict]:
                 SELECT fp.id, fp.staff_id, fp.subject_offering_id, fp.preference_number,
                        fp.submitted_at,
                        s.code AS subject_code, s.name AS subject_name,
-                       sec.label AS section_label, sem.label AS semester_label,
-                       p.name AS program_name
+                       sec.label AS section, sem.label AS semester,
+                       p.name AS program,
+                       COALESCE(s.tch, 0) AS tch
                 FROM faculty_preference fp
                 JOIN subject_offering so ON so.id = fp.subject_offering_id
                 JOIN subject s ON s.id = so.subject_id
@@ -353,9 +330,10 @@ def list_preferences(staff_id: int) -> list[dict]:
             "submitted_at": r[4],
             "subject_code": r[5],
             "subject_name": r[6],
-            "section_label": r[7],
-            "semester_label": r[8],
-            "program_name": r[9],
+            "section": r[7],
+            "semester": r[8],
+            "program": r[9],
+            "tch": r[10],
         }
         for r in rows
     ]
