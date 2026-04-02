@@ -1,5 +1,5 @@
 -- Migration 037: Fix CT program names to match actual program table names
--- Issue: ct_program stores "MCA" or "BCA" but program table has "MCA(General)", "BCA(General)" etc.
+-- Issue: ct_program stores "MCA" or "BCA" but programs table has "MCA(General)", "BCA(General)" etc.
 
 BEGIN;
 
