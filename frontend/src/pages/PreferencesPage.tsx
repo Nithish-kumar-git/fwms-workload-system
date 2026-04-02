@@ -17,7 +17,7 @@ interface Preference {
 }
 
 interface PrefStatus {
-    submitted: number;
+    total_submitted: number;
     remaining: number;
     is_complete: boolean;
 }
@@ -33,6 +33,7 @@ interface SubjectOffering {
     tch: number;
     allocated: boolean;
     faculty_name: string | null;
+    curriculum_year: string;
 }
 
 export default function PreferencesPage() {
@@ -279,7 +280,7 @@ export default function PreferencesPage() {
                 </div>
                 {status && (
                     <span className={`badge ${status.is_complete ? 'badge-success' : 'badge-warning'}`}>
-                        {status.submitted}/5 submitted
+                        {status.total_submitted}/5 submitted
                     </span>
                 )}
             </div>
