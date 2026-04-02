@@ -308,7 +308,8 @@ def list_preferences(staff_id: int) -> list[dict]:
                        s.code AS subject_code, s.name AS subject_name,
                        sec.label AS section, sem.label AS semester,
                        p.name AS program,
-                       COALESCE(s.tch, 0) AS tch
+                       COALESCE(s.tch, 0) AS tch,
+                       s.curriculum_year
                 FROM faculty_preference fp
                 JOIN subject_offering so ON so.id = fp.subject_offering_id
                 JOIN subject s ON s.id = so.subject_id
@@ -334,6 +335,7 @@ def list_preferences(staff_id: int) -> list[dict]:
             "semester": r[8],
             "program": r[9],
             "tch": r[10],
+            "curriculum_year": r[11],
         }
         for r in rows
     ]

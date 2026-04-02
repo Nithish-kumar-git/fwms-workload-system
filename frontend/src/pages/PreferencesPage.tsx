@@ -14,6 +14,7 @@ interface Preference {
     semester: string;
     section: string;
     tch: number;
+    curriculum_year?: string;
 }
 
 interface PrefStatus {
@@ -374,8 +375,13 @@ export default function PreferencesPage() {
                                         <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             {pref.subject_name}
                                         </div>
-                                        <div style={{ fontSize: '0.6875rem', color: '#6b7280', fontFamily: 'monospace' }}>
-                                            {pref.subject_code}
+                                        <div style={{ fontSize: '0.6875rem', color: '#6b7280', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                            <span>{pref.subject_code}</span>
+                                            {pref.curriculum_year && (
+                                                <span style={{fontSize:'9px', background:'#f0fdf4', color:'#166534', padding:'1px 5px', borderRadius:'8px', border:'1px solid #bbf7d0', fontWeight:'600'}}>
+                                                    {pref.curriculum_year}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 ) : (
@@ -636,8 +642,13 @@ export default function PreferencesPage() {
                             marginBottom: '1rem',
                         }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#111827' }}>
-                                    {selectedOffering.course_code} — {selectedOffering.course_name}
+                                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span>{selectedOffering.course_code} — {selectedOffering.course_name}</span>
+                                    {selectedOffering.curriculum_year && (
+                                        <span style={{fontSize:'10px', background:'#f0fdf4', color:'#166534', padding:'2px 7px', borderRadius:'10px', border:'1px solid #bbf7d0', fontWeight:'600'}}>
+                                            {selectedOffering.curriculum_year} Reg
+                                        </span>
+                                    )}
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
                                     {selectedOffering.program} • {selectedOffering.semester} • Sec {selectedOffering.section} • Shift {selectedOffering.shift}
