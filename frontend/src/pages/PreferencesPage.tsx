@@ -325,7 +325,7 @@ export default function PreferencesPage() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                     <span style={{ fontWeight: 600, fontSize: '0.9375rem', color: '#111827' }}>Your Preferences</span>
                     <span style={{ fontWeight: 700, fontSize: '1.125rem', color: status?.is_complete ? '#16a34a' : '#dc2626' }}>
-                        {status?.submitted ?? 0} / 5
+                        {status?.total_submitted ?? 0} / 5
                     </span>
                 </div>
 
