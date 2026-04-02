@@ -575,6 +575,11 @@ export default function PreferencesPage() {
                                                             Shift {o.shift}
                                                         </span>
                                                         <span>TCH {o.tch}</span>
+                                                        {o.curriculum_year && (
+                                                            <span style={{fontSize:'11px', background:'#f0fdf4', color:'#166534',padding:'2px 8px', borderRadius:'12px', border:'1px solid #bbf7d0',fontWeight:'600'}}>
+                                                                {o.curriculum_year} Reg
+                                                            </span>
+                                                        )}
                                                         {o.allocated && o.faculty_name && (
                                                             <span style={{ color: '#16a34a' }}>✓ {o.faculty_name}</span>
                                                         )}
