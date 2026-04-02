@@ -87,6 +87,19 @@ export default function FacultyDashboardPage() {
 
             <WindowStatusBanner />
 
+            {/* CT Info Card */}
+            {user?.is_class_teacher && (
+                <div style={{background:'#fefce8', border:'1px solid #fbbf24',borderLeft: '4px solid #f59e0b',borderRadius:'10px', padding:'16px 20px', marginBottom:'16px'}}>
+                    <div style={{fontWeight:'700', color:'#92400e', fontSize:'14px', marginBottom:'8px'}}>📋 You are Class Teacher for:</div>
+                    <div style={{color:'#78350f', fontSize:'17px', fontWeight:'700'}}>
+                        {user.ct_program} — Section {user.ct_section} — Semester {user.ct_semester}
+                        {user.ct_shift ? ` — Shift ${user.ct_shift}` : ''}
+                        {user.ct_curriculum_year ? ` (${user.ct_curriculum_year} Regulation)` : ''}
+                    </div>
+                    <div style={{color:'#b45309', fontSize:'12px', marginTop:'8px', fontStyle:'italic'}}>⚠ Your Preference #1 must be for a subject in this class</div>
+                </div>
+            )}
+
             {/* Preference Progress + Quick Action */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                 {/* Progress Card */}

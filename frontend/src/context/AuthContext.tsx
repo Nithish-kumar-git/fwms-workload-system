@@ -6,6 +6,12 @@ interface User {
     email: string;
     name: string;
     role: string;  // 'faculty' | 'tt_coordinator' | 'hod'
+    is_class_teacher?: boolean;
+    ct_program?: string;
+    ct_section?: string;
+    ct_semester?: string;
+    ct_shift?: string;
+    ct_curriculum_year?: string;
 }
 
 interface AuthContextType {

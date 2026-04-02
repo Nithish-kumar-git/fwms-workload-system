@@ -32,6 +32,11 @@ class PreferenceResponse(BaseModel):
     section_label: Optional[str] = None
     semester_label: Optional[str] = None
     program_name: Optional[str] = None
+    # Additional fields from list_preferences query
+    program: Optional[str] = None
+    semester: Optional[str] = None
+    section: Optional[str] = None
+    tch: Optional[int] = 0
 
 
 class SubmitPreferenceResponse(BaseModel):
