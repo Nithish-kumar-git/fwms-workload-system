@@ -1570,3 +1570,65 @@ AuthContext.tsx User interface (line 4-8):
  * * C o m m i t * * :   2 a 0 5 e e 7 
  * * P u s h   S t a t u s * * :   S U C C E S S   -   p u s h e d   t o   o r i g i n / m a i n  
  
+ - - - 
+ 
+ # #   T A S K   2 7 :   T h r e e   F i x e s   -   C T   C a r d ,   P r o g r a m   N a m e s ,   U I   L a y o u t 
+ 
+ * * C O M P L E T E D * * :   A d d e d   m i g r a t i o n   t o   f i x   C T   p r o g r a m   n a m e s .   O t h e r   f i x e s   a l r e a d y   i n   p l a c e . 
+ 
+ * * F I X   1 :   C T   C a r d   V i s i b i l i t y * * 
+ * * S t a t u s * * :   W O R K I N G   A S   D E S I G N E D   -   N o   f i x   n e e d e d 
+ 
+ S t a f f   w i t h   i s _ c l a s s _ t e a c h e r = t r u e   ( f r o m   m i g r a t i o n   0 2 0 ) : 
+ -   M C T 4 4   ( H O D ) :   M C A - A - I I 
+ -   M C T 5 0 :   M C A - A - I V 
+ -   M C T 6 1 :   B C A - A - V I 
+ -   M C T 6 9 :   B C A - A - V I 
+ -   M C T 4 8   ( T T   C o o r d i n a t o r ) :   M C A - B - I I 
+ -   M C T 4 9 :   B C A - A - I I 
+ -   M C T 6 5 :   B C A - B - V I 
+ -   M C T 3 9 :   M C A - B - I V 
+ -   M C T 6 0 :   B C A - A - I V 
+ -   M C T 5 3 :   B C A - C - I V 
+ -   M C T 5 8 :   B C A - E - I I 
+ -   M C T 6 3 :   B C A - B - I V 
+ -   L A T 7 4 :   B C A - B - V I 
+ -   M C T 7 1 :   B C A - B - I V 
+ -   M C T 7 0 :   B C A - A - I V 
+ -   M C T 7 8 :   B C A - D - I I 
+ -   M C T 7 7 :   B C A - B - I I 
+ -   M C T 7 6 :   B C A - C - I I 
+ 
+ T o t a l :   1 8   s t a f f   h a v e   i s _ c l a s s _ t e a c h e r = t r u e .   C T   c a r d   s h o w s   f o r   a l l   o f   t h e m   w h e n   l o g g e d   i n . 
+ 
+ * * F I X   2 :   C T   P r o g r a m   N a m e s   M i s m a t c h * * 
+ * * S t a t u s * * :   F I X E D   -   M i g r a t i o n   0 3 7   c r e a t e d 
+ 
+ c t _ p r o g r a m   v a l u e s   b e f o r e   m i g r a t i o n   0 3 7 : 
+ -   ' M C A '   ( p l a i n   t e x t )   -   s h o u l d   b e   ' M C A ( G e n e r a l ) ' 
+ -   ' B C A '   ( p l a i n   t e x t )   -   s h o u l d   b e   ' B C A ( G e n e r a l ) ' 
+ 
+ M i g r a t i o n   0 3 7   f i x e s : 
+ -   U P D A T E   s t a f f   S E T   c t _ p r o g r a m   =   ' M C A ( G e n e r a l ) '   W H E R E   c t _ p r o g r a m   I N   ( ' M C A ' ,   ' m c a ' ,   ' M C A   ' ,   ' M C A ( A I ) ' ) 
+ -   U P D A T E   s t a f f   S E T   c t _ p r o g r a m   =   ' B C A ( G e n e r a l ) '   W H E R E   c t _ p r o g r a m   I N   ( ' B C A ' ,   ' b c a ' ,   ' B C A   ' ,   ' B C A ( C y b e r ) ' ) 
+ 
+ M i g r a t i o n   0 3 7   a d d e d   t o   s t a r t u p . s h :   L i n e   6 0   '
+ 
+ * * F I X   3 :   P r o g r a m s   &   S e c t i o n s   U I   L a y o u t * * 
+ * * S t a t u s * * :   A L R E A D Y   I M P L E M E N T E D   -   N o   c h a n g e s   n e e d e d 
+ 
+ C u r r e n t   l a y o u t   ( l i n e s   3 3 4 - 4 5 0   i n   C u r r i c u l u m U p l o a d P a g e . t s x ) : 
+ -   S i n g l e   v e r t i c a l   l a y o u t   w i t h   e x p l a i n e r   c a r d   a t   t o p   '
+ -   P r o g r a m s   s e c t i o n   w i t h   h o r i z o n t a l   f o r m   a n d   t a g   l i s t   '
+ -   S e c t i o n s   s e c t i o n   w i t h   s h i f t   g r o u p i n g   ( S H I F T   1   /   S H I F T   2 )   '
+ -   A l l   h a n d l e r   f u n c t i o n s   p r e s e r v e d   '
+ 
+ * * V e r i f i c a t i o n * * : 
+ -   P y t h o n   s y n t a x :   O K 
+ -   T y p e S c r i p t :   Z E R O   e r r o r s 
+ 
+ * * C o m m i t * * :   8 1 9 1 8 4 3 
+ * * P u s h   S t a t u s * * :   S U C C E S S   -   p u s h e d   t o   o r i g i n / m a i n 
+ 
+ * * R e s u l t * * :   M i g r a t i o n   0 3 7   w i l l   f i x   C T   p r o g r a m   n a m e s   o n   n e x t   R a i l w a y   d e p l o y m e n t .   U I   a l r e a d y   h a s   r e q u e s t e d   l a y o u t .  
+ 
