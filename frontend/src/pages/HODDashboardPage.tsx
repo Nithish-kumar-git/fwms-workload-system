@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 
 export default function HODDashboardPage() {
     const { user } = useAuth();
+    
+    console.log('USER CT DATA:', JSON.stringify({is_ct: user?.is_class_teacher, prog: user?.ct_program, sec: user?.ct_section, sem: user?.ct_semester}));
 
     const cards = [
         {
