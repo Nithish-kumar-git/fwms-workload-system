@@ -119,6 +119,7 @@ export const createStaff = (data: {
     designation?: string; shift?: string; tch_norm?: number;
     is_coordinator?: boolean; is_class_teacher?: boolean;
     ct_program?: string; ct_section?: string; ct_semester?: string; ct_shift?: string;
+    ct_curriculum_year?: string;
 }) => api.post('/admin/staff', data);
 
 export const updateStaff = (id: number, data: Record<string, unknown>) =>
