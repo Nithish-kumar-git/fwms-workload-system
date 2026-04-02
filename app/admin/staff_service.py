@@ -26,7 +26,8 @@ def list_staff() -> list[dict]:
                 SELECT s.id, s.emp_code, s.name, s.email, s.designation,
                        s.shift, s.tch_norm, s.is_coordinator, s.is_active,
                        s.is_class_teacher, s.ct_program, s.ct_section,
-                       s.ct_semester, CAST(s.ct_shift AS VARCHAR) AS ct_shift
+                       s.ct_semester, CAST(s.ct_shift AS VARCHAR) AS ct_shift,
+                       s.ct_curriculum_year
                 FROM staff s
                 ORDER BY s.name
             """)
@@ -39,6 +40,7 @@ def list_staff() -> list[dict]:
             "is_coordinator": r[7], "is_active": r[8],
             "is_class_teacher": r[9], "ct_program": r[10],
             "ct_section": r[11], "ct_semester": r[12], "ct_shift": r[13],
+            "ct_curriculum_year": r[14],
         }
         for r in rows
     ]
@@ -59,6 +61,7 @@ def create_staff(
     ct_section: str | None = None,
     ct_semester: str | None = None,
     ct_shift: str | None = None,
+    ct_curriculum_year: str | None = None,
 ) -> dict:
     """Create a new staff record with validation."""
     # Domain validation
@@ -86,10 +89,10 @@ def create_staff(
             text("""
                 INSERT INTO staff (emp_code, name, email, designation, shift,
                     tch_norm, role, is_coordinator, is_active,
-                    is_class_teacher, ct_program, ct_section, ct_semester, ct_shift)
+                    is_class_teacher, ct_program, ct_section, ct_semester, ct_shift, ct_curriculum_year)
                 VALUES (:emp_code, :name, :email, :designation, :shift,
                     :tch_norm, :role, :is_coordinator, true,
-                    :is_ct, :ct_prog, :ct_sec, :ct_sem, :ct_shift)
+                    :is_ct, :ct_prog, :ct_sec, :ct_sem, :ct_shift, :ct_curr_year)
                 RETURNING id
             """),
             {
@@ -98,6 +101,7 @@ def create_staff(
                 "role": role, "is_coordinator": is_coordinator,
                 "is_ct": is_class_teacher, "ct_prog": ct_program,
                 "ct_sec": ct_section, "ct_sem": ct_semester, "ct_shift": ct_shift,
+                "ct_curr_year": ct_curriculum_year,
             },
         )
         staff_id = result.scalar()
@@ -133,6 +137,7 @@ def update_staff(
     ct_section: str | None = None,
     ct_semester: str | None = None,
     ct_shift: str | None = None,
+    ct_curriculum_year: str | None = None,
 ) -> dict:
     """Update staff fields (only provided fields)."""
     
@@ -180,6 +185,9 @@ def update_staff(
     if ct_shift is not None:
         updates.append("ct_shift = :ct_shift")
         params["ct_shift"] = ct_shift
+    if ct_curriculum_year is not None:
+        updates.append("ct_curriculum_year = :ct_curr_year")
+        params["ct_curr_year"] = ct_curriculum_year
 
     if not updates:
         return {"success": False, "message": "No fields to update"}

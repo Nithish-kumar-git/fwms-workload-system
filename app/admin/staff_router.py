@@ -44,6 +44,7 @@ class StaffRecord(BaseModel):
     ct_section: str | None = None
     ct_semester: str | None = None
     ct_shift: str | None = None
+    ct_curriculum_year: str | None = None
 
 
 class CreateStaffRequest(BaseModel):
@@ -60,6 +61,7 @@ class CreateStaffRequest(BaseModel):
     ct_section: str | None = None
     ct_semester: str | None = None
     ct_shift: str | None = None
+    ct_curriculum_year: str | None = None
 
 
 class UpdateStaffRequest(BaseModel):
@@ -74,6 +76,7 @@ class UpdateStaffRequest(BaseModel):
     ct_section: Optional[str] = None
     ct_semester: Optional[str] = None
     ct_shift: Optional[str] = None
+    ct_curriculum_year: Optional[str] = None
 
 
 class ActionResponse(BaseModel):
@@ -113,6 +116,7 @@ async def create_staff_endpoint(
         ct_section=body.ct_section,
         ct_semester=body.ct_semester,
         ct_shift=body.ct_shift,
+        ct_curriculum_year=body.ct_curriculum_year,
     )
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])
@@ -140,6 +144,7 @@ async def update_staff_endpoint(
         ct_section=body.ct_section,
         ct_semester=body.ct_semester,
         ct_shift=body.ct_shift,
+        ct_curriculum_year=body.ct_curriculum_year,
     )
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["message"])

@@ -152,7 +152,8 @@ def get_subject_summary(
                        sem.label AS semester, sec.label AS section, so.shift,
                        s.name AS faculty_name, s.emp_code,
                        COALESCE(sub.tch, 0) AS tch,
-                       CASE WHEN a.id IS NOT NULL THEN true ELSE false END AS allocated
+                       CASE WHEN a.id IS NOT NULL THEN true ELSE false END AS allocated,
+                       sub.curriculum_year
                 FROM subject_offering so
                 JOIN subject sub ON sub.id = so.subject_id
                 JOIN program p ON p.id = so.program_id
@@ -179,6 +180,7 @@ def get_subject_summary(
             "semester": r[4], "section": r[5], "shift": r[6],
             "faculty_name": r[7], "faculty_emp_code": r[8],
             "tch": r[9], "allocated": r[10],
+            "curriculum_year": r[11],
         }
         for r in rows
     ]

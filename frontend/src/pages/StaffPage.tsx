@@ -22,12 +22,13 @@ interface Staff {
     ct_section: string | null;
     ct_semester: string | null;
     ct_shift: string | null;
+    ct_curriculum_year: string | null;
 }
 
 const EMPTY_FORM = {
     emp_code: '', name: '', email: '', designation: 'Assistant Professor',
     shift: 'SHIFT1', tch_norm: 40, role: 'faculty', is_class_teacher: false,
-    ct_program: '', ct_section: '', ct_semester: '', ct_shift: '',
+    ct_program: '', ct_section: '', ct_semester: '', ct_shift: '', ct_curriculum_year: '',
 };
 
 export default function StaffPage() {
@@ -92,6 +93,7 @@ export default function StaffPage() {
             is_class_teacher: s.is_class_teacher,
             ct_program: s.ct_program || '', ct_section: s.ct_section || '',
             ct_semester: s.ct_semester || '', ct_shift: s.ct_shift || '',
+            ct_curriculum_year: s.ct_curriculum_year || '',
         });
         setEditId(s.id);
     };
@@ -106,6 +108,7 @@ export default function StaffPage() {
                 ct_section: form.ct_section || undefined,
                 ct_semester: form.ct_semester || undefined,
                 ct_shift: form.ct_shift || undefined,
+                ct_curriculum_year: form.ct_curriculum_year || undefined,
             });
             addToast('Faculty created', 'success');
             setShowAdd(false);
@@ -130,6 +133,7 @@ export default function StaffPage() {
                 ct_section: form.ct_section || null,
                 ct_semester: form.ct_semester || null,
                 ct_shift: form.ct_shift || null,
+                ct_curriculum_year: form.ct_curriculum_year || null,
             });
             addToast('Faculty updated', 'success');
             setEditId(null);
@@ -265,6 +269,17 @@ export default function StaffPage() {
                             <option value="2">Shift 2</option>
                         </select>
                     </div>
+                    <div className="flex-1 min-w-[100px]">
+                        <label style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', paddingLeft: '0.25rem', display: 'block', marginBottom: '0.25rem' }}>Curriculum Year</label>
+                        <select className="form-select w-full" value={form.ct_curriculum_year} onChange={(e) => setField('ct_curriculum_year', e.target.value)}>
+                            <option value="">Select Year</option>
+                            <option value="2022">2022</option>
+                            <option value="2023">2023</option>
+                            <option value="2024">2024</option>
+                            <option value="2025">2025</option>
+                            <option value="2026">2026</option>
+                        </select>
+                    </div>
                 </div>
             )}
             <div className="pt-4 border-t border-gray-100 mt-2 flex justify-end">
@@ -395,7 +410,7 @@ export default function StaffPage() {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.25rem' }}>
                                             <span className="badge badge-info">CT</span>
                                             <span style={{ fontSize: '0.75rem', color: '#6b7280', fontFamily: 'monospace' }}>
-                                                {s.ct_program}-{s.ct_section}-{s.ct_semester}-S{s.ct_shift}
+                                                {s.ct_program}-{s.ct_section}-{s.ct_semester}-S{s.ct_shift} ({s.ct_curriculum_year || 'N/A'})
                                             </span>
                                         </div>
                                     )}

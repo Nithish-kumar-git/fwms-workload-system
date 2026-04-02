@@ -55,6 +55,7 @@ run_migration 032_clear_test_preferences.sql
 run_migration 033_fix_staff_emails.sql
 run_migration 034_fix_real_staff_emails.sql
 run_migration 035_fix_audit_log_constraint.sql
+run_migration 036_add_curriculum_year.sql
 
 echo "All migrations done. Starting server..."
 # Use PORT from environment, default to 8000 if not set

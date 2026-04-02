@@ -49,7 +49,7 @@ def get_all_offerings(session, semester_id=None, program_id=None):
                    s.course_category, so.shift, so.student_strength,
                    so.academic_year, so.semester_id, so.program_id, so.section_id,
                    sem.label AS semester_label, sec.label AS section_label,
-                   p.name AS program_name, s.id AS subject_id
+                   p.name AS program_name, s.id AS subject_id, s.curriculum_year
             FROM subject_offering so
             JOIN subject s ON s.id = so.subject_id
             JOIN semester sem ON sem.id = so.semester_id
@@ -79,13 +79,15 @@ def create_offering(session, data: dict):
             text("""
                 UPDATE subject 
                 SET name=:name, l=:l, t=:t, p=:p,
-                    tch=:tch, credits=:credits, course_category=:cat, updated_at=NOW()
+                    tch=:tch, credits=:credits, course_category=:cat,
+                    curriculum_year=:curr_year, updated_at=NOW()
                 WHERE id=:id
             """),
             {
                 "name": data["course_name"], "l": data["l"], "t": data["t"],
                 "p": data["p"], "tch": data["l"] + data["t"] + data["p"],
-                "credits": data["credits"], "cat": data["course_category"], 
+                "credits": data["credits"], "cat": data["course_category"],
+                "curr_year": data.get("curriculum_year", "2022"),
                 "id": subject_id
             }
         )
@@ -94,15 +96,16 @@ def create_offering(session, data: dict):
         row = session.execute(
             text("""
                 INSERT INTO subject (code, name, l, t, p, tch, credits, course_category,
-                                   batch_id, specialization_id, is_active)
-                VALUES (:code, :name, :l, :t, :p, :tch, :credits, :cat, 1, 1, true)
+                                   batch_id, specialization_id, is_active, curriculum_year)
+                VALUES (:code, :name, :l, :t, :p, :tch, :credits, :cat, 1, 1, true, :curr_year)
                 RETURNING id
             """),
             {
                 "code": data["course_code"], "name": data["course_name"],
                 "l": data["l"], "t": data["t"], "p": data["p"],
                 "tch": data["l"] + data["t"] + data["p"],
-                "credits": data["credits"], "cat": data["course_category"]
+                "credits": data["credits"], "cat": data["course_category"],
+                "curr_year": data.get("curriculum_year", "2022")
             }
         ).fetchone()
         subject_id = row.id

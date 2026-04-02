@@ -24,6 +24,7 @@ interface Offering {
     credits: number;
     course_category: string;
     student_strength: number;
+    curriculum_year: string;
 }
 
 interface Program {
@@ -69,6 +70,7 @@ export default function CurriculumUploadPage() {
         credits: 0,
         course_category: 'CC',
         student_strength: 0,
+        curriculum_year: '2022',
     });
 
     const [newProgram, setNewProgram] = useState({ name: '', ug_pg: 'UG' });
@@ -108,7 +110,7 @@ export default function CurriculumUploadPage() {
             setFormData({
                 course_code: '', course_name: '', program_id: 0, semester_id: 0,
                 section_id: 0, shift: 1, l: 0, t: 0, p: 0, credits: 0,
-                course_category: 'CC', student_strength: 0,
+                course_category: 'CC', student_strength: 0, curriculum_year: '2022',
             });
             loadData();
         } catch (err: any) {
@@ -295,7 +297,7 @@ export default function CurriculumUploadPage() {
                                         <tr>
                                             <th>Code</th><th>Name</th><th>Program</th><th>Semester</th>
                                             <th>Section</th><th>Shift</th><th>L</th><th>T</th><th>P</th>
-                                            <th>TCH</th><th>Category</th><th>Actions</th>
+                                            <th>TCH</th><th>Category</th><th>Regulation</th><th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -312,6 +314,7 @@ export default function CurriculumUploadPage() {
                                                 <td>{o.p}</td>
                                                 <td style={{ fontWeight: 600, color: '#2563eb' }}>{o.tch}</td>
                                                 <td>{o.course_category}</td>
+                                                <td><span className="badge badge-success">{o.curriculum_year}</span></td>
                                                 <td>
                                                     <button onClick={() => handleDeleteOffering(o.id)} className="btn btn-danger text-[13px] py-1 px-3">
                                                         <Trash2 size={14} />Remove
@@ -667,6 +670,22 @@ export default function CurriculumUploadPage() {
                             onChange={(e) => setFormData({ ...formData, student_strength: Number(e.target.value) })}
                             min={0}
                         />
+                    </div>
+                    <div>
+                        <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', marginBottom: '0.375rem' }}>
+                            Curriculum / Regulation Year *
+                        </label>
+                        <select
+                            className="form-input"
+                            value={formData.curriculum_year}
+                            onChange={(e) => setFormData({ ...formData, curriculum_year: e.target.value })}
+                        >
+                            <option value="2022">2022 Regulation (MCA current)</option>
+                            <option value="2023">2023-24 Regulation (BCA current)</option>
+                            <option value="2024">2024 Regulation</option>
+                            <option value="2025">2025 Regulation</option>
+                            <option value="2026">2026 Regulation (new batches)</option>
+                        </select>
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>

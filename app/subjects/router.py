@@ -26,6 +26,7 @@ class OfferingCreate(BaseModel):
     section_id: int
     shift: int
     student_strength: int
+    curriculum_year: Optional[str] = "2022"
 
 
 class SectionCreate(BaseModel):
