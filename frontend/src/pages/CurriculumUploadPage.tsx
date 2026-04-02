@@ -332,112 +332,115 @@ export default function CurriculumUploadPage() {
 
             {/* TAB 2: Programs & Sections */}
             {activeTab === 'programs' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                    {/* Add Program */}
-                    <div className="glass-card" style={{ padding: '1.5rem' }}>
-                        <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem' }}>Add Program</h3>
-                        <div style={{ marginBottom: '1rem' }}>
-                            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', marginBottom: '0.375rem' }}>
-                                Program Name
-                            </label>
-                            <input
-                                type="text"
-                                className="form-input"
+                <div style={{display:'flex', flexDirection:'column', gap:'24px'}}>
+                    {/* EXPLAINER */}
+                    <div style={{background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:'10px', padding:'14px 18px'}}>
+                        <div style={{fontWeight:'600', color:'#0369a1', fontSize:'14px', marginBottom:'4px'}}>How Programs & Sections Work</div>
+                        <div style={{color:'#0c4a6e', fontSize:'13px'}}>
+                            Programs (e.g. MCA(General), BCA(Cyber)) and Sections (e.g. A, B, C) are independent. When you add a subject offering, you combine a Program + Section + Semester together.
+                            Add the program and section here first, then use the Subject Offerings tab to assign subjects to them.
+                        </div>
+                    </div>
+
+                    {/* PROGRAMS SECTION */}
+                    <div className="glass-card" style={{padding:'20px'}}>
+                        <h3 style={{fontSize:'16px', fontWeight:'700', marginBottom:'16px', color:'#1d4ed8'}}>📚 Programs</h3>
+                        {/* Add Program form - horizontal layout */}
+                        <div style={{display:'flex', gap:'10px', marginBottom:'16px', flexWrap:'wrap'}}>
+                            <input 
+                                placeholder="Program name, e.g. MCA(AI) or BCA(Data Science)"
                                 value={newProgram.name}
                                 onChange={(e) => setNewProgram({ ...newProgram, name: e.target.value })}
-                                placeholder="e.g., MCA(AI)"
+                                style={{flex:2, minWidth:'200px', padding:'8px 12px', border:'1px solid #e5e7eb', borderRadius:'8px'}}
                             />
-                        </div>
-                        <div style={{ marginBottom: '1rem' }}>
-                            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', marginBottom: '0.375rem' }}>
-                                Type
-                            </label>
-                            <select
-                                className="form-input"
-                                value={newProgram.ug_pg}
+                            <select 
+                                value={newProgram.ug_pg} 
                                 onChange={(e) => setNewProgram({ ...newProgram, ug_pg: e.target.value })}
+                                style={{flex:1, minWidth:'100px', padding:'8px 12px', border:'1px solid #e5e7eb', borderRadius:'8px'}}
                             >
-                                <option value="UG">UG</option>
-                                <option value="PG">PG</option>
+                                <option value="UG">UG (Undergraduate)</option>
+                                <option value="PG">PG (Postgraduate)</option>
                             </select>
+                            <button 
+                                onClick={handleAddProgram} 
+                                style={{padding:'8px 16px', background:'#1d4ed8', color:'white', borderRadius:'8px', border:'none', cursor:'pointer'}}
+                            >
+                                + Add Program
+                            </button>
                         </div>
-                        <button onClick={handleAddProgram} className="btn btn-primary" style={{ width: '100%' }}>
-                            <Plus size={16} />Add Program
-                        </button>
+                        {/* Programs list */}
+                        <div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>
+                            {programs.map(p => (
+                                <div key={p.id} style={{display:'flex', alignItems:'center', gap:'8px', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:'8px', padding:'6px 12px'}}>
+                                    <span style={{fontWeight:'600', fontSize:'14px'}}>{p.name}</span>
+                                    <span style={{fontSize:'11px', background: p.ug_pg==='PG' ? '#dbeafe':'#dcfce7', color: p.ug_pg==='PG' ? '#1d4ed8':'#166534', padding:'2px 6px', borderRadius:'4px'}}>
+                                        {p.ug_pg}
+                                    </span>
+                                    <button 
+                                        onClick={() => handleDeleteProgram(p.id, p.name)} 
+                                        style={{color:'#ef4444', background:'none', border:'none', cursor:'pointer', fontSize:'16px'}}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
 
-                        <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #e5e7eb' }}>
-                            <h4 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.75rem', color: '#6b7280' }}>
-                                Existing Programs ({programs.length})
-                            </h4>
-                            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                                {programs.map(p => (
-                                    <div key={p.id} style={{ padding: '0.5rem', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <span style={{ fontWeight: 500 }}>{p.name}</span>
-                                            <span className="badge badge-info">{p.ug_pg}</span>
-                                        </div>
-                                        <button
-                                            onClick={() => handleDeleteProgram(p.id, p.name)}
-                                            className="btn btn-danger"
-                                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                    {/* SECTIONS SECTION */}
+                    <div className="glass-card" style={{padding:'20px'}}>
+                        <h3 style={{fontSize:'16px', fontWeight:'700', marginBottom:'16px', color:'#7c3aed'}}>🏷 Sections</h3>
+                        {/* Add Section form */}
+                        <div style={{display:'flex', gap:'10px', marginBottom:'16px', flexWrap:'wrap'}}>
+                            <input 
+                                placeholder="Section label, e.g. F or A+B+C+D"
+                                value={newSection.label}
+                                onChange={(e) => setNewSection({ ...newSection, label: e.target.value })}
+                                style={{flex:2, minWidth:'150px', padding:'8px 12px', border:'1px solid #e5e7eb', borderRadius:'8px'}}
+                            />
+                            <select 
+                                value={newSection.shift} 
+                                onChange={(e) => setNewSection({ ...newSection, shift: Number(e.target.value) })}
+                                style={{flex:1, minWidth:'120px', padding:'8px 12px', border:'1px solid #e5e7eb', borderRadius:'8px'}}
+                            >
+                                <option value={1}>Shift 1 (Morning)</option>
+                                <option value={2}>Shift 2 (Afternoon)</option>
+                            </select>
+                            <button 
+                                onClick={handleAddSection} 
+                                style={{padding:'8px 16px', background:'#7c3aed', color:'white', borderRadius:'8px', border:'none', cursor:'pointer'}}
+                            >
+                                + Add Section
+                            </button>
+                        </div>
+                        {/* Sections grouped by shift */}
+                        <div style={{marginBottom:'12px'}}>
+                            <div style={{fontWeight:'600', fontSize:'13px', color:'#6b7280', marginBottom:'8px'}}>SHIFT 1 SECTIONS</div>
+                            <div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>
+                                {sections.filter(s => s.shift === 1).map(s => (
+                                    <div key={s.id} style={{display:'flex', alignItems:'center', gap:'6px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:'8px', padding:'6px 12px'}}>
+                                        <span style={{fontWeight:'700', fontSize:'14px', color:'#1d4ed8'}}>{s.label}</span>
+                                        <button 
+                                            onClick={() => handleDeleteSection(s.id, s.label)} 
+                                            style={{color:'#ef4444', background:'none', border:'none', cursor:'pointer', fontSize:'16px'}}
                                         >
-                                            <Trash2 size={14} />
+                                            ×
                                         </button>
                                     </div>
                                 ))}
                             </div>
                         </div>
-                    </div>
-
-                    {/* Add Section */}
-                    <div className="glass-card" style={{ padding: '1.5rem' }}>
-                        <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem' }}>Add Section</h3>
-                        <div style={{ marginBottom: '1rem' }}>
-                            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', marginBottom: '0.375rem' }}>
-                                Section Label
-                            </label>
-                            <input
-                                type="text"
-                                className="form-input"
-                                value={newSection.label}
-                                onChange={(e) => setNewSection({ ...newSection, label: e.target.value })}
-                                placeholder="e.g., F or A+B+C+D"
-                            />
-                        </div>
-                        <div style={{ marginBottom: '1rem' }}>
-                            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', marginBottom: '0.375rem' }}>
-                                Shift
-                            </label>
-                            <select
-                                className="form-input"
-                                value={newSection.shift}
-                                onChange={(e) => setNewSection({ ...newSection, shift: Number(e.target.value) })}
-                            >
-                                <option value={1}>Shift 1</option>
-                                <option value={2}>Shift 2</option>
-                            </select>
-                        </div>
-                        <button onClick={handleAddSection} className="btn btn-primary" style={{ width: '100%' }}>
-                            <Plus size={16} />Add Section
-                        </button>
-
-                        <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #e5e7eb' }}>
-                            <h4 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.75rem', color: '#6b7280' }}>
-                                Existing Sections ({sections.length})
-                            </h4>
-                            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                                {sections.map(s => (
-                                    <div key={s.id} style={{ padding: '0.5rem', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <span style={{ fontWeight: 500 }}>{s.label}</span>
-                                            <span className="badge badge-warning">Shift {s.shift}</span>
-                                        </div>
-                                        <button
-                                            onClick={() => handleDeleteSection(s.id, s.label)}
-                                            className="btn btn-danger"
-                                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                        <div>
+                            <div style={{fontWeight:'600', fontSize:'13px', color:'#6b7280', marginBottom:'8px'}}>SHIFT 2 SECTIONS</div>
+                            <div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>
+                                {sections.filter(s => s.shift === 2).map(s => (
+                                    <div key={s.id} style={{display:'flex', alignItems:'center', gap:'6px', background:'#faf5ff', border:'1px solid #e9d5ff', borderRadius:'8px', padding:'6px 12px'}}>
+                                        <span style={{fontWeight:'700', fontSize:'14px', color:'#7c3aed'}}>{s.label}</span>
+                                        <button 
+                                            onClick={() => handleDeleteSection(s.id, s.label)} 
+                                            style={{color:'#ef4444', background:'none', border:'none', cursor:'pointer', fontSize:'16px'}}
                                         >
-                                            <Trash2 size={14} />
+                                            ×
                                         </button>
                                     </div>
                                 ))}
