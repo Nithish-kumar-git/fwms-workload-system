@@ -57,6 +57,7 @@ run_migration 034_fix_real_staff_emails.sql
 run_migration 035_fix_audit_log_constraint.sql
 run_migration 036_add_curriculum_year.sql
 run_migration 037_fix_ct_program_names.sql
+run_migration 038_set_missing_curriculum_years.sql
 
 echo "All migrations done. Starting server..."
 # Use PORT from environment, default to 8000 if not set
