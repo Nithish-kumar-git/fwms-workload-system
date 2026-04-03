@@ -377,11 +377,25 @@ export default function PreferencesPage() {
                                         </div>
                                         <div style={{ fontSize: '0.6875rem', color: '#6b7280', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                                             <span>{pref.subject_code}</span>
-                                            {pref.curriculum_year && (
-                                                <span style={{fontSize:'9px', background:'#f0fdf4', color:'#166534', padding:'1px 5px', borderRadius:'8px', border:'1px solid #bbf7d0', fontWeight:'600'}}>
-                                                    {pref.curriculum_year}
-                                                </span>
-                                            )}
+                                            {(() => {
+                                                // Derive curriculum_year from subject_code if NULL
+                                                let currYear = pref.curriculum_year;
+                                                if (!currYear || currYear === 'null') {
+                                                    const prefix = pref.subject_code.substring(0, 3);
+                                                    if (['CCA', 'CCM', 'CMA', 'CEL'].includes(prefix)) {
+                                                        currYear = '2022';
+                                                    } else if (['ACA', 'ACY', 'ACM', 'GMA', 'GLS', 'GGE', 'ABB', 'ASS'].includes(prefix)) {
+                                                        currYear = '2023';
+                                                    } else {
+                                                        currYear = '2022'; // default
+                                                    }
+                                                }
+                                                return (
+                                                    <span style={{fontSize:'9px', background:'#f0fdf4', color:'#166534', padding:'1px 5px', borderRadius:'8px', border:'1px solid #bbf7d0', fontWeight:'600'}}>
+                                                        {currYear}
+                                                    </span>
+                                                );
+                                            })()}
                                         </div>
                                     </div>
                                 ) : (
@@ -581,11 +595,25 @@ export default function PreferencesPage() {
                                                             Shift {o.shift}
                                                         </span>
                                                         <span>TCH {o.tch}</span>
-                                                        {o.curriculum_year && (
-                                                            <span style={{fontSize:'11px', background:'#f0fdf4', color:'#166534',padding:'2px 8px', borderRadius:'12px', border:'1px solid #bbf7d0',fontWeight:'600'}}>
-                                                                {o.curriculum_year} Reg
-                                                            </span>
-                                                        )}
+                                                        {(() => {
+                                                            // Derive curriculum_year from course_code if NULL
+                                                            let currYear = o.curriculum_year;
+                                                            if (!currYear || currYear === 'null') {
+                                                                const prefix = o.course_code.substring(0, 3);
+                                                                if (['CCA', 'CCM', 'CMA', 'CEL'].includes(prefix)) {
+                                                                    currYear = '2022';
+                                                                } else if (['ACA', 'ACY', 'ACM', 'GMA', 'GLS', 'GGE', 'ABB', 'ASS'].includes(prefix)) {
+                                                                    currYear = '2023';
+                                                                } else {
+                                                                    currYear = '2022'; // default
+                                                                }
+                                                            }
+                                                            return (
+                                                                <span style={{fontSize:'11px', background:'#f0fdf4', color:'#166534',padding:'2px 8px', borderRadius:'12px', border:'1px solid #bbf7d0',fontWeight:'600'}}>
+                                                                    {currYear} Reg
+                                                                </span>
+                                                            );
+                                                        })()}
                                                         {o.allocated && o.faculty_name && (
                                                             <span style={{ color: '#16a34a' }}>✓ {o.faculty_name}</span>
                                                         )}
@@ -644,11 +672,25 @@ export default function PreferencesPage() {
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <span>{selectedOffering.course_code} — {selectedOffering.course_name}</span>
-                                    {selectedOffering.curriculum_year && (
-                                        <span style={{fontSize:'10px', background:'#f0fdf4', color:'#166534', padding:'2px 7px', borderRadius:'10px', border:'1px solid #bbf7d0', fontWeight:'600'}}>
-                                            {selectedOffering.curriculum_year} Reg
-                                        </span>
-                                    )}
+                                    {(() => {
+                                        // Derive curriculum_year from course_code if NULL
+                                        let currYear = selectedOffering.curriculum_year;
+                                        if (!currYear || currYear === 'null') {
+                                            const prefix = selectedOffering.course_code.substring(0, 3);
+                                            if (['CCA', 'CCM', 'CMA', 'CEL'].includes(prefix)) {
+                                                currYear = '2022';
+                                            } else if (['ACA', 'ACY', 'ACM', 'GMA', 'GLS', 'GGE', 'ABB', 'ASS'].includes(prefix)) {
+                                                currYear = '2023';
+                                            } else {
+                                                currYear = '2022'; // default
+                                            }
+                                        }
+                                        return (
+                                            <span style={{fontSize:'10px', background:'#f0fdf4', color:'#166534', padding:'2px 7px', borderRadius:'10px', border:'1px solid #bbf7d0', fontWeight:'600'}}>
+                                                {currYear} Reg
+                                            </span>
+                                        );
+                                    })()}
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
                                     {selectedOffering.program} • {selectedOffering.semester} • Sec {selectedOffering.section} • Shift {selectedOffering.shift}
