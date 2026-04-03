@@ -323,6 +323,7 @@ export default function StaffPage() {
 
             <div className="page-header">
                 <div>
+                    {/* Staff list - roles and CT assignments */}
                     <h1 className="page-title">Staff Management</h1>
                     <p className="page-subtitle">{staff.length} faculty members</p>
                 </div>

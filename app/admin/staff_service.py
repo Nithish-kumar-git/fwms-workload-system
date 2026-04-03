@@ -19,7 +19,10 @@ ALLOWED_DOMAIN = settings.ALLOWED_EMAIL_DOMAIN
 
 
 def list_staff() -> list[dict]:
-    """Return all staff records with key fields."""
+    """Return all staff records with key fields.
+    
+    Note: Uses dict(r._mapping) for safe named column access.
+    """
     with get_transaction() as session:
         rows = session.execute(
             text("""
