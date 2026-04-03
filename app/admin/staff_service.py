@@ -26,13 +26,24 @@ def list_staff() -> list[dict]:
     with get_transaction() as session:
         rows = session.execute(
             text("""
-                SELECT s.id, s.emp_code, s.name, s.email, s.designation,
-                       s.shift, s.tch_norm, s.role, s.is_coordinator, s.is_active,
-                       s.is_class_teacher, s.ct_program, s.ct_section,
-                       s.ct_semester, CAST(s.ct_shift AS VARCHAR) AS ct_shift,
+                SELECT s.id,
+                       s.emp_code,
+                       s.name,
+                       s.email,
+                       s.designation,
+                       s.shift,
+                       s.tch_norm,
+                       s.role,
+                       s.is_active,
+                       s.is_class_teacher,
+                       s.ct_program,
+                       s.ct_section,
+                       s.ct_semester,
+                       CAST(s.ct_shift AS VARCHAR) AS ct_shift,
                        s.ct_curriculum_year
                 FROM staff s
-                ORDER BY s.name
+                WHERE s.emp_code IS NOT NULL
+                ORDER BY s.emp_code
             """)
         ).fetchall()
 

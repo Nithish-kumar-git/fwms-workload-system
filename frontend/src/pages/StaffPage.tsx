@@ -15,7 +15,6 @@ interface Staff {
     shift: string;
     tch_norm: number;
     role: string;
-    is_coordinator: boolean;
     is_active: boolean;
     is_class_teacher: boolean;
     ct_program: string | null;

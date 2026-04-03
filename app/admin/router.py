@@ -100,21 +100,10 @@ async def debug_role_ct():
     PUBLIC DEBUG endpoint - Test role and CT field mapping.
     No authentication required for debugging.
     """
-    from app.db.session import get_transaction
-    from sqlalchemy import text
+    from app.admin.staff_service import list_staff
     
-    with get_transaction() as session:
-        rows = session.execute(
-            text("""
-                SELECT s.id, s.emp_code, s.name, s.role, s.is_class_teacher, 
-                       s.ct_program, s.ct_section, s.ct_semester, s.ct_curriculum_year
-                FROM staff s 
-                ORDER BY s.emp_code
-                LIMIT 5
-            """)
-        ).fetchall()
-        
-        return [dict(r._mapping) for r in rows]
+    result = list_staff()
+    return result[:5]  # return first 5
 
 
 @router.get("/allocations", response_model=AllocationReviewResponse)
