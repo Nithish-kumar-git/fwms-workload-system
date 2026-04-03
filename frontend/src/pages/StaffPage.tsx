@@ -324,7 +324,7 @@ export default function StaffPage() {
                 <div>
                     {/* Staff list - roles and CT assignments */}
                     <h1 className="page-title">Staff Management</h1>
-                    <p className="page-subtitle">{staff.length} faculty members</p>
+                    <p className="page-subtitle">{staff.length} faculty members · v2</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="relative">
@@ -414,21 +414,21 @@ export default function StaffPage() {
                                             {s.role === 'hod' ? 'HOD' :
                                              s.role === 'tt_coordinator' ? 'TT Coordinator' : 'Faculty'}
                                         </span>
-                                        {s.is_class_teacher && s.ct_program && (
-                                            <div style={{
-                                                marginTop: '5px',
-                                                fontSize: '11px',
-                                                color: '#92400e',
-                                                background: '#fef3c7',
-                                                padding: '3px 8px',
-                                                borderRadius: '6px',
-                                                border: '1px solid #fde68a',
-                                                display: 'inline-block',
-                                                whiteSpace: 'nowrap'
-                                            }}>
-                                                📋 CT: {s.ct_program} · Sec {s.ct_section} · Sem {s.ct_semester}{s.ct_curriculum_year ? ` · ${s.ct_curriculum_year}` : ''}
-                                            </div>
-                                        )}
+                                        <div style={{
+                                            marginTop: '5px',
+                                            fontSize: '11px',
+                                            color: '#92400e',
+                                            background: '#fef3c7',
+                                            padding: '3px 8px',
+                                            borderRadius: '6px',
+                                            border: '1px solid #fde68a',
+                                            display: 'inline-block',
+                                            whiteSpace: 'nowrap'
+                                        }}>
+                                            {s.is_class_teacher === true && s.ct_program != null 
+                                                ? `📋 CT: ${s.ct_program} · Sec ${s.ct_section} · Sem ${s.ct_semester}${s.ct_curriculum_year ? ' · ' + s.ct_curriculum_year : ''}`
+                                                : ''}
+                                        </div>
                                     </div>
                                 </td>
                                 <td>
