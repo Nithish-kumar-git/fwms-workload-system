@@ -33,17 +33,7 @@ def list_staff() -> list[dict]:
             """)
         ).fetchall()
 
-    return [
-        {
-            "id": r[0], "emp_code": r[1], "name": r[2], "email": r[3],
-            "designation": r[4], "shift": r[5], "tch_norm": r[6],
-            "role": r[7], "is_coordinator": r[8], "is_active": r[9],
-            "is_class_teacher": r[10], "ct_program": r[11],
-            "ct_section": r[12], "ct_semester": r[13], "ct_shift": r[14],
-            "ct_curriculum_year": r[15],
-        }
-        for r in rows
-    ]
+    return [dict(r._mapping) for r in rows]
 
 
 def create_staff(
