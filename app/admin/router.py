@@ -95,7 +95,7 @@ async def get_staff_list_debug():
 
 
 @router.get("/staff/debug-role-ct")
-async def debug_staff_role_ct():
+async def debug_role_ct():
     """
     PUBLIC DEBUG endpoint - Test role and CT field mapping.
     No authentication required for debugging.
@@ -109,6 +109,7 @@ async def debug_staff_role_ct():
                 SELECT s.id, s.emp_code, s.name, s.role, s.is_class_teacher, 
                        s.ct_program, s.ct_section, s.ct_semester, s.ct_curriculum_year
                 FROM staff s 
+                ORDER BY s.emp_code
                 LIMIT 5
             """)
         ).fetchall()
