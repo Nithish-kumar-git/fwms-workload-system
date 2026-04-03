@@ -384,10 +384,7 @@ export default function StaffPage() {
                         <tr>
                             <th>Emp Code</th>
                             <th>Name</th>
-                            <th>Email</th>
                             <th>Designation</th>
-                            <th>Shift</th>
-                            <th>TCH</th>
                             <th>Roles</th>
                             <th>Status</th>
                             <th style={{ width: '100px' }}>Actions</th>
@@ -398,20 +395,14 @@ export default function StaffPage() {
                             <tr key={s.id} style={{ opacity: s.is_active ? 1 : 0.5 }}>
                                 <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#111827' }}>{s.emp_code}</td>
                                 <td style={{ color: '#111827' }}>{s.name}</td>
-                                <td style={{ fontSize: '0.8125rem', color: '#6b7280' }}>{s.email}</td>
                                 <td>{s.designation}</td>
-                                <td><span className="badge badge-info">{s.shift}</span></td>
-                                <td>{s.tch_norm}</td>
                                 <td>
                                     <span className={`badge ${s.role === 'hod' ? 'badge-danger' : s.role === 'tt_coordinator' ? 'badge-warning' : 'badge-success'}`} style={{ marginRight: '0.25rem' }}>
                                         {s.role === 'hod' ? 'HOD' : s.role === 'tt_coordinator' ? 'Coordinator' : 'Faculty'}
                                     </span>
                                     {s.is_class_teacher && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.25rem' }}>
-                                            <span className="badge badge-info">CT</span>
-                                            <span style={{ fontSize: '0.75rem', color: '#6b7280', fontFamily: 'monospace' }}>
-                                                {s.ct_program}-{s.ct_section}-{s.ct_semester}-S{s.ct_shift} ({s.ct_curriculum_year || 'N/A'})
-                                            </span>
+                                        <div style={{ marginTop: '4px', fontSize: '11px', color: '#92400e', background: '#fef3c7', padding: '2px 8px', borderRadius: '6px', border: '1px solid #fde68a', display: 'inline-block' }}>
+                                            CT: {s.ct_program} · Sec {s.ct_section} · Sem {s.ct_semester}{s.ct_curriculum_year ? ` · ${s.ct_curriculum_year}` : ''}
                                         </div>
                                     )}
                                 </td>
