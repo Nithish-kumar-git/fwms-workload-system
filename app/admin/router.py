@@ -103,7 +103,7 @@ async def debug_role_ct():
     from app.admin.staff_service import list_staff
     
     result = list_staff()
-    return result[:5]  # return first 5
+    return result[:30]  # return first 30 (all staff)
 
 
 @router.get("/allocations", response_model=AllocationReviewResponse)
