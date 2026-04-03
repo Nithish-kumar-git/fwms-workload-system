@@ -397,14 +397,39 @@ export default function StaffPage() {
                                 <td style={{ color: '#111827' }}>{s.name}</td>
                                 <td>{s.designation}</td>
                                 <td>
-                                    <span className={`badge ${s.role === 'hod' ? 'badge-danger' : s.role === 'tt_coordinator' ? 'badge-warning' : 'badge-success'}`} style={{ marginRight: '0.25rem' }}>
-                                        {s.role === 'hod' ? 'HOD' : s.role === 'tt_coordinator' ? 'Coordinator' : 'Faculty'}
-                                    </span>
-                                    {s.is_class_teacher && (
-                                        <div style={{ marginTop: '4px', fontSize: '11px', color: '#92400e', background: '#fef3c7', padding: '2px 8px', borderRadius: '6px', border: '1px solid #fde68a', display: 'inline-block' }}>
-                                            CT: {s.ct_program} · Sec {s.ct_section} · Sem {s.ct_semester}{s.ct_curriculum_year ? ` · ${s.ct_curriculum_year}` : ''}
-                                        </div>
-                                    )}
+                                    <div>
+                                        <span style={{
+                                            fontSize: '12px',
+                                            fontWeight: '600',
+                                            padding: '3px 10px',
+                                            borderRadius: '12px',
+                                            background: s.role === 'hod' ? '#dbeafe' :
+                                                       s.role === 'tt_coordinator' ? '#ede9fe' : '#dcfce7',
+                                            color: s.role === 'hod' ? '#1d4ed8' :
+                                                  s.role === 'tt_coordinator' ? '#7c3aed' : '#166534',
+                                            border: '1px solid',
+                                            borderColor: s.role === 'hod' ? '#bfdbfe' :
+                                                        s.role === 'tt_coordinator' ? '#ddd6fe' : '#bbf7d0',
+                                        }}>
+                                            {s.role === 'hod' ? 'HOD' :
+                                             s.role === 'tt_coordinator' ? 'TT Coordinator' : 'Faculty'}
+                                        </span>
+                                        {s.is_class_teacher && s.ct_program && (
+                                            <div style={{
+                                                marginTop: '5px',
+                                                fontSize: '11px',
+                                                color: '#92400e',
+                                                background: '#fef3c7',
+                                                padding: '3px 8px',
+                                                borderRadius: '6px',
+                                                border: '1px solid #fde68a',
+                                                display: 'inline-block',
+                                                whiteSpace: 'nowrap'
+                                            }}>
+                                                📋 CT: {s.ct_program} · Sec {s.ct_section} · Sem {s.ct_semester}{s.ct_curriculum_year ? ` · ${s.ct_curriculum_year}` : ''}
+                                            </div>
+                                        )}
+                                    </div>
                                 </td>
                                 <td>
                                     {s.is_active
