@@ -37,6 +37,7 @@ class StaffRecord(BaseModel):
     designation: str | None = None
     shift: str | None = None
     tch_norm: int | None = None
+    role: str | None = None
     is_coordinator: bool = False
     is_active: bool = True
     is_class_teacher: bool = False

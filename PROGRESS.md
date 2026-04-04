@@ -1,46 +1,51 @@
-# Staff Roles Fix - Migration 039
+# StaffPage UI Update - Remove Role Column, Add CT Column
 
-## Latest Commit
-- **Hash**: 11ad6cb
-- **Message**: "fix: set correct roles for HOD (MCT44) and TT Coordinator (MCT48) in DB"
-- **Status**: Pushed to origin/main
-
-## Problem
-MCT44 (Dr. S. Gokila) had role='faculty' in database instead of 'hod'
-MCT48 (Dr. Sathish Kumar M) needed role='tt_coordinator' confirmed
-
-## Migration 039 Created
-**File**: `migrations/039_fix_staff_roles.sql`
-
-**SQL Updates**:
-```sql
-UPDATE staff SET role = 'hod' WHERE emp_code = 'MCT44';
-UPDATE staff SET role = 'tt_coordinator' WHERE emp_code = 'MCT48';
-```
+## Commit: 2222980
+**Message**: "StaffPage: remove Role column, add CT column for all staff"
+**Status**: Pushed to origin/main
 
 ## Changes Made
 
-1. **Migration 039**: Created with UPDATE statements for both staff roles
-2. **startup.sh**: Added `run_migration 039_fix_staff_roles.sql` after migration 038
-3. **Debug Endpoint**: Changed LIMIT from 5 to 30 in `/api/admin/staff/debug-role-ct` to show all staff
+### REMOVED: "Roles" Column
+- Removed `<th>Roles</th>` header from table
+- Removed entire `<td>` cell that displayed:
+  - Role badge (HOD/TT Coordinator/Faculty with colored backgrounds)
+  - CT info badge below role badge
+  - Complex nested div structure with conditional rendering
 
-## Python Syntax Check
-- `app/admin/staff_service.py`: OK ✓
-- `app/admin/router.py`: OK ✓
+### ADDED: "CT Assignment" Column
+- Added `<th>CT Assignment</th>` header after Designation column
+- New `<td>` cell for EVERY staff row with:
+  - **For Class Teachers** (is_class_teacher === true AND ct_program not null/empty):
+    - Shows: `{ct_program} · Sec {ct_section} · Sem {ct_semester}`
+    - Style: Yellow pill badge (background #fef3c7, color #92400e, border #fde68a)
+    - Font size: 11px, padding: 2px 8px, border-radius: 6px
+  - **For Non-Class Teachers**:
+    - Shows: "—" (em dash)
+    - Style: Muted gray color (#9ca3af)
+- Column is ALWAYS visible for every staff member (not conditional)
 
-## Verification URLs
-- **Debug Endpoint**: https://fwms-workload-system-production.up.railway.app/api/admin/staff/debug-role-ct
-- **Expected**: MCT44 shows role='hod', MCT48 shows role='tt_coordinator'
-- **Staff Page**: https://fwms-workload-system.vercel.app/hod/staff
-- **Expected**: MCT44 shows blue HOD badge, MCT48 shows purple TT Coordinator badge
-
-## Git Log
+## TypeScript Check
 ```
-11ad6cb (HEAD -> main, origin/main) fix: set correct roles for HOD (MCT44) and TT Coordinator (MCT48) in DB
-bdbb709 fix: CT badge string template, v2 marker to confirm deployment
-1e68c50 fix: rewrite list_staff with clean SQL and dict mapping, remove is_coordinator
+cd frontend && npx tsc --noEmit 2>&1
+(empty output - zero errors)
+Exit Code: 0
 ```
 
-Railway will auto-run migration 039 on next deployment to fix the roles in production database.
+## Git Status
+- All changes committed and pushed
+- Branch: main (up to date with origin/main)
+- Working tree clean
+
+## Table Structure Now
+| Emp Code | Name | Designation | CT Assignment | Status | Actions |
+|----------|------|-------------|---------------|--------|---------|
+
+## Result
+- Cleaner table layout without role badges
+- CT assignments are now prominently displayed in dedicated column
+- Easy to scan which staff are class teachers and their assignments
+- Non-CT staff show clear "—" indicator instead of empty space
+
 
 
