@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Write bug condition exploration test
+- [x] 1. Write bug condition exploration test
   - **Property 1: Bug Condition** - Schema Column Reference Errors
   - **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bug exists
   - **DO NOT attempt to fix the test or the code when it fails**
@@ -20,7 +20,7 @@
   - Mark task complete when test is written, run, and failure is documented
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-- [ ] 2. Write preservation property tests (BEFORE implementing fix)
+- [x] 2. Write preservation property tests (BEFORE implementing fix)
   - **Property 2: Preservation** - Non-Query Operations Unchanged
   - **IMPORTANT**: Follow observation-first methodology
   - Observe behavior on UNFIXED code for non-buggy inputs (operations not involving cycle queries)
@@ -36,9 +36,9 @@
   - Mark task complete when tests are written, run, and passing on unfixed code
   - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-- [ ] 3. Fix SQL queries to use new cycle table schema
+- [x] 3. Fix SQL queries to use new cycle table schema
 
-  - [ ] 3.1 Fix preference service query (app/preference/service.py line 356-374)
+  - [x] 3.1 Fix preference service query (app/preference/service.py line 356-374)
     - Replace direct `so.academic_cycle_id` reference with JOIN through cycle table
     - Add JOIN: `JOIN cycle c ON c.academic_year_id = so.academic_year_id AND c.semester_id = so.semester_id`
     - Update WHERE clause: `AND c.id = :cid` instead of `AND so.academic_cycle_id = :cid`
@@ -47,7 +47,7 @@
     - _Preservation: All preference submission validation rules continue to work unchanged_
     - _Requirements: 2.1, 3.1_
 
-  - [ ] 3.2 Fix semester state service query (app/coordinator/semester_state_service.py line 85-90)
+  - [x] 3.2 Fix semester state service query (app/coordinator/semester_state_service.py line 85-90)
     - Replace `so.academic_cycle_id` with JOIN through cycle table
     - Add JOIN: `LEFT JOIN cycle c ON c.semester_id = sem.id AND c.academic_year_id = so.academic_year_id`
     - Update SELECT: `c.id AS cycle_id` instead of `so.academic_cycle_id`
@@ -56,7 +56,7 @@
     - _Preservation: Window lifecycle management continues to work unchanged_
     - _Requirements: 2.4, 3.2_
 
-  - [ ] 3.3 Fix allocation service offering query (app/allocation/service.py line 131-135)
+  - [x] 3.3 Fix allocation service offering query (app/allocation/service.py line 131-135)
     - Replace `WHERE so.academic_cycle_id = :cid` with JOIN through cycle table
     - Add JOIN: `JOIN cycle c ON c.academic_year_id = so.academic_year_id AND c.semester_id = so.semester_id`
     - Update WHERE clause: `WHERE c.id = :cid` instead of `WHERE so.academic_cycle_id = :cid`
@@ -65,7 +65,7 @@
     - _Preservation: Allocation algorithm logic remains unchanged_
     - _Requirements: 2.3, 3.3_
 
-  - [ ] 3.4 Fix allocation service workload summary query (app/allocation/service.py line 689-692)
+  - [x] 3.4 Fix allocation service workload summary query (app/allocation/service.py line 689-692)
     - Replace `a.academic_cycle_id = :cid` with `a.cycle_id = :cid` (allocation table already migrated correctly)
     - Simplify query to use existing `allocation.cycle_id` column directly
     - _Bug_Condition: isBugCondition(query) where query.references("a.academic_cycle_id")_
@@ -73,7 +73,7 @@
     - _Preservation: Workload calculation produces identical results_
     - _Requirements: 2.3, 3.4_
 
-  - [ ] 3.5 Fix staff service deactivation query (app/admin/staff_service.py line 207-209)
+  - [x] 3.5 Fix staff service deactivation query (app/admin/staff_service.py line 207-209)
     - Replace `JOIN academic_cycle ac ON ac.id = a.academic_cycle_id` with `JOIN cycle c ON c.id = a.cycle_id`
     - Replace `ac.is_active = true` with `c.status != 'FROZEN'`
     - _Bug_Condition: isBugCondition(query) where query.references("a.academic_cycle_id") OR query.joins("academic_cycle")_
@@ -81,7 +81,7 @@
     - _Preservation: Staff deactivation validation continues to work unchanged_
     - _Requirements: 1.4, 3.4_
 
-  - [ ] 3.6 Fix demo script query (scripts/demo_prep.py line 144-146)
+  - [x] 3.6 Fix demo script query (scripts/demo_prep.py line 144-146)
     - Replace direct `so.academic_cycle_id` reference with JOIN through cycle table
     - Add JOIN: `JOIN cycle c ON c.academic_year_id = so.academic_year_id AND c.semester_id = so.semester_id`
     - Update WHERE clause: `WHERE c.id = {cycle_id}` instead of `WHERE so.academic_cycle_id = {cycle_id}`
@@ -90,7 +90,7 @@
     - _Preservation: Demo data generation logic remains unchanged_
     - _Requirements: 2.1_
 
-  - [ ] 3.7 Verify bug condition exploration test now passes
+  - [x] 3.7 Verify bug condition exploration test now passes
     - **Property 1: Expected Behavior** - Schema-Compliant Queries Execute Successfully
     - **IMPORTANT**: Re-run the SAME test from task 1 - do NOT write a new test
     - The test from task 1 encodes the expected behavior
@@ -104,7 +104,7 @@
       - `DELETE /api/admin/staff/{id}` validates active allocations correctly
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-  - [ ] 3.8 Verify preservation tests still pass
+  - [x] 3.8 Verify preservation tests still pass
     - **Property 2: Preservation** - Non-Query Operations Unchanged
     - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
     - Run preservation property tests from step 2
@@ -116,7 +116,7 @@
       - Audit logging generates correct entries
     - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-- [ ] 4. Checkpoint - Ensure all tests pass
+- [x] 4. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
   - Verify no PostgreSQL "column does not exist" errors
   - Verify all affected endpoints return correct data

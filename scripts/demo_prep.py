@@ -70,13 +70,26 @@ def main():
 
     # Step 2: Ensure active cycle
     print("\n[2/6] Academic cycle...")
-    cycle_id = psql("SELECT id FROM academic_cycle WHERE is_active = true LIMIT 1")
+    cycle_id = psql("SELECT id FROM cycle WHERE status = 'OPEN' LIMIT 1")
     if not cycle_id:
+        # Get or create academic year
+        ay_id = psql("SELECT id FROM academic_year WHERE label = '2025-2026' LIMIT 1")
+        if not ay_id:
+            psql_exec("INSERT INTO academic_year (label) VALUES ('2025-2026')")
+            ay_id = psql("SELECT id FROM academic_year WHERE label = '2025-2026' LIMIT 1")
+        
+        # Get semester (assuming EVEN semester exists)
+        sem_id = psql("SELECT id FROM semester WHERE label = 'EVEN' LIMIT 1")
+        if not sem_id:
+            print("  [FAIL] EVEN semester not found in database!")
+            sys.exit(1)
+        
+        # Create cycle
         psql_exec(
-            "INSERT INTO academic_cycle (academic_year, semester_type, is_active) "
-            "VALUES ('2025-2026', 'EVEN', true)"
+            f"INSERT INTO cycle (academic_year_id, semester_id, status) "
+            f"VALUES ({ay_id}, {sem_id}, 'OPEN')"
         )
-        cycle_id = psql("SELECT id FROM academic_cycle WHERE is_active = true LIMIT 1")
+        cycle_id = psql("SELECT id FROM cycle WHERE status = 'OPEN' LIMIT 1")
         print(f"  [OK] Created cycle id={cycle_id}")
     else:
         print(f"  [OK] Active cycle id={cycle_id}")
@@ -109,9 +122,9 @@ def main():
 
     # Step 4: Clear old data
     print("\n[4/6] Clearing old data...")
-    psql_exec(f"DELETE FROM allocation WHERE academic_cycle_id = {cycle_id}")
-    psql_exec(f"DELETE FROM workload_summary WHERE academic_cycle_id = {cycle_id}")
-    psql_exec(f"DELETE FROM faculty_preference WHERE academic_cycle_id = {cycle_id}")
+    psql_exec(f"DELETE FROM allocation WHERE cycle_id = {cycle_id}")
+    psql_exec(f"DELETE FROM workload_summary WHERE cycle_id = {cycle_id}")
+    psql_exec(f"DELETE FROM faculty_preference WHERE cycle_id = {cycle_id}")
     print("  [OK] Cleared allocations, workload summaries, and preferences")
 
     # Step 5: Seed preferences
@@ -140,8 +153,10 @@ def main():
             shift_sql = ""
 
         offerings_raw = psql(
-            f"SELECT id FROM subject_offering so "
-            f"WHERE so.academic_cycle_id = {cycle_id} AND so.is_active = true "
+            f"SELECT so.id FROM subject_offering so "
+            f"JOIN cycle c ON c.academic_year_id = so.academic_year_id "
+            f"             AND c.semester_id = so.semester_id "
+            f"WHERE c.id = {cycle_id} AND so.is_active = true "
             f"{shift_sql} ORDER BY RANDOM() LIMIT 5"
         )
 
@@ -153,7 +168,7 @@ def main():
             if off_id:
                 psql_exec(
                     f"INSERT INTO faculty_preference "
-                    f"(staff_id, subject_offering_id, preference_number, academic_cycle_id) "
+                    f"(staff_id, subject_offering_id, preference_number, cycle_id) "
                     f"VALUES ({staff_id}, {off_id}, {pref_num}, {cycle_id})"
                 )
                 total_prefs += 1
@@ -184,8 +199,8 @@ def main():
         print(f"  You can run allocation from the UI: /admin/allocation")
 
     # Final summary
-    pref_count = psql(f"SELECT count(*) FROM faculty_preference WHERE academic_cycle_id = {cycle_id}")
-    alloc_count = psql(f"SELECT count(*) FROM allocation WHERE academic_cycle_id = {cycle_id}")
+    pref_count = psql(f"SELECT count(*) FROM faculty_preference WHERE cycle_id = {cycle_id}")
+    alloc_count = psql(f"SELECT count(*) FROM allocation WHERE cycle_id = {cycle_id}")
 
     print()
     print("=" * 60)

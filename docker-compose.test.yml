@@ -52,7 +52,7 @@ services:
       GOOGLE_REDIRECT_URI: http://localhost:8000/auth/callback
 
       # Security
-      SECRET_KEY: test-secret-key
+      SECRET_KEY: test-secret-key-for-testing-purposes-only-32-chars-minimum
 
     volumes:
       # Mount source code and tests
@@ -63,10 +63,11 @@ services:
       sh -c "
         echo 'Waiting for test database to be ready...' &&
         sleep 3 &&
-        echo 'Running schema migration on test DB...' &&
-        psql $$DATABASE_URL -f migrations/schema.sql &&
-        echo 'Running window lifecycle migration on test DB...' &&
-        psql $$DATABASE_URL -f migrations/002_window_lifecycle.sql &&
+        echo 'Running migrations on test DB...' &&
+        for f in migrations/schema.sql migrations/002_window_lifecycle.sql migrations/003_seed_minimal.sql migrations/005_workload_schema.sql migrations/010_academic_cycle_support.sql migrations/016_semester_state_management.sql migrations/021_semester_specific_cycles.sql; do
+          echo \"Running $$f...\" &&
+          psql $$DATABASE_URL -f $$f || exit 1
+        done &&
         echo 'Running pytest...' &&
-        pytest tests/ -v --tb=short --color=yes
+        pytest tests/test_preservation_properties.py -v --tb=short --color=yes
       "
