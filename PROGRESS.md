@@ -1,51 +1,80 @@
-# StaffPage UI Update - Remove Role Column, Add CT Column
+# Staff List API Fix - CT Fields and is_active
 
-## Commit: 2222980
-**Message**: "StaffPage: remove Role column, add CT column for all staff"
+## Commit: 4e88981
+**Message**: "Fix staff list API: include ct fields and is_active in response"
 **Status**: Pushed to origin/main
 
-## Changes Made
+## Root Cause Analysis
 
-### REMOVED: "Roles" Column
-- Removed `<th>Roles</th>` header from table
-- Removed entire `<td>` cell that displayed:
-  - Role badge (HOD/TT Coordinator/Faculty with colored backgrounds)
-  - CT info badge below role badge
-  - Complex nested div structure with conditional rendering
+**Bug Symptoms**:
+1. CT Assignment column showed "—" for ALL staff (including confirmed class teachers)
+2. Status showed "Inactive" for ALL staff (even though is_active=true in DB)
 
-### ADDED: "CT Assignment" Column
-- Added `<th>CT Assignment</th>` header after Designation column
-- New `<td>` cell for EVERY staff row with:
-  - **For Class Teachers** (is_class_teacher === true AND ct_program not null/empty):
-    - Shows: `{ct_program} · Sec {ct_section} · Sem {ct_semester}`
-    - Style: Yellow pill badge (background #fef3c7, color #92400e, border #fde68a)
-    - Font size: 11px, padding: 2px 8px, border-radius: 6px
-  - **For Non-Class Teachers**:
-    - Shows: "—" (em dash)
-    - Style: Muted gray color (#9ca3af)
-- Column is ALWAYS visible for every staff member (not conditional)
+**Root Cause**: `/api/admin/staff/list` endpoint had incomplete SELECT query
 
-## TypeScript Check
+## What Was Missing
+
+### 1. In app/admin/router.py - GET /staff/list endpoint
+**BEFORE**: Custom SELECT query with only 4 fields
+```sql
+SELECT id, name, emp_code, designation 
+FROM staff 
+WHERE emp_code IS NOT NULL 
+ORDER BY emp_code
+```
+
+**AFTER**: Now calls `list_staff()` service function
+```python
+from app.admin.staff_service import list_staff
+return list_staff()
+```
+
+This service function includes ALL fields:
+- id, emp_code, name, email, designation, shift, tch_norm, role
+- is_active, is_class_teacher
+- ct_program, ct_section, ct_semester, ct_shift, ct_curriculum_year
+
+### 2. In app/admin/staff_router.py - StaffRecord Pydantic Model
+**MISSING**: `role` field
+
+**ADDED**:
+```python
+role: str | None = None
+```
+
+Now the model includes all fields that the service function returns.
+
+## Files Changed
+1. `app/admin/router.py` - Replaced custom SELECT with service function call
+2. `app/admin/staff_router.py` - Added `role` field to StaffRecord model
+
+## Validation
+
+### Python Syntax Check
+- `app/admin/router.py`: OK ✓
+- `app/admin/staff_router.py`: OK ✓
+
+### TypeScript Check
 ```
 cd frontend && npx tsc --noEmit 2>&1
 (empty output - zero errors)
 Exit Code: 0
 ```
 
-## Git Status
-- All changes committed and pushed
-- Branch: main (up to date with origin/main)
-- Working tree clean
-
-## Table Structure Now
-| Emp Code | Name | Designation | CT Assignment | Status | Actions |
-|----------|------|-------------|---------------|--------|---------|
-
 ## Result
-- Cleaner table layout without role badges
-- CT assignments are now prominently displayed in dedicated column
-- Easy to scan which staff are class teachers and their assignments
-- Non-CT staff show clear "—" indicator instead of empty space
+- Backend now returns complete staff data with all CT fields and is_active
+- Frontend will correctly display:
+  - CT Assignment column: Shows program/section/semester for class teachers, "—" for others
+  - Status column: Shows "Active" for is_active=true, "Inactive" for is_active=false
+- No frontend changes needed - it was already checking the correct fields
+
+## Git Log
+```
+4e88981 (HEAD -> main, origin/main) Fix staff list API: include ct fields and is_active in response
+2222980 StaffPage: remove Role column, add CT column for all staff
+11ad6cb fix: set correct roles for HOD (MCT44) and TT Coordinator (MCT48) in DB
+```
+
 
 
 

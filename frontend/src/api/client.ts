@@ -192,4 +192,16 @@ export const deleteSection = (id: number) => api.delete(`/subjects/sections/${id
 
 export const deleteProgram = (id: number) => api.delete(`/subjects/programs/${id}`);
 
+// ─── Curriculum Upload ───
+export const parseCurriculumFile = (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/curriculum/parse', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+};
+
+export const confirmCurriculumImport = (subjects: any[]) =>
+    api.post('/curriculum/confirm', { subjects });
+
 export default api;

@@ -26,6 +26,7 @@ from app.admin import router as admin_router
 from app.admin import cycle_router
 from app.admin import staff_router
 from app.subjects import router as subjects_router
+from app.curriculum import router as curriculum_router
 from app.reports import router as reports_router
 from app import debug_router
 from app.core.config import settings
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(cycle_router.router)
     app.include_router(staff_router.router)
     app.include_router(subjects_router.router)
+    app.include_router(curriculum_router.router)
     app.include_router(reports_router.router)
     app.include_router(debug_router.router)
     

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, RefreshCw, BookOpen, Users, HelpCircle } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, BookOpen, Users, HelpCircle, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 import ToastContainer from '../components/ToastContainer';
 import Modal from '../components/Modal';
 import {
     getSubjectOfferings, createSubjectOffering, deleteSubjectOffering,
     getSubjectPrograms, getSubjectSections, getSubjectSemesters,
-    createSection, createProgram, deleteSection, deleteProgram
+    createSection, createProgram, deleteSection, deleteProgram,
+    parseCurriculumFile, confirmCurriculumImport
 } from '../api/client';
 
 interface Offering {
@@ -45,7 +46,7 @@ interface Semester {
 }
 
 export default function CurriculumUploadPage() {
-    const [activeTab, setActiveTab] = useState<'offerings' | 'programs' | 'help'>('offerings');
+    const [activeTab, setActiveTab] = useState<'offerings' | 'programs' | 'upload' | 'help'>('offerings');
 
     const [offerings, setOfferings] = useState<Offering[]>([]);
     const [programs, setPrograms] = useState<Program[]>([]);
@@ -75,6 +76,12 @@ export default function CurriculumUploadPage() {
 
     const [newProgram, setNewProgram] = useState({ name: '', ug_pg: 'UG' });
     const [newSection, setNewSection] = useState({ label: '', shift: 1 });
+
+    // Upload state
+    const [uploadFile, setUploadFile] = useState<File | null>(null);
+    const [parsedSubjects, setParsedSubjects] = useState<any[]>([]);
+    const [uploadStep, setUploadStep] = useState<'select' | 'preview' | 'result'>('select');
+    const [importResult, setImportResult] = useState<any>(null);
 
     const loadData = async () => {
         setLoading(true);
@@ -185,6 +192,48 @@ export default function CurriculumUploadPage() {
         }
     };
 
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setUploadFile(file);
+        }
+    };
+
+    const handleParseFile = async () => {
+        if (!uploadFile) {
+            addToast('Please select a file first', 'error');
+            return;
+        }
+        
+        try {
+            const res = await parseCurriculumFile(uploadFile);
+            setParsedSubjects(res.data.subjects);
+            setUploadStep('preview');
+            addToast(res.data.message, 'success');
+        } catch (err: any) {
+            addToast(err.response?.data?.detail || 'Failed to parse file', 'error');
+        }
+    };
+
+    const handleConfirmImport = async () => {
+        try {
+            const res = await confirmCurriculumImport(parsedSubjects);
+            setImportResult(res.data);
+            setUploadStep('result');
+            addToast(res.data.message, res.data.failed > 0 ? 'warning' : 'success');
+            loadData(); // Refresh offerings list
+        } catch (err: any) {
+            addToast(err.response?.data?.detail || 'Failed to import subjects', 'error');
+        }
+    };
+
+    const handleResetUpload = () => {
+        setUploadFile(null);
+        setParsedSubjects([]);
+        setUploadStep('select');
+        setImportResult(null);
+    };
+
     return (
         <div className="page-container">
             <ToastContainer toasts={toasts} onRemove={removeToast} />
@@ -234,6 +283,23 @@ export default function CurriculumUploadPage() {
                     }}
                 >
                     <Users size={18} />Programs & Sections
+                </button>
+                <button
+                    onClick={() => setActiveTab('upload')}
+                    style={{
+                        padding: '0.75rem 1.5rem',
+                        background: 'transparent',
+                        border: 'none',
+                        borderBottom: activeTab === 'upload' ? '2px solid #2563eb' : '2px solid transparent',
+                        color: activeTab === 'upload' ? '#2563eb' : '#6b7280',
+                        fontWeight: activeTab === 'upload' ? 600 : 500,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                    }}
+                >
+                    <Upload size={18} />Bulk Upload
                 </button>
                 <button
                     onClick={() => setActiveTab('help')}
@@ -450,7 +516,150 @@ export default function CurriculumUploadPage() {
                 </div>
             )}
 
-            {/* TAB 3: How to Use */}
+            {/* TAB 3: Bulk Upload */}
+            {activeTab === 'upload' && (
+                <div>
+                    {uploadStep === 'select' && (
+                        <div className="glass-card" style={{ padding: '2rem' }}>
+                            <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem' }}>Upload Curriculum File</h3>
+                            <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
+                                Upload an Excel (.xlsx) or Word (.docx) file containing subject data. The file should have columns for:
+                                Course Code, Course Name, L, T, P, Credits, Category, Program, Semester, Section, Shift, Student Strength, Curriculum Year.
+                            </p>
+                            
+                            <div style={{ marginBottom: '1.5rem' }}>
+                                <input
+                                    type="file"
+                                    accept=".xlsx,.xls,.docx,.doc"
+                                    onChange={handleFileSelect}
+                                    style={{
+                                        padding: '0.75rem',
+                                        border: '2px dashed #d1d5db',
+                                        borderRadius: '0.5rem',
+                                        width: '100%',
+                                        cursor: 'pointer'
+                                    }}
+                                />
+                            </div>
+
+                            {uploadFile && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', padding: '0.75rem', background: '#f3f4f6', borderRadius: '0.5rem' }}>
+                                    <FileText size={20} color="#6b7280" />
+                                    <span style={{ color: '#374151', fontWeight: 500 }}>{uploadFile.name}</span>
+                                    <span style={{ color: '#6b7280', fontSize: '0.875rem' }}>({(uploadFile.size / 1024).toFixed(1)} KB)</span>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={handleParseFile}
+                                disabled={!uploadFile}
+                                className="btn btn-primary"
+                                style={{ opacity: uploadFile ? 1 : 0.5 }}
+                            >
+                                <Upload size={16} />Parse File
+                            </button>
+                        </div>
+                    )}
+
+                    {uploadStep === 'preview' && (
+                        <div>
+                            <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
+                                <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.5rem' }}>Preview Parsed Subjects</h3>
+                                <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
+                                    Found {parsedSubjects.length} subjects. Review and confirm to import.
+                                </p>
+                                <div style={{ display: 'flex', gap: '1rem' }}>
+                                    <button onClick={handleConfirmImport} className="btn btn-primary">
+                                        <CheckCircle size={16} />Confirm Import
+                                    </button>
+                                    <button onClick={handleResetUpload} className="btn btn-outline">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="glass-card" style={{ overflow: 'hidden' }}>
+                                <div className="overflow-x-auto">
+                                    <table className="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Code</th><th>Name</th><th>Program</th><th>Semester</th>
+                                                <th>Section</th><th>L</th><th>T</th><th>P</th><th>Credits</th>
+                                                <th>Category</th><th>Regulation</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {parsedSubjects.map((s, idx) => (
+                                                <tr key={idx}>
+                                                    <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{s.course_code}</td>
+                                                    <td>{s.course_name}</td>
+                                                    <td>{s.program_name}</td>
+                                                    <td><span className="badge badge-info">{s.semester_label}</span></td>
+                                                    <td><span className="badge badge-warning">{s.section_label}</span></td>
+                                                    <td>{s.l}</td>
+                                                    <td>{s.t}</td>
+                                                    <td>{s.p}</td>
+                                                    <td>{s.credits}</td>
+                                                    <td>{s.course_category}</td>
+                                                    <td><span className="badge badge-success">{s.curriculum_year}</span></td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {uploadStep === 'result' && importResult && (
+                        <div>
+                            <div className="glass-card" style={{ padding: '2rem', marginBottom: '1.5rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                                    {importResult.failed === 0 ? (
+                                        <CheckCircle size={48} color="#10b981" />
+                                    ) : (
+                                        <AlertCircle size={48} color="#f59e0b" />
+                                    )}
+                                    <div>
+                                        <h3 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.25rem' }}>Import Complete</h3>
+                                        <p style={{ color: '#6b7280' }}>{importResult.message}</p>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                                    <div style={{ padding: '1rem', background: '#d1fae5', borderRadius: '0.5rem' }}>
+                                        <div style={{ fontSize: '2rem', fontWeight: 700, color: '#065f46' }}>{importResult.imported}</div>
+                                        <div style={{ color: '#047857', fontSize: '0.875rem' }}>Successfully Imported</div>
+                                    </div>
+                                    <div style={{ padding: '1rem', background: '#fee2e2', borderRadius: '0.5rem' }}>
+                                        <div style={{ fontSize: '2rem', fontWeight: 700, color: '#991b1b' }}>{importResult.failed}</div>
+                                        <div style={{ color: '#dc2626', fontSize: '0.875rem' }}>Failed</div>
+                                    </div>
+                                </div>
+
+                                {importResult.errors && importResult.errors.length > 0 && (
+                                    <div style={{ marginBottom: '1.5rem' }}>
+                                        <h4 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem', color: '#dc2626' }}>Errors:</h4>
+                                        <div style={{ maxHeight: '200px', overflowY: 'auto', background: '#fef2f2', padding: '1rem', borderRadius: '0.5rem' }}>
+                                            {importResult.errors.map((err: string, idx: number) => (
+                                                <div key={idx} style={{ fontSize: '0.875rem', color: '#991b1b', marginBottom: '0.25rem' }}>
+                                                    • {err}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <button onClick={handleResetUpload} className="btn btn-primary">
+                                    Upload Another File
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* TAB 4: How to Use */}
             {activeTab === 'help' && (
                 <div className="glass-card" style={{ padding: '2rem' }}>
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem' }}>How to Use Subject Management</h3>
