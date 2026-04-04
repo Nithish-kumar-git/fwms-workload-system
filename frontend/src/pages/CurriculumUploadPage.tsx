@@ -220,7 +220,7 @@ export default function CurriculumUploadPage() {
             const res = await confirmCurriculumImport(parsedSubjects);
             setImportResult(res.data);
             setUploadStep('result');
-            addToast(res.data.message, res.data.failed > 0 ? 'warning' : 'success');
+            addToast(res.data.message, res.data.failed > 0 ? 'info' : 'success');
             loadData(); // Refresh offerings list
         } catch (err: any) {
             addToast(err.response?.data?.detail || 'Failed to import subjects', 'error');

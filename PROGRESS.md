@@ -1,80 +1,71 @@
-# Staff List API Fix - CT Fields and is_active
+# Task 15: Add Curriculum Bulk Upload Feature - COMPLETE
 
-## Commit: 4e88981
-**Message**: "Fix staff list API: include ct fields and is_active in response"
-**Status**: Pushed to origin/main
+## What Was Added
 
-## Root Cause Analysis
+### Backend (Python)
+1. Created `app/curriculum/__init__.py` - new curriculum module
+2. Created `app/curriculum/router.py` with:
+   - POST `/api/curriculum/parse` - parses XLSX/DOCX files and extracts subject data
+   - POST `/api/curriculum/confirm` - imports parsed subjects into database
+   - `parse_excel()` - handles Excel file parsing using openpyxl
+   - `parse_docx()` - handles Word file parsing using python-docx
+   - Helper functions to resolve program/semester/section IDs from names
+3. Updated `app/main.py` - registered curriculum router
 
-**Bug Symptoms**:
-1. CT Assignment column showed "—" for ALL staff (including confirmed class teachers)
-2. Status showed "Inactive" for ALL staff (even though is_active=true in DB)
+### Frontend (TypeScript/React)
+1. Updated `frontend/src/api/client.ts` - added:
+   - `parseCurriculumFile(file)` - uploads file for parsing
+   - `confirmCurriculumImport(subjects)` - confirms import
+2. Updated `frontend/src/pages/CurriculumUploadPage.tsx`:
+   - Added new "Bulk Upload" tab (4th tab)
+   - Added upload state management (file, parsed subjects, step, result)
+   - Added 3-step upload flow:
+     - Step 1: File selection (XLSX/DOCX)
+     - Step 2: Preview parsed subjects in table
+     - Step 3: Import result with success/failure counts
+   - Added handlers: `handleFileSelect`, `handleParseFile`, `handleConfirmImport`, `handleResetUpload`
+   - Added icons: Upload, FileText, CheckCircle, AlertCircle
 
-**Root Cause**: `/api/admin/staff/list` endpoint had incomplete SELECT query
+## File Format Expected
+Excel/Word files should have these columns (in order):
+1. Course Code
+2. Course Name
+3. L (Lecture hours)
+4. T (Tutorial hours)
+5. P (Practical hours)
+6. Credits
+7. Course Category (CC, DE, BS, etc.)
+8. Program Name (must match existing program)
+9. Semester Label (must match existing semester)
+10. Section Label (must match existing section)
+11. Shift (1 or 2)
+12. Student Strength
+13. Curriculum Year (e.g., 2022, 2023)
 
-## What Was Missing
+## Validation Checks
+- Python syntax: OK (app/curriculum/router.py, app/main.py)
+- TypeScript: Zero errors
+- Git commit: 794f1fc
 
-### 1. In app/admin/router.py - GET /staff/list endpoint
-**BEFORE**: Custom SELECT query with only 4 fields
-```sql
-SELECT id, name, emp_code, designation 
-FROM staff 
-WHERE emp_code IS NOT NULL 
-ORDER BY emp_code
+## Dependencies Required
+Backend needs these Python packages (may need to install):
+- `openpyxl` - for Excel parsing
+- `python-docx` - for Word parsing
+
+If not installed, add to requirements.txt or install via:
+```bash
+pip install openpyxl python-docx
 ```
 
-**AFTER**: Now calls `list_staff()` service function
-```python
-from app.admin.staff_service import list_staff
-return list_staff()
-```
+## How It Works
+1. User uploads XLSX/DOCX file in "Bulk Upload" tab
+2. Backend parses file and extracts subject data
+3. Frontend shows preview table with all parsed subjects
+4. User confirms import
+5. Backend creates subject offerings for each subject
+6. Shows result with success/failure counts and error details
 
-This service function includes ALL fields:
-- id, emp_code, name, email, designation, shift, tch_norm, role
-- is_active, is_class_teacher
-- ct_program, ct_section, ct_semester, ct_shift, ct_curriculum_year
-
-### 2. In app/admin/staff_router.py - StaffRecord Pydantic Model
-**MISSING**: `role` field
-
-**ADDED**:
-```python
-role: str | None = None
-```
-
-Now the model includes all fields that the service function returns.
-
-## Files Changed
-1. `app/admin/router.py` - Replaced custom SELECT with service function call
-2. `app/admin/staff_router.py` - Added `role` field to StaffRecord model
-
-## Validation
-
-### Python Syntax Check
-- `app/admin/router.py`: OK ✓
-- `app/admin/staff_router.py`: OK ✓
-
-### TypeScript Check
-```
-cd frontend && npx tsc --noEmit 2>&1
-(empty output - zero errors)
-Exit Code: 0
-```
-
-## Result
-- Backend now returns complete staff data with all CT fields and is_active
-- Frontend will correctly display:
-  - CT Assignment column: Shows program/section/semester for class teachers, "—" for others
-  - Status column: Shows "Active" for is_active=true, "Inactive" for is_active=false
-- No frontend changes needed - it was already checking the correct fields
-
-## Git Log
-```
-4e88981 (HEAD -> main, origin/main) Fix staff list API: include ct fields and is_active in response
-2222980 StaffPage: remove Role column, add CT column for all staff
-11ad6cb fix: set correct roles for HOD (MCT44) and TT Coordinator (MCT48) in DB
-```
-
-
-
-
+## Next Steps
+- Test with sample XLSX/DOCX files
+- Verify openpyxl and python-docx are installed on Railway
+- Add to requirements.txt if missing
