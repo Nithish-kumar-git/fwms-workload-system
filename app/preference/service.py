@@ -132,57 +132,86 @@ def validate_preference(staff_id: int, subject_offering_id: int, preference_numb
             ct_semester = staff[5]
             ct_shift = staff[6]
             
-            # Check if offering matches class teacher's class
-            offering_program = offering[7]    # program_name
-            offering_semester = offering[8]   # semester_label
-            offering_section = offering[9]    # section_label
-            offering_shift_val = offering[1]  # shift
+            # STEP 1: Check if ANY subjects exist for this CT's class
+            # Query active offerings matching ct_program + ct_semester for the current cycle
+            ct_subjects_count = session.execute(
+                text("""
+                    SELECT COUNT(*)
+                    FROM subject_offering so
+                    JOIN program p ON p.id = so.program_id
+                    JOIN semester sem ON sem.id = so.semester_id
+                    JOIN cycle c ON c.academic_year_id = so.academic_year_id 
+                                AND c.semester_id = so.semester_id
+                    WHERE so.is_active = true
+                      AND c.status = 'OPEN'
+                      AND p.name = :ct_program
+                      AND sem.label = :ct_semester
+                """),
+                {"ct_program": ct_program, "ct_semester": ct_semester}
+            ).scalar()
             
-            # Normalize function for string comparison
-            def normalize(val):
-                if val is None:
-                    return ""
-                return str(val).strip().upper().replace(" ", "")
-            
-            mismatch = False
-            mismatch_detail = []
-            
-            # Program comparison - normalize to handle "MCA(General)" vs "MCA (General)"
-            if ct_program and offering_program:
-                if normalize(ct_program) != normalize(offering_program):
-                    mismatch = True
-                    mismatch_detail.append(f"program ({ct_program} vs {offering_program})")
-            
-            # Semester comparison - normalize to handle "II" vs "2" or "Semester II" vs "II"
-            if ct_semester and offering_semester:
-                ct_sem_norm = normalize(ct_semester).replace("SEMESTER", "")
-                off_sem_norm = normalize(offering_semester).replace("SEMESTER", "")
-                if ct_sem_norm != off_sem_norm:
-                    mismatch = True
-                    mismatch_detail.append(f"semester ({ct_semester} vs {offering_semester})")
-            
-            # Section comparison - normalize
-            if ct_section and offering_section:
-                if normalize(ct_section) != normalize(offering_section):
-                    mismatch = True
-                    mismatch_detail.append(f"section ({ct_section} vs {offering_section})")
-            
-            # Shift comparison - convert to int
-            if ct_shift and offering_shift_val:
-                try:
-                    if int(ct_shift) != int(offering_shift_val):
+            # If NO subjects exist for their class, waive the CT rule entirely
+            if ct_subjects_count == 0:
+                logger.info(
+                    f"CT rule waived for staff_id={staff_id}: "
+                    f"No subjects found for {ct_program} Semester {ct_semester}"
+                )
+                # Allow preference 1 for any subject - skip CT validation
+                pass  # Continue to other validations
+            else:
+                # Subjects exist for their class - enforce the CT rule
+                # Check if offering matches class teacher's class
+                offering_program = offering[7]    # program_name
+                offering_semester = offering[8]   # semester_label
+                offering_section = offering[9]    # section_label
+                offering_shift_val = offering[1]  # shift
+                
+                # Normalize function for string comparison
+                def normalize(val):
+                    if val is None:
+                        return ""
+                    return str(val).strip().upper().replace(" ", "")
+                
+                mismatch = False
+                mismatch_detail = []
+                
+                # Program comparison - normalize to handle "MCA(General)" vs "MCA (General)"
+                if ct_program and offering_program:
+                    if normalize(ct_program) != normalize(offering_program):
                         mismatch = True
-                        mismatch_detail.append(f"shift ({ct_shift} vs {offering_shift_val})")
-                except (ValueError, TypeError):
-                    pass  # Skip shift comparison if conversion fails
-            
-            if mismatch:
-                return {
-                    "valid": False,
-                    "error": f"Class teacher must give preference 1 to their own class. "
-                             f"Mismatch: {', '.join(mismatch_detail)}",
-                    "rule": "CT-01"
-                }
+                        mismatch_detail.append(f"program ({ct_program} vs {offering_program})")
+                
+                # Semester comparison - normalize to handle "II" vs "2" or "Semester II" vs "II"
+                if ct_semester and offering_semester:
+                    ct_sem_norm = normalize(ct_semester).replace("SEMESTER", "")
+                    off_sem_norm = normalize(offering_semester).replace("SEMESTER", "")
+                    if ct_sem_norm != off_sem_norm:
+                        mismatch = True
+                        mismatch_detail.append(f"semester ({ct_semester} vs {offering_semester})")
+                
+                # Section comparison - normalize
+                if ct_section and offering_section:
+                    if normalize(ct_section) != normalize(offering_section):
+                        mismatch = True
+                        mismatch_detail.append(f"section ({ct_section} vs {offering_section})")
+                
+                # Shift comparison - convert to int
+                if ct_shift and offering_shift_val:
+                    try:
+                        if int(ct_shift) != int(offering_shift_val):
+                            mismatch = True
+                            mismatch_detail.append(f"shift ({ct_shift} vs {offering_shift_val})")
+                    except (ValueError, TypeError):
+                        pass  # Skip shift comparison if conversion fails
+                
+                if mismatch:
+                    return {
+                        "valid": False,
+                        "error": f"Your class has {ct_subjects_count} subject(s) this semester. "
+                                 f"As class teacher, preference 1 must go to your class subject. "
+                                 f"Mismatch: {', '.join(mismatch_detail)}",
+                        "rule": "CT-01"
+                    }
         
         # Check max preferences count
         pref_count = session.execute(
