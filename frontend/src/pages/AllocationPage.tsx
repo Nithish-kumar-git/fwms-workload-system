@@ -224,9 +224,9 @@ export default function AllocationPage() {
                     {/* Allocations Table */}
                     <div className="glass-card" style={{ overflow: 'hidden', marginBottom: '1.5rem' }}>
                         <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #e5e7eb', background: '#f9fafb' }}>
-                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#111827' }}>Allocations ({result.allocations.length})</h3>
+                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#111827' }}>Allocations ({(result.allocations || []).length})</h3>
                         </div>
-                        {result.allocations.length === 0 ? (
+                        {(result.allocations || []).length === 0 ? (
                             <p style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>No allocations were made in this run.</p>
                         ) : (
                             <div className="overflow-x-auto">
@@ -239,7 +239,7 @@ export default function AllocationPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {result.allocations.slice(0, 100).map((a: any, i: number) => (
+                                        {(result.allocations || []).slice(0, 100).map((a: any, i: number) => (
                                             <tr key={i}>
                                                 <td style={{ fontWeight: 500, color: '#111827' }}>{a.staff_name}</td>
                                                 <td style={{ fontFamily: 'monospace', color: '#6b7280', fontSize: '0.8125rem' }}>{a.emp_code}</td>
@@ -262,7 +262,7 @@ export default function AllocationPage() {
                                 </table>
                             </div>
                         )}
-                        {result.allocations.length > 100 && (
+                        {(result.allocations || []).length > 100 && (
                             <div style={{ padding: '1rem', textAlign: 'center', borderTop: '1px solid #e5e7eb', background: '#f9fafb' }}>
                                 <span style={{ color: '#6b7280', fontSize: '0.875rem' }}>
                                     Showing first 100 results. Go to Review page to see all.
@@ -272,12 +272,12 @@ export default function AllocationPage() {
                     </div>
 
                     {/* Unallocated */}
-                    {result.unallocated.length > 0 && (
+                    {(result.unallocated || []).length > 0 && (
                         <div className="glass-card" style={{ overflow: 'hidden' }}>
                             <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #e5e7eb', background: '#fef3c7' }}>
                                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <AlertTriangle size={18} />
-                                    Unallocated Subjects ({result.unallocated.length})
+                                    Unallocated Subjects ({(result.unallocated || []).length})
                                 </h3>
                                 <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.8125rem', color: '#92400e' }}>
                                     These subjects require manual assignment by the coordinator.
@@ -288,7 +288,7 @@ export default function AllocationPage() {
                                     <tr><th>Subject</th><th>Program</th><th>Sem</th><th>Sec</th><th>TCH</th><th>Reason</th></tr>
                                 </thead>
                                 <tbody>
-                                    {result.unallocated.map((u: any, i: number) => (
+                                    {(result.unallocated || []).map((u: any, i: number) => (
                                         <tr key={i}>
                                             <td style={{ fontFamily: 'monospace' }}>{u.subject_code}</td>
                                             <td>{u.program_name}</td>

@@ -138,24 +138,43 @@ def validate_preference(staff_id: int, subject_offering_id: int, preference_numb
             offering_section = offering[9]    # section_label
             offering_shift_val = offering[1]  # shift
             
+            # Normalize function for string comparison
+            def normalize(val):
+                if val is None:
+                    return ""
+                return str(val).strip().upper().replace(" ", "")
+            
             mismatch = False
             mismatch_detail = []
             
-            if ct_program and offering_program and ct_program.upper() != offering_program.upper():
-                mismatch = True
-                mismatch_detail.append(f"program ({ct_program} vs {offering_program})")
+            # Program comparison - normalize to handle "MCA(General)" vs "MCA (General)"
+            if ct_program and offering_program:
+                if normalize(ct_program) != normalize(offering_program):
+                    mismatch = True
+                    mismatch_detail.append(f"program ({ct_program} vs {offering_program})")
             
-            if ct_semester and offering_semester and str(ct_semester).upper() != str(offering_semester).upper():
-                mismatch = True
-                mismatch_detail.append(f"semester ({ct_semester} vs {offering_semester})")
+            # Semester comparison - normalize to handle "II" vs "2" or "Semester II" vs "II"
+            if ct_semester and offering_semester:
+                ct_sem_norm = normalize(ct_semester).replace("SEMESTER", "")
+                off_sem_norm = normalize(offering_semester).replace("SEMESTER", "")
+                if ct_sem_norm != off_sem_norm:
+                    mismatch = True
+                    mismatch_detail.append(f"semester ({ct_semester} vs {offering_semester})")
             
-            if ct_section and offering_section and str(ct_section).upper() != str(offering_section).upper():
-                mismatch = True
-                mismatch_detail.append(f"section ({ct_section} vs {offering_section})")
+            # Section comparison - normalize
+            if ct_section and offering_section:
+                if normalize(ct_section) != normalize(offering_section):
+                    mismatch = True
+                    mismatch_detail.append(f"section ({ct_section} vs {offering_section})")
             
-            if ct_shift and offering_shift_val and int(ct_shift) != int(offering_shift_val):
-                mismatch = True
-                mismatch_detail.append(f"shift ({ct_shift} vs {offering_shift_val})")
+            # Shift comparison - convert to int
+            if ct_shift and offering_shift_val:
+                try:
+                    if int(ct_shift) != int(offering_shift_val):
+                        mismatch = True
+                        mismatch_detail.append(f"shift ({ct_shift} vs {offering_shift_val})")
+                except (ValueError, TypeError):
+                    pass  # Skip shift comparison if conversion fails
             
             if mismatch:
                 return {
