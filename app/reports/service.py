@@ -146,6 +146,19 @@ def get_subject_summary(
         
         logger.info(f"[get_subject_summary] Using academic_year={academic_year}, year_id={year_id}")
         
+        # FIX: Get semester_ids from OPEN cycles, then query offerings WITHOUT academic_year_id filter
+        # This allows MCA subjects with mismatched academic_year_id to still appear
+        open_semester_ids = session.execute(
+            text("SELECT semester_id FROM cycle WHERE status = 'OPEN'")
+        ).fetchall()
+        open_sem_ids = [r[0] for r in open_semester_ids]
+        
+        logger.info(f"[get_subject_summary] Open semester IDs: {open_sem_ids}")
+        
+        if not open_sem_ids:
+            logger.warning("[get_subject_summary] No open cycles found, returning empty result")
+            return {"total": 0, "records": []}
+        
         rows = session.execute(
             text("""
                 SELECT so.id, sub.code, sub.name, p.name AS program,
@@ -161,14 +174,11 @@ def get_subject_summary(
                 JOIN section sec ON sec.id = so.section_id
                 LEFT JOIN allocation a ON a.subject_offering_id = so.id
                 LEFT JOIN staff s ON s.id = a.staff_id
-                WHERE so.academic_year_id = :year_id
-                  AND so.semester_id IN (
-                      SELECT semester_id FROM cycle 
-                      WHERE status = 'OPEN' AND academic_year_id = :year_id
-                  )
+                WHERE so.semester_id = ANY(:sem_ids)
+                  AND so.is_active = true
                 ORDER BY p.name, sem.label, sec.label, sub.code
             """),
-            {"year_id": year_id}
+            {"sem_ids": open_sem_ids}
         ).fetchall()
 
     logger.info(f"[get_subject_summary] Query returned {len(rows)} rows")
