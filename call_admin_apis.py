@@ -1,7 +1,7 @@
-import urllib.request, json, time
-
-print("Waiting 60 seconds for Railway deployment...")
-time.sleep(60)
+#!/usr/bin/env python3
+import urllib.request
+import json
+import time
 
 base = "https://fwms-workload-system-production.up.railway.app/api/reports"
 
@@ -27,14 +27,17 @@ def call(method, path):
         print(f"ERROR {method} {path}: {e}")
         print('='*80)
 
-# Step 1: Check current state
+print("Waiting 60 seconds for Railway deployment...")
+time.sleep(60)
+
+print("\n\nSTEP 1: Check database state")
 call("GET", "/admin/db-state")
 
-# Step 2: Fix duplicate programs
+print("\n\nSTEP 2: Fix duplicate programs")
 call("POST", "/admin/fix-duplicate-programs")
 
-# Step 3: Seed MCA odd semesters
+print("\n\nSTEP 3: Seed MCA odd semesters")
 call("POST", "/admin/seed-mca-odd")
 
-# Step 4: Verify final state
+print("\n\nSTEP 4: Verify database state after seeding")
 call("GET", "/admin/db-state")

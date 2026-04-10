@@ -266,12 +266,15 @@ async def seed_mca_odd_semesters():
             ).fetchall()
             section_ids = [r[0] for r in sections]
             
-            academic_year_id = session.execute(
-                text("SELECT id FROM academic_year ORDER BY id DESC LIMIT 1")
-            ).scalar()
+            academic_year_row = session.execute(
+                text("SELECT id, name FROM academic_year ORDER BY id DESC LIMIT 1")
+            ).fetchone()
+            academic_year_id = academic_year_row[0]
+            academic_year_name = academic_year_row[1]
             
             results["section_ids"] = section_ids
             results["academic_year_id"] = academic_year_id
+            results["academic_year_name"] = academic_year_name
             
             # Subjects to seed
             sem1_subjects = [
@@ -312,7 +315,7 @@ async def seed_mca_odd_semesters():
                 results["subjects_created"].append(code)
                 return row
             
-            def upsert_offering(sub_id, prog_id, sem_id, sec_id, ay_id):
+            def upsert_offering(sub_id, prog_id, sem_id, sec_id, ay_id, ay_name):
                 existing = session.execute(
                     text("""
                         SELECT id FROM subject_offering
@@ -327,10 +330,10 @@ async def seed_mca_odd_semesters():
                 
                 session.execute(
                     text("""
-                        INSERT INTO subject_offering(subject_id, program_id, semester_id, section_id, shift, is_active, academic_year_id)
-                        VALUES(:s, :p, :sem, :sec, 1, true, :ay)
+                        INSERT INTO subject_offering(subject_id, program_id, semester_id, section_id, shift, is_active, academic_year_id, academic_year)
+                        VALUES(:s, :p, :sem, :sec, 1, true, :ay_id, :ay_name)
                     """),
-                    dict(s=sub_id, p=prog_id, sem=sem_id, sec=sec_id, ay=ay_id)
+                    dict(s=sub_id, p=prog_id, sem=sem_id, sec=sec_id, ay_id=ay_id, ay_name=ay_name)
                 )
                 results["offerings_created"] += 1
             
@@ -339,12 +342,14 @@ async def seed_mca_odd_semesters():
                 sid = upsert_subject(*subj)
                 for prog_id in mca_prog_ids:
                     for sec_id in section_ids:
-                        upsert_offering(sid, prog_id, sem_map[1], sec_id, academic_year_id)
+                        upsert_offering(sid, prog_id, sem_map[1], sec_id, academic_year_id, academic_year_name)
             
             # Seed Sem III
             for subj in sem3_subjects:
                 sid = upsert_subject(*subj)
                 for prog_id in mca_prog_ids:
+                    for sec_id in section_ids:
+                        upsert_offering(sid, prog_id, sem_map[3], sec_id, academic_year_id, academic_year_name)
                     for sec_id in section_ids:
                         upsert_offering(sid, prog_id, sem_map[3], sec_id, academic_year_id)
             
