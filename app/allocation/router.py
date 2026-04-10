@@ -285,7 +285,13 @@ async def run_all_open_semesters(
         "success": True,
         "message": f"Allocated {len(open_cycles)} semesters: {total_assigned} assigned, {total_unassigned} unassigned",
         "semesters_processed": len(open_cycles),
-        "total_assigned": total_assigned,
-        "total_unassigned": total_unassigned,
+        "subjects_total": total_assigned + total_unassigned,
+        "subjects_assigned": total_assigned,
+        "subjects_unassigned": total_unassigned,
+        "faculty_overloaded": 0,  # Not computed in run-all mode
+        "faculty_underloaded": 0,
+        "faculty_balanced": 0,
+        "allocations": [],  # Not returned in run-all mode
+        "unallocated": [],
         "results": results,
     }
