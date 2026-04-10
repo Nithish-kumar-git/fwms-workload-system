@@ -350,8 +350,6 @@ async def seed_mca_odd_semesters():
                 for prog_id in mca_prog_ids:
                     for sec_id in section_ids:
                         upsert_offering(sid, prog_id, sem_map[3], sec_id, academic_year_id, academic_year_name)
-                    for sec_id in section_ids:
-                        upsert_offering(sid, prog_id, sem_map[3], sec_id, academic_year_id)
             
             session.commit()
             results["status"] = "SUCCESS"
