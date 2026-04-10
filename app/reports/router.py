@@ -128,7 +128,7 @@ async def db_state():
         ).fetchall()]
         
         result["semesters"] = [dict(r._mapping) for r in session.execute(
-            text("SELECT id, name, label FROM semester ORDER BY id")
+            text("SELECT id, label FROM semester ORDER BY id")
         ).fetchall()]
         
         result["open_cycles"] = [dict(r._mapping) for r in session.execute(
@@ -137,12 +137,12 @@ async def db_state():
         
         result["mca_offerings_by_sem"] = [dict(r._mapping) for r in session.execute(
             text("""
-                SELECT p.name as prog, sem.name as sem_name, sem.id as sem_id, COUNT(*) as cnt
+                SELECT p.name as prog, sem.label as sem_label, sem.id as sem_id, COUNT(*) as cnt
                 FROM subject_offering so
                 JOIN program p ON p.id = so.program_id
                 JOIN semester sem ON sem.id = so.semester_id
                 WHERE p.name ILIKE '%MCA%'
-                GROUP BY p.name, sem.name, sem.id
+                GROUP BY p.name, sem.label, sem.id
                 ORDER BY sem.id
             """)
         ).fetchall()]
@@ -236,22 +236,22 @@ async def seed_mca_odd_semesters():
                 results["errors"].append("No MCA programs found in program table")
                 return results
             
-            # Get semester IDs - try both name and label columns
+            # Get semester IDs - try label column only
             semesters = session.execute(
-                text("SELECT id, name, label FROM semester ORDER BY id")
+                text("SELECT id, label FROM semester ORDER BY id")
             ).fetchall()
             sem_map = {}
             
             for s in semesters:
                 r = dict(s._mapping)
-                for val in [r.get('name', ''), r.get('label', '')]:
-                    v = str(val).strip().upper()
-                    if v in ('I', 'SEMESTER I', 'SEM I', '1'):
-                        sem_map[1] = r['id']
-                    elif v in ('II', 'SEMESTER II', 'SEM II', '2'):
-                        sem_map[2] = r['id']
-                    elif v in ('III', 'SEMESTER III', 'SEM III', '3'):
-                        sem_map[3] = r['id']
+                val = r.get('label', '')
+                v = str(val).strip().upper()
+                if v in ('I', 'SEMESTER I', 'SEM I', '1'):
+                    sem_map[1] = r['id']
+                elif v in ('II', 'SEMESTER II', 'SEM II', '2'):
+                    sem_map[2] = r['id']
+                elif v in ('III', 'SEMESTER III', 'SEM III', '3'):
+                    sem_map[3] = r['id']
             
             results["semester_map"] = sem_map
             
