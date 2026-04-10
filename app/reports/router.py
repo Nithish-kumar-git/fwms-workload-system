@@ -148,7 +148,7 @@ async def db_state():
         ).fetchall()]
         
         result["sections"] = [dict(r._mapping) for r in session.execute(
-            text("SELECT id, name FROM section ORDER BY id")
+            text("SELECT id, label FROM section ORDER BY id")
         ).fetchall()]
     
     return result
@@ -262,7 +262,7 @@ async def seed_mca_odd_semesters():
             
             # Get sections and academic year
             sections = session.execute(
-                text("SELECT id, name FROM section ORDER BY id")
+                text("SELECT id, label FROM section ORDER BY id")
             ).fetchall()
             section_ids = [r[0] for r in sections]
             
