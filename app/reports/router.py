@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
-# ─── DEBUG Endpoint (public, no auth) ───────────────────────────────────────
+# ─── DEBUG Endpoints (public, no auth) ──────────────────────────────────────
 
 @router.get("/export/staff-debug")
 async def get_staff_debug():
@@ -67,6 +67,50 @@ async def get_staff_debug():
             }
             for r in rows
         ]
+
+
+@router.get("/debug-offerings")
+async def debug_offerings():
+    """
+    PUBLIC DEBUG endpoint - Show subject offerings grouped by program and semester.
+    No authentication required for debugging.
+    """
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    with get_transaction() as session:
+        # Get open cycles
+        open_cycles = session.execute(
+            text("SELECT id, semester_id, status, academic_year_id FROM cycle WHERE status='OPEN'")
+        ).fetchall()
+        
+        # Get offerings grouped by program and semester
+        rows = session.execute(
+            text("""
+                SELECT p.name as prog, sem.label as sem, COUNT(*) as cnt, 
+                       bool_and(so.is_active) as all_active,
+                       array_agg(DISTINCT so.academic_year_id) as year_ids
+                FROM subject_offering so
+                JOIN program p ON p.id = so.program_id
+                JOIN semester sem ON sem.id = so.semester_id
+                GROUP BY p.name, sem.label
+                ORDER BY p.name, sem.label
+            """)
+        ).fetchall()
+        
+        return {
+            "open_cycles": [{"id": r[0], "semester_id": r[1], "status": r[2], "academic_year_id": r[3]} for r in open_cycles],
+            "offerings_by_program_semester": [
+                {
+                    "program": r[0],
+                    "semester": r[1],
+                    "count": r[2],
+                    "all_active": r[3],
+                    "academic_year_ids": r[4]
+                }
+                for r in rows
+            ]
+        }
 
 
 # ─── Live Report Endpoints (view only, not for export) ───────────────────────
