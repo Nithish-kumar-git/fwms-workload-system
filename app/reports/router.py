@@ -328,7 +328,7 @@ async def seed_mca_odd_semesters():
                 session.execute(
                     text("""
                         INSERT INTO subject_offering(subject_id, program_id, semester_id, section_id, shift, is_active, academic_year_id)
-                        VALUES(:s, :p, :sem, :sec, 'Shift 1', true, :ay)
+                        VALUES(:s, :p, :sem, :sec, 1, true, :ay)
                     """),
                     dict(s=sub_id, p=prog_id, sem=sem_id, sec=sec_id, ay=ay_id)
                 )
