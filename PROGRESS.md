@@ -1,140 +1,92 @@
-# MCA Subjects Missing from Preference Catalog - Fix Applied
+# MCA Subjects Missing - ROOT CAUSE FOUND
 
-## Status: FIXED (Awaiting Deployment)
+## STEP 1: Production API Test
+- **Result**: 401 Unauthorized (endpoint requires auth)
+- Cannot test directly without token
 
-## Root Cause
-The preference catalog endpoint `/api/reports/subject-summary` was filtering subject offerings by BOTH:
-- `academic_year_id` from the cycle
-- `semester_id` from OPEN cycles
+## STEP 2: Code Verification
+- **Result**: ✓ Code has the NEW query using `ANY(:sem_ids)`
+- **Confirmed**: The fix was deployed correctly
 
-MCA subjects have mismatched `academic_year_id` values in the database, causing them to be excluded even when odd semester cycles are OPEN.
+## STEP 3: Column Names
+- **Result**: ✓ Semester uses `label` column, Section uses `label` column
+- **Confirmed**: Query is correct
 
-## Fix Applied (Commit 13bae8f)
+## STEP 4: Debug Endpoint Results
 
-### File Modified: `app/reports/service.py`
-
-### Changes:
-**OLD Query (BROKEN):**
-```sql
-WHERE so.academic_year_id = :year_id
-  AND so.semester_id IN (
-      SELECT semester_id FROM cycle
-      WHERE status = 'OPEN' AND academic_year_id = :year_id
-  )
+### Open Cycles (Production):
+```
+Cycle 1: semester_id=2, status=OPEN, academic_year_id=1
+Cycle 2: semester_id=4, status=OPEN, academic_year_id=1
+Cycle 3: semester_id=6, status=OPEN, academic_year_id=1
 ```
 
-**NEW Query (FIXED):**
-```sql
-WHERE so.semester_id = ANY(:sem_ids)
-  AND so.is_active = true
+**CRITICAL FINDING**: Only EVEN semesters (2, 4, 6) are OPEN!
+
+### MCA Offerings Found:
+```
+MCA(BD) - Sem II: 1 offerings, active=True, year_ids=[1]
+MCA(BD+CC) - Sem IV: 1 offerings, active=True, year_ids=[1]
+MCA(CC) - Sem II: 1 offerings, active=True, year_ids=[1]
+MCA(General) - Sem II: 1 offerings, active=True, year_ids=[1]
+MCA(General) - Sem IV: 1 offerings, active=True, year_ids=[1]
+MCA(General+BD) - Sem II: 6 offerings, active=True, year_ids=[1]
+MCA(General+CC) - Sem II: 5 offerings, active=True, year_ids=[1]
 ```
 
-### Logic:
-1. Get all `semester_id` values from cycles with `status = 'OPEN'`
-2. Query subject offerings that match ANY of those semester IDs
-3. **Removed** the `academic_year_id` filter entirely
-4. Added `is_active = true` to only show active offerings
+**MCA subjects exist and are active!** They are in semesters II and IV (EVEN semesters).
 
-### Why This Works:
-- MCA subjects with mismatched `academic_year_id` will now appear as long as their `semester_id` matches an OPEN cycle
-- The fix is more forgiving and doesn't rely on perfect ID matching
-- Only filters by what matters: semester and active status
-
-## Verification Steps
-
-### 1. Python Syntax Check
-```bash
-python3 -c "import ast; ast.parse(open('app/reports/service.py').read()); print('✓ Python syntax OK')"
+### Duplicate Programs Found:
 ```
-**Result:** ✓ Python syntax OK
-
-### 2. Git Status
-```bash
-git log --oneline -5
-```
-**Result:**
-```
-13bae8f (HEAD -> main, origin/main, origin/HEAD) fix: preference catalog now fetches MCA odd sem subjects without academic_year filter
-ef715fb fix: allocation run-all endpoint field names match frontend expectations
+BCA(CYBER+MM) vs BCA(Cyber+MM)  ← case mismatch
+BCA(GENERAL) vs BCA(General)    ← case mismatch
 ```
 
-### 3. Commit Details
-- **Commit:** 13bae8f
-- **Author:** Nithish Kumar V
-- **Date:** Fri Apr 10 14:21:52 2026 +0530
-- **Files Changed:** 
-  - `app/reports/service.py` (22 lines changed)
-  - `PROGRESS.md` (225 lines changed)
+## ROOT CAUSE ANALYSIS
 
-## Frontend Verification
+The query is working correctly! MCA subjects ARE being returned by the API because:
+1. ✓ OPEN cycles exist for semesters 2, 4, 6
+2. ✓ MCA offerings exist in semesters 2, 4
+3. ✓ MCA offerings are active
+4. ✓ Query filters by `semester_id = ANY(open_sem_ids)`
 
-### Endpoint Called by PreferencesPage.tsx:
-```typescript
-const loadOfferings = async () => {
-    const res = await getSubjectSummary();  // Calls /api/reports/subject-summary
-    setOfferings(res.data.records || []);
-};
-```
+**THE REAL PROBLEM**: User expects to see MCA subjects when ODD semester cycles (1, 3, 5) are open, but:
+- MCA offerings are stored in EVEN semesters (2, 4) in the database
+- When ODD cycles are open, the query correctly returns NO MCA subjects
+- This is a DATA PROBLEM, not a CODE PROBLEM
 
-### API Client Definition:
-```typescript
-export const getSubjectSummary = () => api.get('/reports/subject-summary');
-```
+## Solution Options
 
-✅ **Confirmed:** Frontend calls the correct endpoint that was fixed.
+### Option 1: Create MCA Offerings for ODD Semesters
+If MCA program has odd semester subjects, they need to be added to the database:
+- Create subject_offering records for MCA programs with semester_id IN (1, 3, 5)
+- This requires knowing which MCA subjects belong to odd semesters
+
+### Option 2: Open BOTH Odd and Even Cycles Simultaneously
+If the system should show all subjects regardless of semester:
+- Activate cycles for both ODD and EVEN semesters at the same time
+- This would make ALL subjects visible in the preference catalog
+
+### Option 3: Change Query Logic (NOT RECOMMENDED)
+Remove semester filtering entirely - show ALL active offerings:
+- This would break the semester-specific workflow
+- Faculty would see subjects from all semesters mixed together
+
+## Recommended Action
+
+**Ask the user**: 
+1. Should MCA subjects appear when ODD semester cycles are open?
+2. If yes, do MCA programs have odd semester subjects that need to be added to the database?
+3. Or should the system open both ODD and EVEN cycles simultaneously?
+
+## Files Modified
+- `app/reports/router.py` - Added `/debug-offerings` endpoint
+
+## Commit
+- `a09bd9d` - debug: add offerings debug endpoint to diagnose MCA subjects issue
 
 ## Next Steps
-
-### Deployment Required
-The fix is committed to `main` branch but needs to be deployed to production (Railway):
-
-1. **Push to origin** (if not already pushed):
-   ```bash
-   git push origin main
-   ```
-
-2. **Verify Railway deployment**:
-   - Check Railway dashboard for automatic deployment
-   - Wait for build to complete
-   - Verify logs show no errors
-
-3. **Test in production**:
-   - Open PreferencesPage in production
-   - Check browser console for API response
-   - Verify MCA subjects appear in the catalog
-   - Filter by odd semesters (1, 3, 5) to confirm MCA subjects are visible
-
-### Diagnostic Queries (Run on Production DB)
-If MCA subjects still don't appear after deployment, run these queries:
-
-```sql
--- Check which cycles are OPEN
-SELECT id, semester_id, status, academic_year_id 
-FROM cycle 
-WHERE status='OPEN';
-
--- Check MCA offerings
-SELECT so.id, so.semester_id, so.academic_year_id, so.is_active,
-       sem.name as sem_name, p.name as prog_name
-FROM subject_offering so
-JOIN program p ON p.id = so.program_id
-JOIN semester sem ON sem.id = so.semester_id
-WHERE p.name ILIKE '%MCA%'
-ORDER BY so.semester_id;
-```
-
-### Potential Issues to Check:
-1. **No OPEN cycles**: If no cycles are OPEN, the endpoint returns empty results
-2. **Duplicate programs**: Check if there are multiple program records like "MCA(General)" vs "MCA (General)"
-3. **Browser cache**: Clear browser cache or hard refresh (Ctrl+Shift+R)
-4. **Server not restarted**: Ensure Railway redeployed the new code
-
-## Summary
-
-✅ Fix applied to correct endpoint (`app/reports/service.py`)  
-✅ Python syntax validated  
-✅ Committed to main branch (13bae8f)  
-✅ Frontend confirmed to call the fixed endpoint  
-⏳ **Awaiting deployment to production**  
-
-The code fix is complete and correct. The issue should be resolved once deployed to Railway.
+1. Clarify with user: What is the expected behavior?
+2. If MCA has odd semester subjects: Create migration to add them
+3. If both semesters should be open: Update cycle activation logic
+4. Clean up duplicate programs (BCA case mismatches)
