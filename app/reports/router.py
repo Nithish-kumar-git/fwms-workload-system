@@ -113,6 +113,251 @@ async def debug_offerings():
         }
 
 
+# ─── Admin Seeding Endpoints (public, no auth - for one-time setup) ──────────
+
+@router.get("/admin/db-state")
+async def db_state():
+    """PUBLIC DEBUG - Show current database state for MCA seeding."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    result = {}
+    with get_transaction() as session:
+        result["programs"] = [dict(r._mapping) for r in session.execute(
+            text("SELECT id, name FROM program ORDER BY name")
+        ).fetchall()]
+        
+        result["semesters"] = [dict(r._mapping) for r in session.execute(
+            text("SELECT id, name, label FROM semester ORDER BY id")
+        ).fetchall()]
+        
+        result["open_cycles"] = [dict(r._mapping) for r in session.execute(
+            text("SELECT id, semester_id, status FROM cycle WHERE status='OPEN'")
+        ).fetchall()]
+        
+        result["mca_offerings_by_sem"] = [dict(r._mapping) for r in session.execute(
+            text("""
+                SELECT p.name as prog, sem.name as sem_name, sem.id as sem_id, COUNT(*) as cnt
+                FROM subject_offering so
+                JOIN program p ON p.id = so.program_id
+                JOIN semester sem ON sem.id = so.semester_id
+                WHERE p.name ILIKE '%MCA%'
+                GROUP BY p.name, sem.name, sem.id
+                ORDER BY sem.id
+            """)
+        ).fetchall()]
+        
+        result["sections"] = [dict(r._mapping) for r in session.execute(
+            text("SELECT id, name FROM section ORDER BY id")
+        ).fetchall()]
+    
+    return result
+
+
+@router.post("/admin/fix-duplicate-programs")
+async def fix_duplicate_programs():
+    """PUBLIC - Fix duplicate program names (case-insensitive consolidation)."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    results = {"merged": [], "remaining": []}
+    
+    try:
+        with get_transaction() as session:
+            dups = session.execute(
+                text("""
+                    SELECT UPPER(REPLACE(name,' ','')) as key,
+                           array_agg(id ORDER BY id) as ids,
+                           array_agg(name ORDER BY id) as names
+                    FROM program
+                    GROUP BY UPPER(REPLACE(name,' ',''))
+                    HAVING COUNT(*) > 1
+                """)
+            ).fetchall()
+            
+            for dup in dups:
+                ids = dup[1]
+                names = dup[2]
+                keep_id = ids[0]
+                
+                for i, rid in enumerate(ids[1:], 1):
+                    session.execute(
+                        text("UPDATE subject_offering SET program_id=:k WHERE program_id=:r"),
+                        {"k": keep_id, "r": rid}
+                    )
+                    session.execute(
+                        text("DELETE FROM program WHERE id=:r"),
+                        {"r": rid}
+                    )
+                    results["merged"].append(
+                        f"Merged '{names[i]}' (id={rid}) into '{names[0]}' (id={keep_id})"
+                    )
+            
+            session.commit()
+            
+            remaining = session.execute(
+                text("SELECT id, name FROM program ORDER BY name")
+            ).fetchall()
+            results["remaining"] = [dict(r._mapping) for r in remaining]
+            results["status"] = "SUCCESS"
+            
+    except Exception as e:
+        results["status"] = "FAILED"
+        results["error"] = str(e)
+    
+    return results
+
+
+@router.post("/admin/seed-mca-odd")
+async def seed_mca_odd_semesters():
+    """PUBLIC - One-time endpoint to seed MCA Sem I and III subject offerings."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    results = {
+        "subjects_created": [],
+        "subjects_existed": [],
+        "offerings_created": 0,
+        "offerings_existed": 0,
+        "programs_found": [],
+        "errors": []
+    }
+    
+    try:
+        with get_transaction() as session:
+            # Get MCA program ids
+            mca_progs = session.execute(
+                text("SELECT id, name FROM program WHERE name ILIKE '%MCA%'")
+            ).fetchall()
+            results["programs_found"] = [dict(r._mapping) for r in mca_progs]
+            mca_prog_ids = [r[0] for r in mca_progs]
+            
+            if not mca_prog_ids:
+                results["errors"].append("No MCA programs found in program table")
+                return results
+            
+            # Get semester IDs - try both name and label columns
+            semesters = session.execute(
+                text("SELECT id, name, label FROM semester ORDER BY id")
+            ).fetchall()
+            sem_map = {}
+            
+            for s in semesters:
+                r = dict(s._mapping)
+                for val in [r.get('name', ''), r.get('label', '')]:
+                    v = str(val).strip().upper()
+                    if v in ('I', 'SEMESTER I', 'SEM I', '1'):
+                        sem_map[1] = r['id']
+                    elif v in ('II', 'SEMESTER II', 'SEM II', '2'):
+                        sem_map[2] = r['id']
+                    elif v in ('III', 'SEMESTER III', 'SEM III', '3'):
+                        sem_map[3] = r['id']
+            
+            results["semester_map"] = sem_map
+            
+            if 1 not in sem_map or 3 not in sem_map:
+                results["errors"].append(f"Could not find sem I or III ids. Found: {sem_map}")
+                results["all_semesters"] = [dict(s._mapping) for s in semesters]
+                return results
+            
+            # Get sections and academic year
+            sections = session.execute(
+                text("SELECT id, name FROM section ORDER BY id")
+            ).fetchall()
+            section_ids = [r[0] for r in sections]
+            
+            academic_year_id = session.execute(
+                text("SELECT id FROM academic_year ORDER BY id DESC LIMIT 1")
+            ).scalar()
+            
+            results["section_ids"] = section_ids
+            results["academic_year_id"] = academic_year_id
+            
+            # Subjects to seed
+            sem1_subjects = [
+                ("CMA42001", "Statistics for Computer Science", "BS", 3, 1, 0, 4, 4, 2022),
+                ("CCM42001", "Basics of Accounting", "BS", 1, 1, 0, 2, 2, 2022),
+                ("CCA42001", "Object Oriented Programming", "PC", 3, 0, 2, 4, 5, 2022),
+                ("CCA42002", "Data Communication and Networking", "PC", 2, 1, 0, 3, 3, 2022),
+                ("CCA42003", "Software Engineering Concepts", "PC", 3, 0, 0, 3, 3, 2022),
+                ("CCA42004", "Advanced Data Structures and Algorithms", "PC", 3, 0, 2, 4, 5, 2022),
+                ("CCA42005", "Python Programming", "PC", 2, 0, 2, 3, 4, 2022),
+            ]
+            
+            sem3_subjects = [
+                ("CCA42010", "Software Testing and Quality Assurance", "PC", 2, 1, 2, 4, 5, 2022),
+                ("CCA42011", "Cryptography and Network Security", "PC", 3, 0, 2, 4, 5, 2022),
+                ("CEL42001", "Communication Skills and Professional Development", "BS", 2, 0, 2, 3, 3, 2022),
+            ]
+            
+            def upsert_subject(code, name, cat, l, t, p, credits, tch, cy):
+                existing = session.execute(
+                    text("SELECT id FROM subject WHERE code=:code"),
+                    {"code": code}
+                ).scalar()
+                
+                if existing:
+                    results["subjects_existed"].append(code)
+                    return existing
+                
+                row = session.execute(
+                    text("""
+                        INSERT INTO subject(code, name, course_category, l, t, p, credits, tch, curriculum_year)
+                        VALUES(:code, :name, :cat, :l, :t, :p, :credits, :tch, :cy)
+                        RETURNING id
+                    """),
+                    dict(code=code, name=name, cat=cat, l=l, t=t, p=p, credits=credits, tch=tch, cy=cy)
+                ).scalar()
+                
+                results["subjects_created"].append(code)
+                return row
+            
+            def upsert_offering(sub_id, prog_id, sem_id, sec_id, ay_id):
+                existing = session.execute(
+                    text("""
+                        SELECT id FROM subject_offering
+                        WHERE subject_id=:s AND program_id=:p AND semester_id=:sem AND section_id=:sec
+                    """),
+                    dict(s=sub_id, p=prog_id, sem=sem_id, sec=sec_id)
+                ).scalar()
+                
+                if existing:
+                    results["offerings_existed"] += 1
+                    return
+                
+                session.execute(
+                    text("""
+                        INSERT INTO subject_offering(subject_id, program_id, semester_id, section_id, shift, is_active, academic_year_id)
+                        VALUES(:s, :p, :sem, :sec, 'Shift 1', true, :ay)
+                    """),
+                    dict(s=sub_id, p=prog_id, sem=sem_id, sec=sec_id, ay=ay_id)
+                )
+                results["offerings_created"] += 1
+            
+            # Seed Sem I
+            for subj in sem1_subjects:
+                sid = upsert_subject(*subj)
+                for prog_id in mca_prog_ids:
+                    for sec_id in section_ids:
+                        upsert_offering(sid, prog_id, sem_map[1], sec_id, academic_year_id)
+            
+            # Seed Sem III
+            for subj in sem3_subjects:
+                sid = upsert_subject(*subj)
+                for prog_id in mca_prog_ids:
+                    for sec_id in section_ids:
+                        upsert_offering(sid, prog_id, sem_map[3], sec_id, academic_year_id)
+            
+            session.commit()
+            results["status"] = "SUCCESS"
+            
+    except Exception as e:
+        results["errors"].append(str(e))
+        results["status"] = "FAILED"
+    
+    return results
+
+
 # ─── Live Report Endpoints (view only, not for export) ───────────────────────
 
 @router.get("/faculty-workload", response_model=FacultyWorkloadResponse)
