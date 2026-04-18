@@ -851,3 +851,63 @@ async def export_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="Master_Workload_{academic_year}_Sem{semester_id}.pdf"'},
     )
+
+
+@router.get("/admin/shift-deep-check")
+async def shift_deep_check():
+    """PUBLIC DEBUG - Deep diagnostic of shift distribution across all tables."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    result = {}
+    with get_transaction() as session:
+        # Programs (no shift column, just count offerings)
+        result["programs_with_offerings"] = [dict(r._mapping) for r in session.execute(
+            text("""
+                SELECT p.id, p.name,
+                       COUNT(so.id) as offering_count
+                FROM program p
+                LEFT JOIN subject_offering so ON so.program_id = p.id
+                GROUP BY p.id, p.name
+                ORDER BY p.name
+            """)
+        ).fetchall()]
+        
+        # Sections with shift
+        result["sections_with_shift"] = [dict(r._mapping) for r in session.execute(
+            text("""
+                SELECT sec.id, sec.label, sec.shift,
+                       COUNT(so.id) as offering_count
+                FROM section sec
+                LEFT JOIN subject_offering so ON so.section_id = sec.id
+                GROUP BY sec.id, sec.label, sec.shift
+                ORDER BY sec.shift, sec.label
+            """)
+        ).fetchall()]
+        
+        # Staff shifts
+        result["staff_shifts"] = [dict(r._mapping) for r in session.execute(
+            text("""
+                SELECT id, name, emp_code, shift
+                FROM staff
+                WHERE is_active = true
+                ORDER BY shift, name
+            """)
+        ).fetchall()]
+        
+        # Offerings by program and section shift
+        result["offerings_by_program_section_shift"] = [dict(r._mapping) for r in session.execute(
+            text("""
+                SELECT p.name as program,
+                       sec.label as section, sec.shift as sec_shift,
+                       so.shift as offering_shift,
+                       COUNT(*) as cnt
+                FROM subject_offering so
+                JOIN program p ON p.id = so.program_id
+                JOIN section sec ON sec.id = so.section_id
+                GROUP BY p.name, sec.label, sec.shift, so.shift
+                ORDER BY p.name, sec.label
+            """)
+        ).fetchall()]
+    
+    return result
