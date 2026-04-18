@@ -99,4 +99,3 @@ Shift 2 offerings: 0  ← THIS IS THE PROBLEM
 If Option B is chosen (separate shift=2 offerings):
 - `/api/reports/admin/fix-shift-from-program` - Set offering.shift to match section.shift
 - `/api/reports/admin/program-shifts` - View section shift values
-## Test update - 2026-04-19 02:19:30
