@@ -951,8 +951,9 @@ async def test_catalog_for_staff(emp_code: str):
         # Check preference window
         window = session.execute(
             text("""
-                SELECT id, is_open, start_time, end_time
-                FROM preference_window
+                SELECT id, status, start_time, end_time
+                FROM selection_window
+                WHERE status = 'OPEN'
                 ORDER BY id DESC LIMIT 1
             """)
         ).fetchone()
@@ -1000,19 +1001,19 @@ async def window_status():
     with get_transaction() as session:
         windows = session.execute(
             text("""
-                SELECT pw.id, pw.is_open, pw.start_time, pw.end_time,
-                       pw.cycle_id, c.status as cycle_status, c.semester_id,
+                SELECT sw.id, sw.status, sw.start_time, sw.end_time,
+                       sw.cycle_id, c.status as cycle_status, c.semester_id,
                        sem.label as sem_name
-                FROM preference_window pw
-                LEFT JOIN cycle c ON c.id = pw.cycle_id
+                FROM selection_window sw
+                LEFT JOIN cycle c ON c.id = sw.cycle_id
                 LEFT JOIN semester sem ON sem.id = c.semester_id
-                ORDER BY pw.id DESC
+                ORDER BY sw.id DESC
                 LIMIT 10
             """)
         ).fetchall()
         
         all_windows = [dict(r._mapping) for r in windows]
-        open_windows = [w for w in all_windows if w.get("is_open") == True]
+        open_windows = [w for w in all_windows if w.get("status") == "OPEN"]
         
         return {
             "windows": all_windows,
