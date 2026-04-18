@@ -462,6 +462,69 @@ async def fix_shift2_offerings():
     return results
 
 
+@router.get("/admin/program-shifts")
+async def program_shifts():
+    """PUBLIC DEBUG - Show all programs and their shift values."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    with get_transaction() as session:
+        progs = session.execute(
+            text("SELECT id, name, shift FROM program ORDER BY shift, name")
+        ).fetchall()
+        return [dict(r._mapping) for r in progs]
+
+
+@router.post("/admin/fix-shift-from-program")
+async def fix_shift_from_program():
+    """PUBLIC - Set subject_offering.shift to match program.shift for every offering."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    results = {}
+    try:
+        with get_transaction() as session:
+            # First show all program names and their shift values
+            all_progs = session.execute(
+                text("SELECT id, name, shift FROM program ORDER BY name")
+            ).fetchall()
+            results["all_programs"] = [dict(r._mapping) for r in all_progs]
+            
+            # Update each offering's shift to match its program's shift
+            updated = session.execute(
+                text("""
+                    UPDATE subject_offering so
+                    SET shift = p.shift
+                    FROM program p
+                    WHERE so.program_id = p.id
+                    RETURNING so.id, so.shift, p.name as prog_name, p.shift as prog_shift
+                """)
+            ).fetchall()
+            
+            session.commit()
+            
+            results["offerings_updated"] = len(updated)
+            
+            # Show distribution after fix
+            dist = session.execute(
+                text("""
+                    SELECT so.shift, p.name as prog, COUNT(*) as cnt
+                    FROM subject_offering so
+                    JOIN program p ON p.id = so.program_id
+                    GROUP BY so.shift, p.name
+                    ORDER BY so.shift, p.name
+                """)
+            ).fetchall()
+            results["shift_distribution"] = [dict(r._mapping) for r in dist]
+            results["status"] = "SUCCESS"
+            
+    except Exception as e:
+        results["error"] = str(e)
+        results["status"] = "FAILED"
+    
+    return results
+
+
 # ─── Live Report Endpoints (view only, not for export) ───────────────────────
 
 @router.get("/faculty-workload", response_model=FacultyWorkloadResponse)
