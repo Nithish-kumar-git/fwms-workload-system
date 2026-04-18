@@ -464,40 +464,40 @@ async def fix_shift2_offerings():
 
 @router.get("/admin/program-shifts")
 async def program_shifts():
-    """PUBLIC DEBUG - Show all programs and their shift values."""
+    """PUBLIC DEBUG - Show all sections and their shift values."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
     with get_transaction() as session:
-        progs = session.execute(
-            text("SELECT id, name, shift FROM program ORDER BY shift, name")
+        sections = session.execute(
+            text("SELECT id, label, shift FROM section ORDER BY shift, label")
         ).fetchall()
-        return [dict(r._mapping) for r in progs]
+        return {"sections": [dict(r._mapping) for r in sections]}
 
 
 @router.post("/admin/fix-shift-from-program")
 async def fix_shift_from_program():
-    """PUBLIC - Set subject_offering.shift to match program.shift for every offering."""
+    """PUBLIC - Set subject_offering.shift to match section.shift for every offering."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
     results = {}
     try:
         with get_transaction() as session:
-            # First show all program names and their shift values
-            all_progs = session.execute(
-                text("SELECT id, name, shift FROM program ORDER BY name")
+            # First show all section labels and their shift values
+            all_sections = session.execute(
+                text("SELECT id, label, shift FROM section ORDER BY label")
             ).fetchall()
-            results["all_programs"] = [dict(r._mapping) for r in all_progs]
+            results["all_sections"] = [dict(r._mapping) for r in all_sections]
             
-            # Update each offering's shift to match its program's shift
+            # Update each offering's shift to match its section's shift
             updated = session.execute(
                 text("""
                     UPDATE subject_offering so
-                    SET shift = p.shift
-                    FROM program p
-                    WHERE so.program_id = p.id
-                    RETURNING so.id, so.shift, p.name as prog_name, p.shift as prog_shift
+                    SET shift = sec.shift
+                    FROM section sec
+                    WHERE so.section_id = sec.id
+                    RETURNING so.id, so.shift, sec.label as sec_label, sec.shift as sec_shift
                 """)
             ).fetchall()
             
@@ -508,11 +508,11 @@ async def fix_shift_from_program():
             # Show distribution after fix
             dist = session.execute(
                 text("""
-                    SELECT so.shift, p.name as prog, COUNT(*) as cnt
+                    SELECT so.shift, sec.label as section, COUNT(*) as cnt
                     FROM subject_offering so
-                    JOIN program p ON p.id = so.program_id
-                    GROUP BY so.shift, p.name
-                    ORDER BY so.shift, p.name
+                    JOIN section sec ON sec.id = so.section_id
+                    GROUP BY so.shift, sec.label
+                    ORDER BY so.shift, sec.label
                 """)
             ).fetchall()
             results["shift_distribution"] = [dict(r._mapping) for r in dist]
