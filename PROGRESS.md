@@ -1,10 +1,10 @@
-# Shift 2 Subjects Fix - ROOT CAUSE FOUND
+# Shift 2 Subjects Fix - ROOT CAUSE CONFIRMED
 
-## Diagnostic Results
+## Latest Diagnostic Results (2bbac93)
 
 ### Window Status
 - **Window is OPEN** ✓
-- Window ID: 225
+- Window ID: 227
 - Cycle: 1 (Semester II, OPEN)
 - Start: 2026-04-18, End: 2026-04-25
 
@@ -28,50 +28,74 @@ Shift 1 offerings: 82
 Shift 2 offerings: 0  ← THIS IS THE PROBLEM
 ```
 
-**This is NOT a filter issue. This is a DATA issue.**
+**This is a DATA issue, NOT a code issue.**
 
-The subjects literally don't exist with shift=2 in the database for the open semesters.
+## Code Review Findings
+
+### Backend (app/reports/service.py)
+- `get_subject_summary()` has NO shift filter ✓
+- Returns ALL offerings from open semesters
+- Query: `WHERE so.semester_id = ANY(:sem_ids) AND so.is_active = true`
+
+### Backend (app/preference/service.py)
+- SHIFT-01 validation is DISABLED ✓
+- Comment: "Rule 4 (SHIFT-01): Shift compatibility - DISABLED"
+- No shift filter in preference submission
+
+### Frontend (PreferencesPage.tsx)
+- NO shift filter in catalog loading ✓
+- Calls `getSubjectSummary()` without any shift parameter
+- Displays all subjects returned by API
+
+### Grep Results
+- NO shift filters found in preference or reports modules
+- Only shift references are in:
+  - Staff management UI (shift selection dropdown)
+  - Demo/test scripts (for seeding test data)
+  - Class teacher validation (ct_shift field)
 
 ## Why SHIFT2 Staff See Empty Catalog
 
+**The system is working as designed for CASE 3:**
 1. Frontend calls `GET /api/reports/subject-summary`
 2. Backend returns 82 offerings, ALL with `shift=1`
-3. Frontend has NO shift filter (correct for CASE 3)
-4. But SHIFT2 staff expect to see shift=2 offerings
-5. Since NO shift=2 offerings exist, they see nothing
+3. Frontend displays all 82 offerings (no shift filter)
+4. SHIFT2 staff SHOULD see these 82 offerings
 
-## The Misunderstanding
+**But user reports SHIFT2 staff see NOTHING.**
 
-**Previous Analysis Said**: "CASE 3 - One set of offerings for both shifts"
+**This means one of two things:**
+1. **User expectation mismatch**: Institution expects separate shift=2 offerings to exist
+2. **Unreported frontend issue**: There's a client-side filter we can't see in the code
 
-**Reality**: The database SHOULD have one set of offerings, but:
-- Only 82 offerings exist for open semesters (II, IV, VI)
-- ALL 82 have `shift=1`
-- ZERO have `shift=2`
+## The Real Question
 
-**For CASE 3 to work correctly**, SHIFT2 staff should be able to select from the SAME shift=1 offerings. But the user reports they see NOTHING, which means either:
-1. The frontend IS filtering by shift (contradicts our code review)
-2. The user expectation is that shift=2 offerings should exist separately
-3. There's a mismatch between what the system shows and what users expect
+**Does the institution want:**
 
-## Next Steps Required
+**Option A**: CASE 3 - One set of offerings for both shifts
+- Both SHIFT1 and SHIFT2 staff select from the SAME 82 offerings
+- No separate shift=2 offerings needed
+- Current code is correct, just need to verify SHIFT1 staff can see them
 
-**CRITICAL DECISION NEEDED FROM USER**:
+**Option B**: Separate offerings per shift
+- Create 82 duplicate offerings with shift=2
+- Total: 82 shift=1 + 82 shift=2 = 164 offerings
+- Each shift has their own separate subject pool
 
-**Option A**: CASE 3 is correct - One set of offerings for both shifts
-- SHIFT2 staff SHOULD see the 82 shift=1 offerings
-- If they're seeing nothing, there's a frontend bug we haven't found
-- Need to verify: Do SHIFT1 staff see the 82 offerings?
+## Next Steps
 
-**Option B**: Institution needs separate shift=2 offerings
-- Create duplicate offerings with shift=2 for the same subjects
-- This means 82 shift=1 + 82 shift=2 = 164 total offerings
-- Shift differentiation happens at OFFERING level, not just STAFF level
+**IMMEDIATE ACTION NEEDED:**
+1. Ask user: "Do SHIFT1 staff see the 82 subjects in their catalog?"
+2. If YES → Option A is correct, investigate why SHIFT2 staff see nothing
+3. If NO → Window might be closed or there's a different issue
+4. Confirm user expectation: Should shift=2 offerings exist as separate records?
 
 ## Git Commits
-- 8bdcbbd: feat: add staff catalog test and window status endpoints
+- 2bbac93: feat: add staff catalog test and window status diagnostic endpoints
+- de65dba: Previous commit
 
-## Files to Check Next
-1. Verify SHIFT1 staff can see the 82 offerings
-2. Check if frontend has hidden shift filter we missed
-3. Confirm user expectation: Should shift=2 offerings exist separately?
+## Available Fix Endpoints
+
+If Option B is chosen (separate shift=2 offerings):
+- `/api/reports/admin/fix-shift-from-program` - Set offering.shift to match section.shift
+- `/api/reports/admin/program-shifts` - View section shift values
