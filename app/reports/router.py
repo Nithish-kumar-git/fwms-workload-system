@@ -911,3 +911,110 @@ async def shift_deep_check():
         ).fetchall()]
     
     return result
+
+
+@router.get("/admin/test-catalog-for-staff/{emp_code}")
+async def test_catalog_for_staff(emp_code: str):
+    """PUBLIC DEBUG - Test what catalog data a specific staff member would see."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    result = {}
+    with get_transaction() as session:
+        # Get staff info
+        staff = session.execute(
+            text("""
+                SELECT id, name, emp_code, shift, is_active
+                FROM staff WHERE emp_code = :code
+            """),
+            {"code": emp_code}
+        ).fetchone()
+        
+        if not staff:
+            return {"error": f"Staff {emp_code} not found"}
+        
+        result["staff"] = dict(staff._mapping)
+        
+        # Get open cycles
+        open_cycles = session.execute(
+            text("""
+                SELECT c.id, c.semester_id, c.status, sem.label as sem_name
+                FROM cycle c JOIN semester sem ON sem.id = c.semester_id
+                WHERE c.status = 'OPEN'
+            """)
+        ).fetchall()
+        result["open_cycles"] = [dict(r._mapping) for r in open_cycles]
+        
+        open_sem_ids = [r[1] for r in open_cycles]
+        result["open_semester_ids"] = open_sem_ids
+        
+        # Check preference window
+        window = session.execute(
+            text("""
+                SELECT id, is_open, start_time, end_time
+                FROM preference_window
+                ORDER BY id DESC LIMIT 1
+            """)
+        ).fetchone()
+        result["preference_window"] = dict(window._mapping) if window else None
+        
+        # Get what catalog returns for this staff
+        if open_sem_ids:
+            offerings = session.execute(
+                text("""
+                    SELECT COUNT(*) as total,
+                           COUNT(CASE WHEN so.shift = 1 THEN 1 END) as shift1_count,
+                           COUNT(CASE WHEN so.shift = 2 THEN 1 END) as shift2_count
+                    FROM subject_offering so
+                    WHERE so.semester_id = ANY(:sids) AND so.is_active = true
+                """),
+                {"sids": open_sem_ids}
+            ).fetchone()
+            result["catalog_counts"] = dict(offerings._mapping)
+        else:
+            result["catalog_counts"] = "No open semesters"
+        
+        # Check existing preferences for this staff
+        prefs = session.execute(
+            text("""
+                SELECT fp.id, fp.preference_number, sub.name as subject, fp.cycle_id
+                FROM faculty_preference fp
+                JOIN subject_offering so ON so.id = fp.subject_offering_id
+                JOIN subject sub ON sub.id = so.subject_id
+                WHERE fp.staff_id = :sid
+                ORDER BY fp.preference_number
+            """),
+            {"sid": staff[0]}
+        ).fetchall()
+        result["existing_preferences"] = [dict(r._mapping) for r in prefs]
+    
+    return result
+
+
+@router.get("/admin/window-status")
+async def window_status():
+    """PUBLIC DEBUG - Show preference window status."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    with get_transaction() as session:
+        windows = session.execute(
+            text("""
+                SELECT pw.id, pw.is_open, pw.start_time, pw.end_time,
+                       pw.cycle_id, c.status as cycle_status, c.semester_id,
+                       sem.label as sem_name
+                FROM preference_window pw
+                LEFT JOIN cycle c ON c.id = pw.cycle_id
+                LEFT JOIN semester sem ON sem.id = c.semester_id
+                ORDER BY pw.id DESC
+                LIMIT 10
+            """)
+        ).fetchall()
+        
+        all_windows = [dict(r._mapping) for r in windows]
+        open_windows = [w for w in all_windows if w.get("is_open") == True]
+        
+        return {
+            "windows": all_windows,
+            "open_windows": open_windows
+        }
