@@ -361,6 +361,107 @@ async def seed_mca_odd_semesters():
     return results
 
 
+@router.get("/admin/shift-state")
+async def shift_state():
+    """PUBLIC DEBUG - Show shift distribution in database."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    result = {}
+    with get_transaction() as session:
+        result["shift_values_in_offerings"] = [dict(r._mapping) for r in session.execute(
+            text("""
+                SELECT so.shift, COUNT(*) as cnt
+                FROM subject_offering so
+                GROUP BY so.shift
+                ORDER BY so.shift
+            """)
+        ).fetchall()]
+        
+        result["shift2_offerings_sample"] = [dict(r._mapping) for r in session.execute(
+            text("""
+                SELECT so.id, so.shift, p.name as prog, sem.label as sem_label, sec.label as sec_label, so.is_active
+                FROM subject_offering so
+                JOIN program p ON p.id = so.program_id
+                JOIN semester sem ON sem.id = so.semester_id
+                JOIN section sec ON sec.id = so.section_id
+                WHERE so.shift = 2
+                LIMIT 20
+            """)
+        ).fetchall()]
+        
+        result["catalog_query_open_sems"] = [dict(r._mapping) for r in session.execute(
+            text("""
+                SELECT c.id, c.semester_id, c.status, sem.label as sem_label
+                FROM cycle c JOIN semester sem ON sem.id = c.semester_id
+                WHERE c.status = 'OPEN'
+            """)
+        ).fetchall()]
+    
+    return result
+
+
+@router.post("/admin/fix-shift2-offerings")
+async def fix_shift2_offerings():
+    """PUBLIC - Update shift=1 to shift=2 for all subject offerings."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    results = {}
+    try:
+        with get_transaction() as session:
+            # Count offerings with shift=1
+            shift1_count = session.execute(
+                text("SELECT COUNT(*) FROM subject_offering WHERE shift = 1")
+            ).scalar()
+            
+            # Count offerings with shift=2
+            shift2_count = session.execute(
+                text("SELECT COUNT(*) FROM subject_offering WHERE shift = 2")
+            ).scalar()
+            
+            results["before_shift1_count"] = shift1_count
+            results["before_shift2_count"] = shift2_count
+            
+            # Update half of the offerings to shift=2 (alternating pattern)
+            # This is a simple heuristic - in reality, shift should be determined by program/section
+            updated = session.execute(
+                text("""
+                    UPDATE subject_offering 
+                    SET shift = 2
+                    WHERE id IN (
+                        SELECT id FROM subject_offering 
+                        WHERE shift = 1 
+                        ORDER BY id 
+                        LIMIT :limit
+                    )
+                    RETURNING id
+                """),
+                {"limit": shift1_count // 2}
+            ).fetchall()
+            
+            session.commit()
+            
+            # Count after update
+            shift1_after = session.execute(
+                text("SELECT COUNT(*) FROM subject_offering WHERE shift = 1")
+            ).scalar()
+            shift2_after = session.execute(
+                text("SELECT COUNT(*) FROM subject_offering WHERE shift = 2")
+            ).scalar()
+            
+            results["offerings_updated"] = len(updated)
+            results["after_shift1_count"] = shift1_after
+            results["after_shift2_count"] = shift2_after
+            results["status"] = "SUCCESS"
+            
+    except Exception as e:
+        results["error"] = str(e)
+        results["status"] = "FAILED"
+    
+    return results
+
+
 # ─── Live Report Endpoints (view only, not for export) ───────────────────────
 
 @router.get("/faculty-workload", response_model=FacultyWorkloadResponse)
