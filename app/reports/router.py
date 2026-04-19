@@ -1125,3 +1125,164 @@ async def window_status():
             "windows": [dict(r._mapping) for r in windows],
             "open_windows": [dict(r._mapping) for r in windows if r[1] == True]
         }
+
+
+@router.post("/admin/create-shift2-offerings")
+async def create_shift2_offerings():
+    """PUBLIC - Create shift=2 duplicate offerings for all shift=1 offerings."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    results = {
+        "shift2_sections_created": [],
+        "shift2_sections_existed": [],
+        "offerings_created": 0,
+        "offerings_skipped": 0,
+        "errors": []
+    }
+    
+    try:
+        with get_transaction() as session:
+            # Get all shift=1 sections (skip combined sections like A+B)
+            shift1_sections = session.execute(
+                text("""
+                    SELECT id, label, shift
+                    FROM section
+                    WHERE shift = 1 AND label NOT LIKE '%+%'
+                    ORDER BY label
+                """)
+            ).fetchall()
+            
+            results["shift1_sections_found"] = [dict(r._mapping) for r in shift1_sections]
+            
+            # Create shift=2 sections if they don't exist
+            for sec in shift1_sections:
+                sec_label = sec[1]
+                
+                # Check if shift=2 section already exists
+                existing = session.execute(
+                    text("""
+                        SELECT id FROM section
+                        WHERE label = :label AND shift = 2
+                    """),
+                    {"label": sec_label}
+                ).scalar()
+                
+                if existing:
+                    results["shift2_sections_existed"].append(sec_label)
+                else:
+                    # Create shift=2 section
+                    new_id = session.execute(
+                        text("""
+                            INSERT INTO section (label, shift)
+                            VALUES (:label, 2)
+                            RETURNING id
+                        """),
+                        {"label": sec_label}
+                    ).scalar()
+                    results["shift2_sections_created"].append({"label": sec_label, "id": new_id})
+            
+            session.commit()
+            
+            # Get all shift=1 offerings
+            shift1_offerings = session.execute(
+                text("""
+                    SELECT so.id, so.subject_id, so.program_id, so.semester_id, so.section_id,
+                           so.academic_year_id, so.academic_year, so.old_academic_cycle_id,
+                           so.student_strength, so.is_active,
+                           sec.label as section_label
+                    FROM subject_offering so
+                    JOIN section sec ON sec.id = so.section_id
+                    WHERE so.shift = 1 AND sec.label NOT LIKE '%+%'
+                """)
+            ).fetchall()
+            
+            results["shift1_offerings_found"] = len(shift1_offerings)
+            
+            # For each shift=1 offering, create shift=2 duplicate
+            for off in shift1_offerings:
+                section_label = off[10]
+                
+                # Get shift=2 section id
+                shift2_section_id = session.execute(
+                    text("""
+                        SELECT id FROM section
+                        WHERE label = :label AND shift = 2
+                    """),
+                    {"label": section_label}
+                ).scalar()
+                
+                if not shift2_section_id:
+                    results["errors"].append(f"No shift=2 section found for label {section_label}")
+                    results["offerings_skipped"] += 1
+                    continue
+                
+                # Check if shift=2 offering already exists
+                existing = session.execute(
+                    text("""
+                        SELECT id FROM subject_offering
+                        WHERE subject_id = :sub_id
+                          AND program_id = :prog_id
+                          AND semester_id = :sem_id
+                          AND section_id = :sec_id
+                          AND shift = 2
+                    """),
+                    {
+                        "sub_id": off[1],
+                        "prog_id": off[2],
+                        "sem_id": off[3],
+                        "sec_id": shift2_section_id
+                    }
+                ).scalar()
+                
+                if existing:
+                    results["offerings_skipped"] += 1
+                    continue
+                
+                # Create shift=2 offering
+                session.execute(
+                    text("""
+                        INSERT INTO subject_offering (
+                            subject_id, program_id, semester_id, section_id, shift,
+                            academic_year_id, academic_year, old_academic_cycle_id,
+                            student_strength, is_active
+                        )
+                        VALUES (
+                            :sub_id, :prog_id, :sem_id, :sec_id, 2,
+                            :ay_id, :ay_name, :old_cycle_id,
+                            :strength, :active
+                        )
+                    """),
+                    {
+                        "sub_id": off[1],
+                        "prog_id": off[2],
+                        "sem_id": off[3],
+                        "sec_id": shift2_section_id,
+                        "ay_id": off[5],
+                        "ay_name": off[6],
+                        "old_cycle_id": off[7],
+                        "strength": off[8],
+                        "active": off[9]
+                    }
+                )
+                results["offerings_created"] += 1
+            
+            session.commit()
+            
+            # Show final distribution
+            dist = session.execute(
+                text("""
+                    SELECT so.shift, COUNT(*) as cnt
+                    FROM subject_offering so
+                    GROUP BY so.shift
+                    ORDER BY so.shift
+                """)
+            ).fetchall()
+            results["final_distribution"] = [dict(r._mapping) for r in dist]
+            results["status"] = "SUCCESS"
+            
+    except Exception as e:
+        results["errors"].append(str(e))
+        results["status"] = "FAILED"
+    
+    return results

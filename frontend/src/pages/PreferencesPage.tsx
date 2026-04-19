@@ -3,6 +3,7 @@ import { getMyPreferences, submitPreference, deletePreference, getPreferenceStat
 import { useToast } from '../hooks/useToast';
 import ToastContainer from '../components/ToastContainer';
 import { Clock, AlertCircle, RefreshCw, Search, Filter, BookOpen, CheckCircle2, XCircle, X } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface Preference {
     id: number;
@@ -38,6 +39,7 @@ interface SubjectOffering {
 }
 
 export default function PreferencesPage() {
+    const { user } = useAuth();
     const [preferences, setPreferences] = useState<Preference[]>([]);
     const [status, setStatus] = useState<PrefStatus | null>(null);
     const [windowOpen, setWindowOpen] = useState(true);
@@ -137,8 +139,27 @@ export default function PreferencesPage() {
 
     const filteredOfferings = useMemo(() => {
         let result = offerings;
+        
+        // SHIFT-BASED FILTERING (applied FIRST, before other filters)
+        if (user?.shift) {
+            const userShift = user.shift;
+            if (userShift === 'SHIFT1') {
+                // SHIFT1 staff see only shift=1 offerings
+                result = result.filter((o) => o.shift === 1);
+            } else if (userShift === 'SHIFT2') {
+                // SHIFT2 staff see only shift=2 offerings
+                result = result.filter((o) => o.shift === 2);
+            }
+            // SHIFT1+SHIFT2 staff see ALL offerings (no filter)
+        }
+        
+        // Program filter
         if (filterProgram) result = result.filter((o) => o.program === filterProgram);
+        
+        // Semester filter
         if (filterSemester) result = result.filter((o) => o.semester === filterSemester);
+        
+        // Search filter
         if (searchText) {
             const q = searchText.toLowerCase();
             result = result.filter((o) =>
@@ -147,7 +168,7 @@ export default function PreferencesPage() {
             );
         }
         return result;
-    }, [offerings, filterProgram, filterSemester, searchText]);
+    }, [offerings, filterProgram, filterSemester, searchText, user?.shift]);
 
     const grouped = useMemo(() => {
         const map: Record<string, Record<string, SubjectOffering[]>> = {};

@@ -6,6 +6,7 @@ interface User {
     email: string;
     name: string;
     role: string;  // 'faculty' | 'tt_coordinator' | 'hod'
+    shift?: string;  // 'SHIFT1' | 'SHIFT2' | 'SHIFT1+SHIFT2'
     is_class_teacher?: boolean;
     ct_program?: string;
     ct_section?: string;

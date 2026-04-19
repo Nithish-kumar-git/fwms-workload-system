@@ -24,6 +24,7 @@ class StaffInfoResponse(BaseModel):
     email: EmailStr
     name: str
     role: str  # 'faculty' | 'tt_coordinator' | 'hod'
+    shift: Optional[str] = None  # 'SHIFT1' | 'SHIFT2' | 'SHIFT1+SHIFT2'
     is_class_teacher: bool = False
     ct_program: Optional[str] = None
     ct_section: Optional[str] = None

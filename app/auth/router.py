@@ -228,11 +228,11 @@ async def dev_login_by_id(staff_id: int):
 @router.get("/me", response_model=StaffInfoResponse)
 async def get_current_user_info(user: UserInfo = Depends(get_current_user)):
     """Get current user info. Role always fresh from DB."""
-    # Fetch CT fields from database
+    # Fetch CT fields and shift from database
     with get_transaction() as session:
         row = session.execute(
             text("""
-                SELECT is_class_teacher, ct_program, ct_section, ct_semester, 
+                SELECT shift, is_class_teacher, ct_program, ct_section, ct_semester, 
                        CAST(ct_shift AS VARCHAR) AS ct_shift, ct_curriculum_year
                 FROM staff WHERE id = :sid
             """),
@@ -245,12 +245,13 @@ async def get_current_user_info(user: UserInfo = Depends(get_current_user)):
                 email=user.email,
                 name=user.name,
                 role=user.role,
-                is_class_teacher=row[0] or False,
-                ct_program=row[1],
-                ct_section=row[2],
-                ct_semester=row[3],
-                ct_shift=row[4],
-                ct_curriculum_year=row[5],
+                shift=row[0],
+                is_class_teacher=row[1] or False,
+                ct_program=row[2],
+                ct_section=row[3],
+                ct_semester=row[4],
+                ct_shift=row[5],
+                ct_curriculum_year=row[6],
             )
     
     # Fallback if no row found
