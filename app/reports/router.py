@@ -537,13 +537,13 @@ async def create_shift2_offerings():
         with get_transaction() as session:
             # Get ALL shift=1 section ids
             shift1_sections = session.execute(
-                text("SELECT id, name FROM section WHERE shift = 1 ORDER BY id")
+                text("SELECT id, label FROM section WHERE shift = 1 ORDER BY id")
             ).fetchall()
             results["shift1_sections"] = [dict(r._mapping) for r in shift1_sections]
             
             # Check if shift=2 sections exist
             shift2_sections = session.execute(
-                text("SELECT id, name FROM section WHERE shift = 2 ORDER BY id")
+                text("SELECT id, label FROM section WHERE shift = 2 ORDER BY id")
             ).fetchall()
             
             # If no shift 2 sections exist, create them
@@ -551,24 +551,24 @@ async def create_shift2_offerings():
                 new_sec_ids = {}
                 for sec in shift1_sections:
                     # Skip combined sections like A+B, A+B+C for shift 2
-                    sec_name = sec[1]
-                    if '+' in str(sec_name):
+                    sec_label = sec[1]
+                    if '+' in str(sec_label):
                         continue
                     
                     existing = session.execute(
-                        text("SELECT id FROM section WHERE name=:n AND shift=2"),
-                        {"n": sec_name}
+                        text("SELECT id FROM section WHERE label=:lbl AND shift=2"),
+                        {"lbl": sec_label}
                     ).scalar()
                     
                     if not existing:
                         new_id = session.execute(
-                            text("INSERT INTO section (name, shift) VALUES (:n, 2) RETURNING id"),
-                            {"n": sec_name}
+                            text("INSERT INTO section (label, shift) VALUES (:lbl, 2) RETURNING id"),
+                            {"lbl": sec_label}
                         ).scalar()
                         new_sec_ids[sec[0]] = new_id
                         if "created_sections" not in results:
                             results["created_sections"] = []
-                        results["created_sections"].append(f"{sec_name} (id={new_id})")
+                        results["created_sections"].append(f"{sec_label} (id={new_id})")
                     else:
                         new_sec_ids[sec[0]] = existing
                 
@@ -576,12 +576,12 @@ async def create_shift2_offerings():
                 
                 # Re-fetch shift 2 sections
                 shift2_sections = session.execute(
-                    text("SELECT id, name FROM section WHERE shift = 2 ORDER BY id")
+                    text("SELECT id, label FROM section WHERE shift = 2 ORDER BY id")
                 ).fetchall()
             
             results["shift2_sections"] = [dict(r._mapping) for r in shift2_sections]
             
-            # Build map: shift1_section_name -> shift2_section_id
+            # Build map: shift1_section_label -> shift2_section_id
             shift2_sec_map = {r[1]: r[0] for r in shift2_sections}
             
             # Get all shift=1 offerings
@@ -589,7 +589,7 @@ async def create_shift2_offerings():
                 text("""
                     SELECT so.id, so.subject_id, so.program_id, so.semester_id, so.section_id, 
                            so.academic_year_id, so.is_active, so.academic_year, so.old_academic_cycle_id,
-                           sec.name as sec_name
+                           sec.label as sec_label
                     FROM subject_offering so
                     JOIN section sec ON sec.id = so.section_id
                     WHERE so.shift = 1
@@ -601,17 +601,17 @@ async def create_shift2_offerings():
             
             for off in shift1_offerings:
                 o = dict(off._mapping)
-                sec_name = o["sec_name"]
+                sec_label = o["sec_label"]
                 
                 # Skip combined sections
-                if '+' in str(sec_name):
+                if '+' in str(sec_label):
                     results["skipped"] += 1
                     continue
                 
                 # Find matching shift 2 section
-                shift2_sec_id = shift2_sec_map.get(sec_name)
+                shift2_sec_id = shift2_sec_map.get(sec_label)
                 if not shift2_sec_id:
-                    results["errors"].append(f"No shift2 section for: {sec_name}")
+                    results["errors"].append(f"No shift2 section for: {sec_label}")
                     results["skipped"] += 1
                     continue
                 
