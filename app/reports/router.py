@@ -1522,13 +1522,13 @@ def section_check(emp_code: str):
         result["staff"] = dict(staff._mapping)
         
         result["all_sections"] = [dict(r._mapping) for r in session.execute(
-            text("SELECT id, name, label, shift FROM section ORDER BY shift, name")
+            text("SELECT id, label, shift FROM section ORDER BY shift, label")
         ).fetchall()]
         
         result["mca_general_sem2_offerings"] = [dict(r._mapping) for r in session.execute(text("""
             SELECT so.id, so.shift, so.is_active,
                    p.name as prog, sem.name as sem_name,
-                   sec.id as sec_id, sec.name as sec_name, sec.label as sec_label,
+                   sec.id as sec_id, sec.label as sec_name, sec.label as sec_label,
                    sec.shift as sec_shift,
                    sub.code, sub.name as sub_name
             FROM subject_offering so
@@ -1539,19 +1539,19 @@ def section_check(emp_code: str):
             WHERE p.name ILIKE '%MCA%' AND p.name ILIKE '%General%'
               AND sem.name ILIKE '%II%'
               AND so.is_active = true
-            ORDER BY sec.name, sub.code
+            ORDER BY sec.label, sub.code
         """)).fetchall()]
         
         result["section_b_exists"] = [dict(r._mapping) for r in session.execute(text("""
-            SELECT id, name, label, shift FROM section 
-            WHERE (name = 'B' OR label = 'B') 
+            SELECT id, label, shift FROM section 
+            WHERE label = 'B'
             ORDER BY id
         """)).fetchall()]
         
         result["mca_general_sec_b_offerings"] = [dict(r._mapping) for r in session.execute(text("""
             SELECT so.id, so.shift, so.is_active,
                    p.name as prog, sem.name as sem_name,
-                   sec.id as sec_id, sec.name as sec_name, sec.label as sec_label,
+                   sec.id as sec_id, sec.label as sec_name, sec.label as sec_label,
                    sub.code, sub.name as sub_name
             FROM subject_offering so
             JOIN program p ON p.id = so.program_id
@@ -1559,7 +1559,7 @@ def section_check(emp_code: str):
             JOIN section sec ON sec.id = so.section_id
             JOIN subject sub ON sub.id = so.subject_id
             WHERE p.name ILIKE '%MCA%' AND p.name ILIKE '%General%'
-              AND (sec.name = 'B' OR sec.label = 'B')
+              AND sec.label = 'B'
             ORDER BY sem.name, sub.code
         """)).fetchall()]
     
@@ -1577,7 +1577,7 @@ def create_secb_offerings():
     try:
         with get_transaction() as session:
             sec_b = session.execute(text(
-                "SELECT id FROM section WHERE (name='B' OR label='B') AND shift=1 ORDER BY id LIMIT 1"
+                "SELECT id FROM section WHERE label='B' AND shift=1 ORDER BY id LIMIT 1"
             )).scalar()
             
             if not sec_b:
@@ -1585,7 +1585,7 @@ def create_secb_offerings():
                 return results
             
             sec_a = session.execute(text(
-                "SELECT id FROM section WHERE (name='A' OR label='A') AND shift=1 ORDER BY id LIMIT 1"
+                "SELECT id FROM section WHERE label='A' AND shift=1 ORDER BY id LIMIT 1"
             )).scalar()
             
             sec_a_mca_sem2 = session.execute(text("""
