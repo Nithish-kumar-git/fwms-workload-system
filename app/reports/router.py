@@ -1527,7 +1527,7 @@ def section_check(emp_code: str):
         
         result["mca_general_sem2_offerings"] = [dict(r._mapping) for r in session.execute(text("""
             SELECT so.id, so.shift, so.is_active,
-                   p.name as prog, sem.name as sem_name,
+                   p.name as prog, sem.label as sem_name,
                    sec.id as sec_id, sec.label as sec_name, sec.label as sec_label,
                    sec.shift as sec_shift,
                    sub.code, sub.name as sub_name
@@ -1537,7 +1537,7 @@ def section_check(emp_code: str):
             JOIN section sec ON sec.id = so.section_id
             JOIN subject sub ON sub.id = so.subject_id
             WHERE p.name ILIKE '%MCA%' AND p.name ILIKE '%General%'
-              AND sem.name ILIKE '%II%'
+              AND sem.label ILIKE '%II%'
               AND so.is_active = true
             ORDER BY sec.label, sub.code
         """)).fetchall()]
@@ -1550,7 +1550,7 @@ def section_check(emp_code: str):
         
         result["mca_general_sec_b_offerings"] = [dict(r._mapping) for r in session.execute(text("""
             SELECT so.id, so.shift, so.is_active,
-                   p.name as prog, sem.name as sem_name,
+                   p.name as prog, sem.label as sem_name,
                    sec.id as sec_id, sec.label as sec_name, sec.label as sec_label,
                    sub.code, sub.name as sub_name
             FROM subject_offering so
@@ -1560,7 +1560,7 @@ def section_check(emp_code: str):
             JOIN subject sub ON sub.id = so.subject_id
             WHERE p.name ILIKE '%MCA%' AND p.name ILIKE '%General%'
               AND sec.label = 'B'
-            ORDER BY sem.name, sub.code
+            ORDER BY sem.label, sub.code
         """)).fetchall()]
     
     return result
@@ -1597,7 +1597,7 @@ def create_secb_offerings():
                 JOIN semester sem ON sem.id = so.semester_id
                 WHERE so.section_id = :sec_a
                   AND p.name ILIKE '%MCA%'
-                  AND sem.name ILIKE '%II%'
+                  AND sem.label ILIKE '%II%'
                   AND so.is_active = true
             """), {"sec_a": sec_a}).fetchall()
             
