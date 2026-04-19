@@ -525,6 +525,136 @@ async def fix_shift_from_program():
     return results
 
 
+@router.post("/admin/create-shift2-offerings")
+async def create_shift2_offerings():
+    """PUBLIC - Create shift=2 duplicate offerings for every existing shift=1 offering."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    results = {"created": 0, "skipped": 0, "errors": [], "status": "SUCCESS"}
+    
+    try:
+        with get_transaction() as session:
+            # Get ALL shift=1 section ids
+            shift1_sections = session.execute(
+                text("SELECT id, name FROM section WHERE shift = 1 ORDER BY id")
+            ).fetchall()
+            results["shift1_sections"] = [dict(r._mapping) for r in shift1_sections]
+            
+            # Check if shift=2 sections exist
+            shift2_sections = session.execute(
+                text("SELECT id, name FROM section WHERE shift = 2 ORDER BY id")
+            ).fetchall()
+            
+            # If no shift 2 sections exist, create them
+            if not shift2_sections:
+                new_sec_ids = {}
+                for sec in shift1_sections:
+                    # Skip combined sections like A+B, A+B+C for shift 2
+                    sec_name = sec[1]
+                    if '+' in str(sec_name):
+                        continue
+                    
+                    existing = session.execute(
+                        text("SELECT id FROM section WHERE name=:n AND shift=2"),
+                        {"n": sec_name}
+                    ).scalar()
+                    
+                    if not existing:
+                        new_id = session.execute(
+                            text("INSERT INTO section (name, shift) VALUES (:n, 2) RETURNING id"),
+                            {"n": sec_name}
+                        ).scalar()
+                        new_sec_ids[sec[0]] = new_id
+                        if "created_sections" not in results:
+                            results["created_sections"] = []
+                        results["created_sections"].append(f"{sec_name} (id={new_id})")
+                    else:
+                        new_sec_ids[sec[0]] = existing
+                
+                session.commit()
+                
+                # Re-fetch shift 2 sections
+                shift2_sections = session.execute(
+                    text("SELECT id, name FROM section WHERE shift = 2 ORDER BY id")
+                ).fetchall()
+            
+            results["shift2_sections"] = [dict(r._mapping) for r in shift2_sections]
+            
+            # Build map: shift1_section_name -> shift2_section_id
+            shift2_sec_map = {r[1]: r[0] for r in shift2_sections}
+            
+            # Get all shift=1 offerings
+            shift1_offerings = session.execute(
+                text("""
+                    SELECT so.id, so.subject_id, so.program_id, so.semester_id, so.section_id, 
+                           so.academic_year_id, so.is_active, so.academic_year, so.old_academic_cycle_id,
+                           sec.name as sec_name
+                    FROM subject_offering so
+                    JOIN section sec ON sec.id = so.section_id
+                    WHERE so.shift = 1
+                    ORDER BY so.id
+                """)
+            ).fetchall()
+            
+            results["shift1_offerings_total"] = len(shift1_offerings)
+            
+            for off in shift1_offerings:
+                o = dict(off._mapping)
+                sec_name = o["sec_name"]
+                
+                # Skip combined sections
+                if '+' in str(sec_name):
+                    results["skipped"] += 1
+                    continue
+                
+                # Find matching shift 2 section
+                shift2_sec_id = shift2_sec_map.get(sec_name)
+                if not shift2_sec_id:
+                    results["errors"].append(f"No shift2 section for: {sec_name}")
+                    results["skipped"] += 1
+                    continue
+                
+                # Check if shift=2 offering already exists
+                existing = session.execute(
+                    text("""
+                        SELECT id FROM subject_offering
+                        WHERE subject_id=:subj AND program_id=:prog AND semester_id=:sem 
+                          AND section_id=:sec AND shift=2
+                    """),
+                    {"subj": o["subject_id"], "prog": o["program_id"],
+                     "sem": o["semester_id"], "sec": shift2_sec_id}
+                ).scalar()
+                
+                if existing:
+                    results["skipped"] += 1
+                    continue
+                
+                # Create shift=2 duplicate
+                session.execute(
+                    text("""
+                        INSERT INTO subject_offering 
+                        (subject_id, program_id, semester_id, section_id, shift, is_active, 
+                         academic_year_id, academic_year, old_academic_cycle_id)
+                        VALUES (:subj, :prog, :sem, :sec, 2, :active, :ay_id, :ay, :old_cy)
+                    """),
+                    {"subj": o["subject_id"], "prog": o["program_id"],
+                     "sem": o["semester_id"], "sec": shift2_sec_id,
+                     "active": o["is_active"], "ay_id": o["academic_year_id"],
+                     "ay": o["academic_year"], "old_cy": o["old_academic_cycle_id"]}
+                )
+                results["created"] += 1
+            
+            session.commit()
+            results["status"] = "SUCCESS"
+            
+    except Exception as e:
+        results["errors"].append(str(e))
+        results["status"] = "FAILED"
+    
+    return results
+
+
 # ─── Live Report Endpoints (view only, not for export) ───────────────────────
 
 @router.get("/faculty-workload", response_model=FacultyWorkloadResponse)
