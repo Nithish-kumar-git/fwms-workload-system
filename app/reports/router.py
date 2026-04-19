@@ -655,6 +655,64 @@ async def create_shift2_offerings():
     return results
 
 
+@router.get("/admin/shift2-check")
+async def shift2_check():
+    """PUBLIC DEBUG - Check shift 2 offerings in open semesters."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    result = {}
+    with get_transaction() as session:
+        # Check if shift 2 offerings are active and in open semesters
+        result["shift2_in_open_sems"] = [dict(r._mapping) for r in session.execute(
+            text("""
+                SELECT so.shift, so.is_active, so.academic_year_id, so.academic_year,
+                       sem.label as sem_label, sem.id as sem_id,
+                       p.name as prog,
+                       COUNT(*) as cnt
+                FROM subject_offering so
+                JOIN semester sem ON sem.id = so.semester_id
+                JOIN program p ON p.id = so.program_id
+                WHERE so.semester_id IN (SELECT semester_id FROM cycle WHERE status='OPEN')
+                  AND so.shift = 2
+                GROUP BY so.shift, so.is_active, so.academic_year_id, so.academic_year, sem.label, sem.id, p.name
+                ORDER BY sem.label, p.name
+                LIMIT 30
+            """)
+        ).fetchall()]
+        
+        result["shift1_in_open_sems_count"] = session.execute(
+            text("""
+                SELECT COUNT(*) FROM subject_offering so
+                WHERE so.semester_id IN (SELECT semester_id FROM cycle WHERE status='OPEN')
+                  AND so.shift = 1 AND so.is_active = true
+            """)
+        ).scalar()
+        
+        result["shift2_in_open_sems_count"] = session.execute(
+            text("""
+                SELECT COUNT(*) FROM subject_offering so
+                WHERE so.semester_id IN (SELECT semester_id FROM cycle WHERE status='OPEN')
+                  AND so.shift = 2 AND so.is_active = true
+            """)
+        ).scalar()
+        
+        result["shift2_academic_years"] = [dict(r._mapping) for r in session.execute(
+            text("""
+                SELECT DISTINCT so.academic_year_id, so.academic_year, so.is_active
+                FROM subject_offering so WHERE so.shift = 2
+            """)
+        ).fetchall()]
+        
+        result["open_cycle_year_ids"] = [dict(r._mapping) for r in session.execute(
+            text("""
+                SELECT DISTINCT academic_year_id FROM cycle WHERE status='OPEN'
+            """)
+        ).fetchall()]
+    
+    return result
+
+
 # ─── Live Report Endpoints (view only, not for export) ───────────────────────
 
 @router.get("/faculty-workload", response_model=FacultyWorkloadResponse)

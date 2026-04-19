@@ -140,19 +140,6 @@ export default function PreferencesPage() {
     const filteredOfferings = useMemo(() => {
         let result = offerings;
         
-        // SHIFT-BASED FILTERING (applied FIRST, before other filters)
-        if (user?.shift) {
-            const userShift = user.shift;
-            if (userShift === 'SHIFT1') {
-                // SHIFT1 staff see only shift=1 offerings
-                result = result.filter((o) => o.shift === 1);
-            } else if (userShift === 'SHIFT2') {
-                // SHIFT2 staff see only shift=2 offerings
-                result = result.filter((o) => o.shift === 2);
-            }
-            // SHIFT1+SHIFT2 staff see ALL offerings (no filter)
-        }
-        
         // Program filter
         if (filterProgram) result = result.filter((o) => o.program === filterProgram);
         
