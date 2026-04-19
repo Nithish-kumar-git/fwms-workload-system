@@ -13,15 +13,8 @@ import {
     XCircle,
     Calendar
 } from 'lucide-react';
-import { 
-    fetchPreferenceOverview, 
-    fetchAllocationOverview,
-    getActiveCycle,
-    PreferenceOverviewResponse,
-    AllocationOverviewResponse,
-    PreferenceRecord,
-    AllocationRecord
-} from '../api/client';
+import { fetchPreferenceOverview, fetchAllocationOverview, getActiveCycle } from '../api/client';
+import type { PreferenceOverviewResponse, AllocationOverviewResponse, PreferenceRecord, AllocationRecord } from '../api/client';
 
 type TabType = 'preferences' | 'allocations';
 

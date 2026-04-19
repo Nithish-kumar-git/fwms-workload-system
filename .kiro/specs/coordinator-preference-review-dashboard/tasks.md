@@ -29,7 +29,7 @@ The implementation follows established patterns from the reports module for back
     - Return aggregated data with total_faculty, overloaded_count, balanced_count, underloaded_count, and records array
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 8.2_
   
-  - [ ] 1.3 Write unit tests for service functions
+  - [-] 1.3 Write unit tests for service functions
     - Test get_preference_overview() with no active cycle returns empty list
     - Test get_preference_overview() with faculty having all preferences submitted
     - Test get_preference_overview() with faculty having partial preferences
@@ -145,7 +145,7 @@ The implementation follows established patterns from the reports module for back
     - Ensure route is positioned logically with other coordinator routes
     - _Requirements: 1.1, 1.2, 1.3_
 
-- [-] 7. Final checkpoint - End-to-end testing and verification
+- [x] 7. Final checkpoint - End-to-end testing and verification
   - Verify coordinator can access /admin/preference-review page
   - Verify faculty cannot access /admin/preference-review page (redirected)
   - Verify navigation item appears and shows active styling

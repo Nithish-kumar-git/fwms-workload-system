@@ -16,7 +16,6 @@ import StaffEmailsPage from './pages/StaffEmailsPage';
 import CurriculumUploadPage from './pages/CurriculumUploadPage';
 import FinalApprovalPage from './pages/FinalApprovalPage';
 import PreferenceReviewDashboardPage from './pages/PreferenceReviewDashboardPage';
-import PreferenceReviewDashboardPage from './pages/PreferenceReviewDashboardPage';
 
 /* ── Auth guard: redirects to /login if not authenticated ── */
 function RequireAuth() {
