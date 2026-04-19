@@ -1500,3 +1500,136 @@ async def create_shift2_offerings():
         results["status"] = "FAILED"
     
     return results
+
+
+@router.get("/admin/section-check/{emp_code}")
+def section_check(emp_code: str):
+    """PUBLIC DEBUG - Diagnose section B offerings for a specific staff member."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    result = {}
+    with get_transaction() as session:
+        staff = session.execute(text("""
+            SELECT id, name, emp_code, shift, is_class_teacher,
+                   ct_program, ct_section, ct_semester, ct_shift, ct_curriculum_year
+            FROM staff WHERE emp_code = :code
+        """), {"code": emp_code}).fetchone()
+        
+        if not staff:
+            return {"error": f"Staff {emp_code} not found"}
+        
+        result["staff"] = dict(staff._mapping)
+        
+        result["all_sections"] = [dict(r._mapping) for r in session.execute(
+            text("SELECT id, name, label, shift FROM section ORDER BY shift, name")
+        ).fetchall()]
+        
+        result["mca_general_sem2_offerings"] = [dict(r._mapping) for r in session.execute(text("""
+            SELECT so.id, so.shift, so.is_active,
+                   p.name as prog, sem.name as sem_name,
+                   sec.id as sec_id, sec.name as sec_name, sec.label as sec_label,
+                   sec.shift as sec_shift,
+                   sub.code, sub.name as sub_name
+            FROM subject_offering so
+            JOIN program p ON p.id = so.program_id
+            JOIN semester sem ON sem.id = so.semester_id
+            JOIN section sec ON sec.id = so.section_id
+            JOIN subject sub ON sub.id = so.subject_id
+            WHERE p.name ILIKE '%MCA%' AND p.name ILIKE '%General%'
+              AND sem.name ILIKE '%II%'
+              AND so.is_active = true
+            ORDER BY sec.name, sub.code
+        """)).fetchall()]
+        
+        result["section_b_exists"] = [dict(r._mapping) for r in session.execute(text("""
+            SELECT id, name, label, shift FROM section 
+            WHERE (name = 'B' OR label = 'B') 
+            ORDER BY id
+        """)).fetchall()]
+        
+        result["mca_general_sec_b_offerings"] = [dict(r._mapping) for r in session.execute(text("""
+            SELECT so.id, so.shift, so.is_active,
+                   p.name as prog, sem.name as sem_name,
+                   sec.id as sec_id, sec.name as sec_name, sec.label as sec_label,
+                   sub.code, sub.name as sub_name
+            FROM subject_offering so
+            JOIN program p ON p.id = so.program_id
+            JOIN semester sem ON sem.id = so.semester_id
+            JOIN section sec ON sec.id = so.section_id
+            JOIN subject sub ON sub.id = so.subject_id
+            WHERE p.name ILIKE '%MCA%' AND p.name ILIKE '%General%'
+              AND (sec.name = 'B' OR sec.label = 'B')
+            ORDER BY sem.name, sub.code
+        """)).fetchall()]
+    
+    return result
+
+
+@router.post("/admin/create-secb-offerings")
+def create_secb_offerings():
+    """PUBLIC - Create Section B offerings for MCA General Sem II by copying from Section A."""
+    from app.db.session import get_transaction
+    from sqlalchemy import text
+    
+    results = {"created": 0, "skipped": 0, "errors": []}
+    
+    try:
+        with get_transaction() as session:
+            sec_b = session.execute(text(
+                "SELECT id FROM section WHERE (name='B' OR label='B') AND shift=1 ORDER BY id LIMIT 1"
+            )).scalar()
+            
+            if not sec_b:
+                results["errors"].append("Section B shift=1 not found")
+                return results
+            
+            sec_a = session.execute(text(
+                "SELECT id FROM section WHERE (name='A' OR label='A') AND shift=1 ORDER BY id LIMIT 1"
+            )).scalar()
+            
+            sec_a_mca_sem2 = session.execute(text("""
+                SELECT so.subject_id, so.program_id, so.semester_id,
+                       so.shift, so.is_active, so.academic_year_id,
+                       so.academic_year, so.old_academic_cycle_id
+                FROM subject_offering so
+                JOIN program p ON p.id = so.program_id
+                JOIN semester sem ON sem.id = so.semester_id
+                WHERE so.section_id = :sec_a
+                  AND p.name ILIKE '%MCA%'
+                  AND sem.name ILIKE '%II%'
+                  AND so.is_active = true
+            """), {"sec_a": sec_a}).fetchall()
+            
+            for off in sec_a_mca_sem2:
+                o = dict(off._mapping)
+                existing = session.execute(text("""
+                    SELECT id FROM subject_offering
+                    WHERE subject_id=:s AND program_id=:p AND semester_id=:sem AND section_id=:sec
+                """), {"s":o["subject_id"],"p":o["program_id"],"sem":o["semester_id"],"sec":sec_b}).scalar()
+                
+                if existing:
+                    results["skipped"] += 1
+                    continue
+                
+                session.execute(text("""
+                    INSERT INTO subject_offering(
+                        subject_id,program_id,semester_id,section_id,shift,is_active,
+                        academic_year_id,academic_year,old_academic_cycle_id
+                    )
+                    VALUES(:s,:p,:sem,:sec,:sh,:act,:ay,:ayn,:old)
+                """), {
+                    "s":o["subject_id"],"p":o["program_id"],"sem":o["semester_id"],"sec":sec_b,
+                    "sh":o["shift"],"act":o["is_active"],"ay":o["academic_year_id"],
+                    "ayn":o["academic_year"],"old":o["old_academic_cycle_id"]
+                })
+                results["created"] += 1
+            
+            session.commit()
+            results["status"] = "SUCCESS"
+            
+    except Exception as e:
+        results["errors"].append(str(e))
+        results["status"] = "FAILED"
+    
+    return results
