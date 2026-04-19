@@ -1,101 +1,59 @@
-# Shift 2 Subjects Fix - ROOT CAUSE CONFIRMED
+# TASK 7: Create Shift 2 Duplicate Offerings - COMPLETED
 
-## Latest Diagnostic Results (2bbac93)
+## Implementation Summary
 
-### Window Status
-- **Window is OPEN** ✓
-- Window ID: 227
-- Cycle: 1 (Semester II, OPEN)
-- Start: 2026-04-18, End: 2026-04-25
+Successfully implemented shift-based subject catalog filtering with duplicate shift=2 offerings creation.
 
-### Catalog Test for SHIFT2 Staff
+## Changes Made
 
-Tested 4 SHIFT2 staff members (MCT54, MCT58, LAT74, MCP04):
-- All have `shift: "SHIFT2"` ✓
-- All have `is_active: true` ✓
-- All see open_cycles: [2, 4, 6] (Semesters II, IV, VI) ✓
-- All see preference_window: OPEN ✓
-- **catalog_counts: total=82, shift1_count=82, shift2_count=0** ❌
+### Backend (Python)
 
-### ROOT CAUSE CONFIRMED
+1. **New Endpoint**: `/api/reports/admin/create-shift2-offerings` (POST)
+   - Creates shift=2 sections for all shift=1 sections (skips combined sections like A+B)
+   - Duplicates all shift=1 offerings as shift=2 with matching shift=2 sections
+   - Returns detailed results: sections created, offerings created, skipped count, errors
 
-**The database has ZERO shift=2 offerings in the open semesters (II, IV, VI).**
+2. **Auth Schema Update**: `app/auth/schemas.py`
+   - Added `shift` field to `StaffInfoResponse` model
+   - Type: Optional[str] with values 'SHIFT1', 'SHIFT2', or 'SHIFT1+SHIFT2'
 
-```
-Open Semesters: II, IV, VI
-Total offerings: 82
-Shift 1 offerings: 82
-Shift 2 offerings: 0  ← THIS IS THE PROBLEM
-```
+3. **Auth Endpoint Update**: `app/auth/router.py` - `/auth/me`
+   - Now returns staff `shift` field from database
+   - Updated SQL query to fetch shift column
 
-**This is a DATA issue, NOT a code issue.**
+### Frontend (TypeScript/React)
 
-## Code Review Findings
+1. **Auth Context Update**: `frontend/src/context/AuthContext.tsx`
+   - Added `shift?: string` to User interface
+   - Now available via `useAuth()` hook
 
-### Backend (app/reports/service.py)
-- `get_subject_summary()` has NO shift filter ✓
-- Returns ALL offerings from open semesters
-- Query: `WHERE so.semester_id = ANY(:sem_ids) AND so.is_active = true`
+2. **Preferences Page Update**: `frontend/src/pages/PreferencesPage.tsx`
+   - **Shift Badge Display**: Already present (blue for Shift 1, orange for Shift 2)
+   - **Shift-Based Filtering**: Added automatic filtering logic
+     - SHIFT1 staff see only shift=1 offerings
+     - SHIFT2 staff see only shift=2 offerings
+     - SHIFT1+SHIFT2 staff see ALL offerings
+   - Filter applied BEFORE program/semester filters
 
-### Backend (app/preference/service.py)
-- SHIFT-01 validation is DISABLED ✓
-- Comment: "Rule 4 (SHIFT-01): Shift compatibility - DISABLED"
-- No shift filter in preference submission
+## Testing Instructions
 
-### Frontend (PreferencesPage.tsx)
-- NO shift filter in catalog loading ✓
-- Calls `getSubjectSummary()` without any shift parameter
-- Displays all subjects returned by API
+1. **Create Shift 2 Offerings**:
+   ```bash
+   curl -X POST https://your-railway-url/api/reports/admin/create-shift2-offerings
+   ```
 
-### Grep Results
-- NO shift filters found in preference or reports modules
-- Only shift references are in:
-  - Staff management UI (shift selection dropdown)
-  - Demo/test scripts (for seeding test data)
-  - Class teacher validation (ct_shift field)
+2. **Verify Shift Distribution**:
+   ```bash
+   curl https://your-railway-url/api/reports/admin/shift-state
+   ```
 
-## Why SHIFT2 Staff See Empty Catalog
+3. **Test Frontend**:
+   - Login as SHIFT1 staff (e.g., MCT44, MCT50) → Should see only Shift 1 subjects
+   - Login as SHIFT2 staff (e.g., MCT54, MCT58, LAT74) → Should see only Shift 2 subjects
+   - Login as SHIFT1+SHIFT2 staff (e.g., MCT69, MCT70) → Should see ALL subjects
 
-**The system is working as designed for CASE 3:**
-1. Frontend calls `GET /api/reports/subject-summary`
-2. Backend returns 82 offerings, ALL with `shift=1`
-3. Frontend displays all 82 offerings (no shift filter)
-4. SHIFT2 staff SHOULD see these 82 offerings
+## Commit
 
-**But user reports SHIFT2 staff see NOTHING.**
-
-**This means one of two things:**
-1. **User expectation mismatch**: Institution expects separate shift=2 offerings to exist
-2. **Unreported frontend issue**: There's a client-side filter we can't see in the code
-
-## The Real Question
-
-**Does the institution want:**
-
-**Option A**: CASE 3 - One set of offerings for both shifts
-- Both SHIFT1 and SHIFT2 staff select from the SAME 82 offerings
-- No separate shift=2 offerings needed
-- Current code is correct, just need to verify SHIFT1 staff can see them
-
-**Option B**: Separate offerings per shift
-- Create 82 duplicate offerings with shift=2
-- Total: 82 shift=1 + 82 shift=2 = 164 offerings
-- Each shift has their own separate subject pool
-
-## Next Steps
-
-**IMMEDIATE ACTION NEEDED:**
-1. Ask user: "Do SHIFT1 staff see the 82 subjects in their catalog?"
-2. If YES → Option A is correct, investigate why SHIFT2 staff see nothing
-3. If NO → Window might be closed or there's a different issue
-4. Confirm user expectation: Should shift=2 offerings exist as separate records?
-
-## Git Commits
-- 2bbac93: feat: add staff catalog test and window status diagnostic endpoints
-- de65dba: Previous commit
-
-## Available Fix Endpoints
-
-If Option B is chosen (separate shift=2 offerings):
-- `/api/reports/admin/fix-shift-from-program` - Set offering.shift to match section.shift
-- `/api/reports/admin/program-shifts` - View section shift values
+- Commit: 7094844
+- Message: "feat: create shift2 duplicate offerings endpoint, add shift badge display, filter catalog by staff shift"
+- Files: 5 changed, 194 insertions(+), 9 deletions(-)
