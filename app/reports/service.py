@@ -597,3 +597,324 @@ def _generate_text_pdf(academic_year: str, semester_id: int) -> bytes:
     lines.append(f"Generated: {datetime.now().isoformat()}")
 
     return "\n".join(lines).encode("utf-8")
+
+
+# ============================================================================
+# Coordinator Preference Review Dashboard
+# ============================================================================
+
+def get_preference_overview() -> dict:
+    """
+    Aggregate preference submission status for all active faculty.
+    
+    Returns:
+        {
+            "total_faculty": int,
+            "submitted_count": int,
+            "partial_count": int,
+            "not_submitted_count": int,
+            "records": [
+                {
+                    "staff_id": int,
+                    "emp_code": str,
+                    "name": str,
+                    "total_subjects": int,
+                    "submitted_preferences": int,
+                    "status": "Submitted" | "Partial" | "Not Submitted",
+                    "preferences": [
+                        {
+                            "subject_code": str,
+                            "subject_name": str,
+                            "program": str,
+                            "semester": str,
+                            "section": str,
+                            "preference_rank": int
+                        }
+                    ]
+                }
+            ]
+        }
+    """
+    with get_transaction() as session:
+        # Query active cycle to get semester_id and academic_year
+        try:
+            academic_year, semester_id = _resolve_active_cycle(session)
+        except RuntimeError:
+            # No active cycle - return empty result
+            logger.warning("No active cycle found for preference overview")
+            return {
+                "total_faculty": 0,
+                "submitted_count": 0,
+                "partial_count": 0,
+                "not_submitted_count": 0,
+                "records": []
+            }
+        
+        # Fetch all active faculty from staff table
+        faculty_rows = session.execute(
+            text("""
+                SELECT s.id, s.emp_code, s.name
+                FROM staff s
+                WHERE s.is_active = true AND s.emp_code IS NOT NULL
+                ORDER BY s.name
+            """)
+        ).fetchall()
+        
+        records = []
+        submitted_count = 0
+        partial_count = 0
+        not_submitted_count = 0
+        
+        for faculty in faculty_rows:
+            staff_id = faculty[0]
+            emp_code = faculty[1]
+            name = faculty[2]
+            
+            # Count total available subjects from subject_offering filtered by active cycle
+            total_subjects = session.execute(
+                text("""
+                    SELECT COUNT(DISTINCT so.id)
+                    FROM subject_offering so
+                    WHERE so.academic_year = :year
+                      AND so.semester_id = :sem_id
+                      AND so.is_active = true
+                """),
+                {"year": academic_year, "sem_id": semester_id}
+            ).scalar() or 0
+            
+            # Count submitted preferences from faculty_preference joined with subject_offering
+            submitted_preferences = session.execute(
+                text("""
+                    SELECT COUNT(DISTINCT fp.subject_offering_id)
+                    FROM faculty_preference fp
+                    JOIN subject_offering so ON so.id = fp.subject_offering_id
+                    WHERE fp.staff_id = :staff_id
+                      AND so.academic_year = :year
+                      AND so.semester_id = :sem_id
+                      AND so.is_active = true
+                """),
+                {"staff_id": staff_id, "year": academic_year, "sem_id": semester_id}
+            ).scalar() or 0
+            
+            # Calculate submission status
+            if total_subjects == 0:
+                status = "Not Submitted"
+                not_submitted_count += 1
+            elif submitted_preferences == total_subjects:
+                status = "Submitted"
+                submitted_count += 1
+            elif submitted_preferences > 0:
+                status = "Partial"
+                partial_count += 1
+            else:
+                status = "Not Submitted"
+                not_submitted_count += 1
+            
+            # Fetch preference details with subject information for expandable rows
+            preference_rows = session.execute(
+                text("""
+                    SELECT sub.code, sub.name, p.name AS program,
+                           sem.label AS semester, sec.label AS section,
+                           fp.preference_number
+                    FROM faculty_preference fp
+                    JOIN subject_offering so ON so.id = fp.subject_offering_id
+                    JOIN subject sub ON sub.id = so.subject_id
+                    JOIN program p ON p.id = so.program_id
+                    JOIN semester sem ON sem.id = so.semester_id
+                    JOIN section sec ON sec.id = so.section_id
+                    WHERE fp.staff_id = :staff_id
+                      AND so.academic_year = :year
+                      AND so.semester_id = :sem_id
+                      AND so.is_active = true
+                    ORDER BY fp.preference_number
+                """),
+                {"staff_id": staff_id, "year": academic_year, "sem_id": semester_id}
+            ).fetchall()
+            
+            preferences = [
+                {
+                    "subject_code": row[0],
+                    "subject_name": row[1],
+                    "program": row[2],
+                    "semester": row[3],
+                    "section": row[4],
+                    "preference_rank": row[5]
+                }
+                for row in preference_rows
+            ]
+            
+            records.append({
+                "staff_id": staff_id,
+                "emp_code": emp_code,
+                "name": name,
+                "total_subjects": total_subjects,
+                "submitted_preferences": submitted_preferences,
+                "status": status,
+                "preferences": preferences
+            })
+        
+        return {
+            "total_faculty": len(records),
+            "submitted_count": submitted_count,
+            "partial_count": partial_count,
+            "not_submitted_count": not_submitted_count,
+            "records": records
+        }
+
+
+def get_allocation_overview() -> dict:
+    """
+    Aggregate allocation results for all active faculty.
+    
+    Returns:
+        {
+            "total_faculty": int,
+            "overloaded_count": int,
+            "balanced_count": int,
+            "underloaded_count": int,
+            "records": [
+                {
+                    "staff_id": int,
+                    "emp_code": str,
+                    "name": str,
+                    "total_tch": int,
+                    "assigned_subjects_count": int,
+                    "workload_status": "Overloaded" | "Balanced" | "Underloaded",
+                    "assigned_subjects": [
+                        {
+                            "subject_code": str,
+                            "subject_name": str,
+                            "program": str,
+                            "semester": str,
+                            "section": str,
+                            "tch": int
+                        }
+                    ]
+                }
+            ]
+        }
+    """
+    with get_transaction() as session:
+        # Query active cycle to get semester_id and academic_year
+        try:
+            academic_year, semester_id = _resolve_active_cycle(session)
+        except RuntimeError:
+            # No active cycle - return empty result
+            logger.warning("No active cycle found for allocation overview")
+            return {
+                "total_faculty": 0,
+                "overloaded_count": 0,
+                "balanced_count": 0,
+                "underloaded_count": 0,
+                "records": []
+            }
+        
+        # Fetch all active faculty from staff table
+        faculty_rows = session.execute(
+            text("""
+                SELECT s.id, s.emp_code, s.name
+                FROM staff s
+                WHERE s.is_active = true AND s.emp_code IS NOT NULL
+                ORDER BY s.name
+            """)
+        ).fetchall()
+        
+        records = []
+        overloaded_count = 0
+        balanced_count = 0
+        underloaded_count = 0
+        
+        for faculty in faculty_rows:
+            staff_id = faculty[0]
+            emp_code = faculty[1]
+            name = faculty[2]
+            
+            # Sum total TCH from allocation joined with subject_offering
+            total_tch_result = session.execute(
+                text("""
+                    SELECT COALESCE(SUM(sub.tch), 0)
+                    FROM allocation a
+                    JOIN subject_offering so ON so.id = a.subject_offering_id
+                    JOIN subject sub ON sub.id = so.subject_id
+                    WHERE a.staff_id = :staff_id
+                      AND so.academic_year = :year
+                      AND so.semester_id = :sem_id
+                """),
+                {"staff_id": staff_id, "year": academic_year, "sem_id": semester_id}
+            ).scalar() or 0
+            
+            total_tch = int(total_tch_result)
+            
+            # Count assigned subjects
+            assigned_subjects_count = session.execute(
+                text("""
+                    SELECT COUNT(DISTINCT a.subject_offering_id)
+                    FROM allocation a
+                    JOIN subject_offering so ON so.id = a.subject_offering_id
+                    WHERE a.staff_id = :staff_id
+                      AND so.academic_year = :year
+                      AND so.semester_id = :sem_id
+                """),
+                {"staff_id": staff_id, "year": academic_year, "sem_id": semester_id}
+            ).scalar() or 0
+            
+            # Calculate workload status
+            if total_tch > 18:
+                workload_status = "Overloaded"
+                overloaded_count += 1
+            elif total_tch >= 14:
+                workload_status = "Balanced"
+                balanced_count += 1
+            else:
+                workload_status = "Underloaded"
+                underloaded_count += 1
+            
+            # Fetch assigned subject details for expandable rows
+            subject_rows = session.execute(
+                text("""
+                    SELECT sub.code, sub.name, p.name AS program,
+                           sem.label AS semester, sec.label AS section,
+                           COALESCE(sub.tch, 0) AS tch
+                    FROM allocation a
+                    JOIN subject_offering so ON so.id = a.subject_offering_id
+                    JOIN subject sub ON sub.id = so.subject_id
+                    JOIN program p ON p.id = so.program_id
+                    JOIN semester sem ON sem.id = so.semester_id
+                    JOIN section sec ON sec.id = so.section_id
+                    WHERE a.staff_id = :staff_id
+                      AND so.academic_year = :year
+                      AND so.semester_id = :sem_id
+                    ORDER BY p.name, sem.label, sec.label, sub.code
+                """),
+                {"staff_id": staff_id, "year": academic_year, "sem_id": semester_id}
+            ).fetchall()
+            
+            assigned_subjects = [
+                {
+                    "subject_code": row[0],
+                    "subject_name": row[1],
+                    "program": row[2],
+                    "semester": row[3],
+                    "section": row[4],
+                    "tch": row[5]
+                }
+                for row in subject_rows
+            ]
+            
+            records.append({
+                "staff_id": staff_id,
+                "emp_code": emp_code,
+                "name": name,
+                "total_tch": total_tch,
+                "assigned_subjects_count": assigned_subjects_count,
+                "workload_status": workload_status,
+                "assigned_subjects": assigned_subjects
+            })
+        
+        return {
+            "total_faculty": len(records),
+            "overloaded_count": overloaded_count,
+            "balanced_count": balanced_count,
+            "underloaded_count": underloaded_count,
+            "records": records
+        }

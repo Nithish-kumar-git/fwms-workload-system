@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, BookOpen, Settings, FileText, LogOut,
-    Clock, CalendarDays, Users, Shield, Upload, CheckCircle,
+    Clock, CalendarDays, Users, Shield, Upload, CheckCircle, ClipboardList,
 } from 'lucide-react';
 import { logout } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -22,6 +22,7 @@ const coordinatorItems = [
     { path: '/admin/cycles', label: 'Cycles', icon: CalendarDays },
     { path: '/admin/subjects', label: 'Subjects', icon: Upload },
     { path: '/admin/allocation', label: 'Allocation', icon: Settings },
+    { path: '/admin/preference-review', label: 'Pref Review', icon: ClipboardList },
     { path: '/admin/review', label: 'Review', icon: FileText },
     { path: '/admin/reports', label: 'Reports', icon: FileText },
 ];

@@ -99,6 +99,67 @@ export const downloadExcel = () =>
 export const downloadPdf = () =>
     api.get('/reports/export/workload.pdf', { responseType: 'blob' });
 
+// ─── Coordinator Dashboard ───
+export interface PreferenceDetail {
+    subject_code: string;
+    subject_name: string;
+    program: string;
+    semester: string;
+    section: string;
+    preference_rank: number;
+}
+
+export interface PreferenceRecord {
+    staff_id: number;
+    emp_code: string;
+    name: string;
+    total_subjects: number;
+    submitted_preferences: number;
+    status: 'Submitted' | 'Partial' | 'Not Submitted';
+    preferences: PreferenceDetail[];
+}
+
+export interface PreferenceOverviewResponse {
+    total_faculty: number;
+    submitted_count: number;
+    partial_count: number;
+    not_submitted_count: number;
+    records: PreferenceRecord[];
+}
+
+export interface AssignedSubject {
+    subject_code: string;
+    subject_name: string;
+    program: string;
+    semester: string;
+    section: string;
+    tch: number;
+}
+
+export interface AllocationRecord {
+    staff_id: number;
+    emp_code: string;
+    name: string;
+    total_tch: number;
+    assigned_subjects_count: number;
+    workload_status: 'Overloaded' | 'Balanced' | 'Underloaded';
+    assigned_subjects: AssignedSubject[];
+}
+
+export interface AllocationOverviewResponse {
+    total_faculty: number;
+    overloaded_count: number;
+    balanced_count: number;
+    underloaded_count: number;
+    records: AllocationRecord[];
+}
+
+export const fetchPreferenceOverview = (): Promise<{ data: PreferenceOverviewResponse }> =>
+    api.get('/reports/coordinator/preference-overview');
+
+export const fetchAllocationOverview = (): Promise<{ data: AllocationOverviewResponse }> =>
+    api.get('/reports/coordinator/allocation-overview');
+
 // ─── Preference Window ───
 export const openPrefWindow = (data: {
     academic_year: string;

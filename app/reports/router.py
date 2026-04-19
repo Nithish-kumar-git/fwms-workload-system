@@ -746,6 +746,32 @@ async def department_summary(
     return DepartmentSummaryResponse(**data)
 
 
+# ─── Coordinator Preference Review Dashboard ─────────────────────────────────
+
+@router.get("/coordinator/preference-overview")
+async def preference_overview(
+    coordinator_id: int = Depends(get_current_coordinator_id),
+):
+    """
+    Preference submission overview for all faculty.
+    Accessible by tt_coordinator and hod roles only.
+    """
+    data = report_service.get_preference_overview()
+    return data
+
+
+@router.get("/coordinator/allocation-overview")
+async def allocation_overview(
+    coordinator_id: int = Depends(get_current_coordinator_id),
+):
+    """
+    Allocation results overview for all faculty.
+    Accessible by tt_coordinator and hod roles only.
+    """
+    data = report_service.get_allocation_overview()
+    return data
+
+
 # ─── Pipeline Status ─────────────────────────────────────────────────────────
 
 @router.get("/pipeline-status")

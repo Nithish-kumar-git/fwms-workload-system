@@ -15,6 +15,8 @@ import StaffPage from './pages/StaffPage';
 import StaffEmailsPage from './pages/StaffEmailsPage';
 import CurriculumUploadPage from './pages/CurriculumUploadPage';
 import FinalApprovalPage from './pages/FinalApprovalPage';
+import PreferenceReviewDashboardPage from './pages/PreferenceReviewDashboardPage';
+import PreferenceReviewDashboardPage from './pages/PreferenceReviewDashboardPage';
 
 /* ── Auth guard: redirects to /login if not authenticated ── */
 function RequireAuth() {
@@ -140,6 +142,7 @@ export default function App() {
                         <Route element={<RequireCoordinator />}>
                             <Route path="/dashboard" element={<DashboardPage />} />
                             <Route path="/admin/allocation" element={<AllocationPage />} />
+                            <Route path="/admin/preference-review" element={<PreferenceReviewDashboardPage />} />
                             <Route path="/admin/review" element={<ReviewPage />} />
                             <Route path="/admin/reports" element={<ReportsPage />} />
                             <Route path="/admin/window" element={<WindowPage />} />

@@ -1,132 +1,59 @@
-# Shift 2 Bug Fixes - Progress Report
+# Coordinator Preference Review Dashboard - Implementation Progress
 
-## Summary
-Fixed two bugs preventing shift 2 offerings from being visible to all staff in the preferences catalog.
+## STEP 1: File Analysis Complete
 
-## Bug 1: Shift-Based Staff Filtering (FIXED)
+### Files Read and Key Findings:
 
-### Problem
-Frontend was filtering offerings based on staff shift value:
-- SHIFT1 staff could only see shift=1 offerings
-- SHIFT2 staff could only see shift=2 offerings
-- This prevented staff from seeing all available subjects
+1. **frontend/src/App.tsx**
+   - Coordinator routes use `/admin/*` prefix
+   - Existing route: `/admin/review` → ReviewPage (allocation override)
+   - Auth guard: `RequireCoordinator` (allows tt_coordinator OR hod roles)
+   - Will add new route: `/admin/preference-review`
 
-### Solution
-**Removed shift-based filtering from PreferencesPage.tsx** (lines 143-154)
+2. **frontend/src/api/client.ts**
+   - Base URL pattern: `${VITE_API_URL}/api` or `/api`
+   - JWT token in localStorage: `jwt_token`
+   - Bearer token in Authorization header
+   - Existing API functions follow pattern: `export const functionName = () => api.get('/endpoint')`
 
-**Before**:
-```typescript
-const filteredOfferings = useMemo(() => {
-    let result = offerings;
-    
-    // SHIFT-BASED FILTERING (applied FIRST, before other filters)
-    if (user?.shift) {
-        const userShift = user.shift;
-        if (userShift === 'SHIFT1') {
-            result = result.filter((o) => o.shift === 1);
-        } else if (userShift === 'SHIFT2') {
-            result = result.filter((o) => o.shift === 2);
-        }
-    }
-    // ... other filters
-});
-```
+3. **frontend/src/pages/AllocationPage.tsx**
+   - Table pattern: `<table className="data-table">` with `<thead>` and `<tbody>`
+   - Glass card: `<div className="glass-card">`
+   - Stats grid: `<div className="stat-grid">` with `<div className="stat-card glass-card">`
+   - Badge classes: `badge badge-success`, `badge badge-warning`, `badge-danger`
+   - Loading state: centered text with spinner
+   - Error state: glass-card with AlertCircle icon
 
-**After**:
-```typescript
-const filteredOfferings = useMemo(() => {
-    let result = offerings;
-    
-    // Program filter
-    if (filterProgram) result = result.filter((o) => o.program === filterProgram);
-    // ... other filters (no shift filtering)
-});
-```
+4. **frontend/src/pages/StaffEmailsPage.tsx**
+   - Search pattern: `<Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />`
+   - Modal usage: `<Modal isOpen={...} onClose={...} title="...">`
+   - Toast pattern: `useToast()` hook with `addToast(message, type)`
 
-**Result**: All staff now see ALL subjects from both shifts. Shift badge remains visible for information.
+5. **frontend/src/pages/ReviewPage.tsx**
+   - Existing page for allocation override (NOT preference review)
+   - Uses grouped data structure by program/semester/section
+   - Table with override buttons
 
-## Bug 2: Shift 2 Offerings Visibility (VERIFIED OK)
+6. **frontend/src/components/Navbar.tsx**
+   - Coordinator nav items array: `coordinatorItems`
+   - Current items: Dashboard, My Preferences, Window, Cycles, Subjects, Allocation, Review, Reports
+   - Will add: "Pref Review" between "Allocation" and "Review"
+   - Icon imports from 'lucide-react'
 
-### Diagnostic Endpoint Added
-Created `/api/reports/admin/shift2-check` to diagnose shift 2 offerings status.
+### Existing API Endpoints (from client.ts):
+- Preferences: `/preferences/me`, `/preferences/status`
+- Allocation: `/admin/allocations`
+- Staff: `/admin/staff/list`
+- Reports: `/reports/faculty-workload`, `/reports/subject-summary`
 
-### Diagnostic Results
-```json
-{
-  "shift1_in_open_sems_count": 82,
-  "shift2_in_open_sems_count": 73,
-  "shift2_academic_years": [{"academic_year_id": 1, "academic_year": "2025-2026"}],
-  "open_cycle_year_ids": [{"academic_year_id": 1}]
-}
-```
+### Auth/Role Check:
+- Coordinator pages use `RequireCoordinator` guard
+- Allows both `tt_coordinator` and `hod` roles
+- JWT token required in Authorization header
 
-### Analysis
-✓ **73 shift=2 offerings** exist in open semesters (II, IV, VI)
-✓ **Academic year IDs match**: shift 2 offerings use academic_year_id=1, same as open cycles
-✓ **All offerings are active**: is_active=true
-✓ **No shift filter in backend**: `get_subject_summary()` query has NO shift filtering
-
-### Root Cause
-**Frontend filtering was the only issue**. Backend query was correct all along.
-
-The `get_subject_summary()` function in `app/reports/service.py`:
-- Queries offerings from open semesters only
-- No shift filtering in WHERE clause
-- Returns both shift=1 and shift=2 offerings
-
-## Shift 2 Offerings Distribution
-
-### By Semester
-- **Semester II**: 39 offerings (BCA, MCA programs)
-- **Semester IV**: 21 offerings (BCA, MCA programs)
-- **Semester VI**: 13 offerings (BCA programs)
-
-### Sample Programs with Shift 2
-- BCA(CYBER+MM): 10 offerings (Sem II), 8 offerings (Sem IV)
-- BCA(GENERAL): 5 offerings (Sem II), 4 offerings (Sem IV), 6 offerings (Sem VI)
-- MCA(General+BD): 6 offerings (Sem II)
-- MCA(General+CC): 5 offerings (Sem II)
-
-## Verification
-
-### TypeScript Compilation
-```
-✓ 0 errors
-```
-
-### Python Syntax Check
-```
-✓ All Python files OK
-```
-
-### Git Commit
-```
-Commit: 9f00640
-Message: "fix: remove shift staff filter, add shift2 diagnostic endpoint"
-Branch: main
-```
-
-## Changes Summary
-
-### Frontend Changes
-- **File**: `frontend/src/pages/PreferencesPage.tsx`
-- **Lines removed**: 11 lines (shift filtering logic)
-- **Impact**: All staff now see all offerings regardless of their shift value
-
-### Backend Changes
-- **File**: `app/reports/router.py`
-- **New endpoint**: `GET /api/reports/admin/shift2-check`
-- **Purpose**: Diagnostic endpoint to verify shift 2 offerings status
-- **Returns**: Counts, academic year IDs, and sample offerings
-
-## Final Status
-
-✅ **Bug 1 Fixed**: Shift-based staff filtering removed from frontend
-✅ **Bug 2 Verified**: Shift 2 offerings are correctly configured and visible
-✅ **All staff can now see both shift 1 and shift 2 offerings**
-✅ **Shift badges remain visible for information**
-
-## Next Steps
-- Staff can now select from both shift 1 and shift 2 offerings
-- Shift badge helps staff identify which shift each offering belongs to
-- No further action needed - both bugs resolved
+## Next Steps:
+- Add backend endpoints to app/reports/router.py
+- Add API functions to client.ts
+- Create CoordinatorReviewPage.tsx
+- Add route to App.tsx
+- Add nav link to Navbar.tsx
