@@ -73,11 +73,11 @@ These rules were defined during requirements analysis and enforced at the databa
                                       └──────────┬──────────┘
                                                  │
                               ┌──────────────────▼──────────────────┐
-                              │         PostgreSQL Database          │
+                              │         PostgreSQL Database         │
                               │  subject_selection (FCFS enforced)  │
-                              │  staff_assignment (eligibility)      │
-                              │  selection_window (time gating)      │
-                              │  audit_log (append-only history)     │
+                              │  staff_assignment (eligibility)     │
+                              │  selection_window (time gating)     │
+                              │  audit_log (append-only history)    │
                               └─────────────────────────────────────┘
 ```
 
