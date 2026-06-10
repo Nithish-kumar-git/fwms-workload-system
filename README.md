@@ -108,6 +108,31 @@ fwms-workload-system/
 
 ---
 
+## 🧪 Testing
+
+```bash
+# Install test dependencies
+pip install pytest httpx
+
+# Run all tests
+pytest tests/ -v
+
+# Run specific test file
+pytest tests/test_health.py -v
+
+# Run with coverage
+pip install pytest-cov
+pytest tests/ --cov=app --cov-report=html
+```
+
+**Test Coverage:**
+- Health endpoint (service status)
+- Demo login (no-auth user creation)
+- Authentication & authorization (JWT validation)
+- Integration tests (window lifecycle, FCFS)
+
+---
+
 ## 🔑 Key Environment Variables
 
 | Variable | Description |
