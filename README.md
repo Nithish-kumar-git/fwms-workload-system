@@ -35,6 +35,22 @@
 
 ---
 
+## 📸 Screenshots
+
+> 💡 **Try it yourself:** Click [Try Demo](https://fwms-workload-system.vercel.app/login) on the login page for instant HOD access — no account needed.
+
+| Login Page | HOD Dashboard |
+|---|---|
+| ![Login](docs/screenshots/login.png) | ![Dashboard](docs/screenshots/dashboard.png) |
+
+| Workload Allocation | Subject Preferences |
+|---|---|
+| ![Workload](docs/screenshots/workload.png) | ![Preferences](docs/screenshots/preferences.png) |
+
+*Screenshots coming soon — [visit the live demo](https://fwms-workload-system.vercel.app)*
+
+---
+
 ## 🛠 Tech Stack
 
 | Layer | Technology |
