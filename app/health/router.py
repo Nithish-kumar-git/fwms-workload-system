@@ -11,13 +11,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/health", tags=["health"])
+router = APIRouter(prefix="/api/health", tags=["health"])
 
 
 @router.get("")
 async def health_check():
     """Basic health check endpoint."""
-    return {"status": "ok"}
+    return {"status": "ok", "service": "fwms-api"}
 
 
 @router.get("/deep")
