@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, BookOpen, Settings, FileText, LogOut,
     Clock, CalendarDays, Users, Shield, Upload, CheckCircle, ClipboardList,
+    ExternalLink,
 } from 'lucide-react';
 import { logout } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -106,6 +107,16 @@ export default function Navbar() {
                             </span>
                         </span>
                     )}
+                    <a
+                        href="https://fwms-workload-system.onrender.com/docs"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-[12px] text-gray-500 hover:text-gray-800 transition-colors duration-200"
+                        title="View API documentation (Swagger)"
+                    >
+                        <ExternalLink size={14} strokeWidth={2} />
+                        <span className="font-medium">API Docs</span>
+                    </a>
                     <button onClick={handleLogout} className="btn btn-outline text-[13px] py-1.5 px-4 font-medium">
                         <LogOut size={15} />
                         Logout
