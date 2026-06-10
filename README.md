@@ -148,3 +148,4 @@ Full list in `.env.example`.
 ## 📄 License
 
 MIT
+
