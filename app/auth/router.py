@@ -225,6 +225,75 @@ async def dev_login_by_id(staff_id: int):
         "role": role,
     })
 
+
+@router.post("/demo-login")
+async def demo_login():
+    """
+    Public demo login endpoint for recruiters.
+    
+    - No authentication required
+    - No request body required
+    - Always available (no DEV_AUTH_BYPASS check)
+    - Creates/reuses demo user: demo@fwms.local with HOD role
+    
+    Returns JWT token for immediate frontend access.
+    """
+    DEMO_EMAIL = "demo@fwms.local"
+    DEMO_NAME = "Demo User"
+    DEMO_ROLE = "hod"
+    DEMO_DEPARTMENT = "MCA"
+    
+    with get_transaction() as db_session:
+        # Look up existing demo user
+        row = db_session.execute(
+            text("SELECT id, email, name, role FROM staff WHERE email = :email"),
+            {"email": DEMO_EMAIL}
+        ).fetchone()
+        
+        # Create demo user if not exists
+        if row is None:
+            logger.info(f"Creating demo user: {DEMO_EMAIL}")
+            staff_id = db_session.execute(
+                text("""
+                    INSERT INTO staff (email, name, role, department, is_active)
+                    VALUES (:email, :name, :role, :department, true)
+                    RETURNING id
+                """),
+                {
+                    "email": DEMO_EMAIL,
+                    "name": DEMO_NAME,
+                    "role": DEMO_ROLE,
+                    "department": DEMO_DEPARTMENT
+                }
+            ).scalar()
+            db_session.commit()
+            
+            email = DEMO_EMAIL
+            name = DEMO_NAME
+            role = DEMO_ROLE
+        else:
+            # Use existing demo user
+            staff_id = row[0]
+            email = row[1]
+            name = row[2]
+            role = row[3] or DEMO_ROLE
+    
+    # Create JWT token
+    token = create_jwt(staff_id=staff_id, email=email, name=name, role=role)
+    
+    logger.info(f"Demo login: staff_id={staff_id}, email={email}, role={role}")
+    
+    return JSONResponse(content={
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "name": name,
+            "email": email,
+            "role": role
+        }
+    })
+
+
 @router.get("/me", response_model=StaffInfoResponse)
 async def get_current_user_info(user: UserInfo = Depends(get_current_user)):
     """Get current user info. Role always fresh from DB."""
