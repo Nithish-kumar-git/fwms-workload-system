@@ -47,8 +47,6 @@
 |---|---|
 | ![Workload](docs/screenshots/workload.png) | ![Preferences](docs/screenshots/preferences.png) |
 
-*Screenshots coming soon — [visit the live demo](https://fwms-workload-system.vercel.app)*
-
 ---
 
 ## 🛠 Tech Stack
