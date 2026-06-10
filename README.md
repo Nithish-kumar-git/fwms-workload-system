@@ -1,7 +1,7 @@
 # 🎓 Faculty Workload Management System (FWMS)
 
-> A full-stack web application for managing faculty teaching workload 
-> allocation at Hindustan University — replacing error-prone Excel tracking.
+> A full-stack web app for managing faculty teaching workload allocation
+> at Hindustan University — replacing manual Excel-based tracking.
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20App-blue?style=for-the-badge)](https://fwms-workload-system.vercel.app)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge)](https://fastapi.tiangolo.com)
@@ -16,21 +16,22 @@
 | **API Docs** | https://fwms-workload-system.onrender.com/docs |
 | **Demo Login** | Click **"Try Demo"** on the login page — no account needed |
 
-> ⚠️ Backend runs on Render free tier. First load after inactivity  
-> takes ~30 seconds to wake up. Please wait if the page loads slowly.
+> ⚠️ Backend on Render free tier — first load after inactivity takes ~30s.
+> The login page will show a "waking up" notice automatically.
 
 ---
 
 ## ✨ Features
 
 - 🔐 **Google OAuth** login for university staff (@hindustanuniv.ac.in)
-- 👥 **Role-based access** — Admin / HOD / Coordinator / Faculty  
-- 📋 **Subject preference system** — faculty submit ranked preferences (1–5)
+- 👥 **Role-based access** — Admin / HOD / Coordinator / Faculty
+- 📋 **Subject preference system** — faculty rank preferences (1–5)
 - 📊 **Workload allocation** with teaching norm enforcement:
-  - Professor: 12 hrs/week · Associate Professor: 14 hrs · Assistant: 16 hrs
+  Professor 12h · Associate Professor 14h · Assistant Professor 16h
 - 📤 **Excel export** of finalized semester workload reports
-- 🔄 **Multi-semester cycles** — Odd/Even semester switching
+- 🔄 **Multi-semester cycle** management (Odd / Even switching)
 - 🏫 **Multi-shift, multi-section, multi-department** support
+- ⏳ **Cold start detection** — login page auto-detects backend wake-up
 
 ---
 
@@ -51,36 +52,22 @@
 
 ## 🚀 Local Development
 
-### Prerequisites
-
-- Docker & Docker Compose
-- Node.js 18+
-- PostgreSQL database (or Neon free tier)
-- Google OAuth credentials
-
-### Setup
-
 ```bash
 # Clone
 git clone https://github.com/Nithish-kumar-git/fwms-workload-system
 cd fwms-workload-system
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your DATABASE_URL, SECRET_KEY, GOOGLE_CLIENT_ID etc.
-
-# Start backend (auto-runs all 39 migrations)
+# Backend
+cp .env.example .env    # fill in DATABASE_URL, SECRET_KEY, etc.
 docker-compose up --build
-# API: http://localhost:8000
-# Swagger: http://localhost:8000/docs
+# API at http://localhost:8000 | Docs at http://localhost:8000/docs
 
-# Start frontend (separate terminal)
+# Frontend (separate terminal)
 cd frontend && npm install && npm run dev
-# App: http://localhost:5173
+# App at http://localhost:5173
 ```
 
-See [docs/DOCKER.md](docs/DOCKER.md) for full Docker setup.  
-See [docs/OAUTH_SETUP.md](docs/OAUTH_SETUP.md) for Google OAuth config.
+See [docs/DOCKER.md](docs/DOCKER.md) and [docs/OAUTH_SETUP.md](docs/OAUTH_SETUP.md).
 
 ---
 
@@ -90,34 +77,32 @@ See [docs/OAUTH_SETUP.md](docs/OAUTH_SETUP.md) for Google OAuth config.
 fwms-workload-system/
  ├── app/                   # FastAPI backend
  │   ├── auth/              # Google OAuth + JWT
- │   ├── core/              # Config, DB connection, middleware
- │   └── routers/           # All API route handlers
- ├── frontend/              # React + TypeScript
- │   └── src/
- │       ├── api/           # Axios API client
- │       ├── components/    # Reusable UI components
- │       └── pages/         # Page-level components
+ │   ├── core/              # Config, DB, middleware
+ │   └── routers/           # API route handlers
+ ├── frontend/src/          # React + TypeScript
+ │   ├── api/               # Axios API client
+ │   ├── components/        # Reusable UI components
+ │   └── pages/             # Page components
  ├── migrations/            # 39 SQL schema files (001–039)
  ├── docs/                  # Setup guides
- ├── Dockerfile             # Backend container definition
- ├── docker-compose.yml     # Local dev orchestration
+ ├── Dockerfile
+ ├── docker-compose.yml
  └── startup.sh             # Runs migrations then starts API
 ```
 
 ---
 
-## 🔑 Environment Variables
-
-See `.env.example` for the full list.
+## 🔑 Key Environment Variables
 
 | Variable | Description |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
-| `SECRET_KEY` | JWT signing secret (keep private) |
-| `GOOGLE_CLIENT_ID` | OAuth app client ID |
-| `GOOGLE_CLIENT_SECRET` | OAuth app client secret |
+| `SECRET_KEY` | JWT signing secret |
+| `GOOGLE_CLIENT_ID` | OAuth client ID |
 | `FRONTEND_URL` | Allowed CORS origin |
-| `VITE_API_URL` | Backend URL for frontend build |
+| `VITE_API_URL` | Backend URL (set in Vercel dashboard) |
+
+Full list in `.env.example`.
 
 ---
 
