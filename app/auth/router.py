@@ -234,11 +234,11 @@ async def demo_login():
     - No authentication required
     - No request body required
     - Always available (no DEV_AUTH_BYPASS check)
-    - Creates/reuses demo user: demo@fwms.local with HOD role
+    - Creates/reuses demo user: demo@fwms-demo.com with HOD role
     
     Returns JWT token for immediate frontend access.
     """
-    DEMO_EMAIL = "demo@fwms.local"
+    DEMO_EMAIL = "demo@fwms-demo.com"
     DEMO_NAME = "Demo User"
     DEMO_ROLE = "hod"
     
