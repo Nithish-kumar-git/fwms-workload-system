@@ -108,7 +108,7 @@ FROM staff
 WHERE id = :sid AND is_active = true
 ```
 
-### Fix 3: Stale Demo User Cleanup (Current)
+### Fix 3: Stale Demo User Cleanup (Commit 6f69160)
 
 **Problem:**
 If a demo user was created before the fixes in commit 64f423e, it would exist in the database with incomplete fields (missing emp_code, designation, etc.), preventing it from being recreated with the full profile.
@@ -121,7 +121,7 @@ The SELECT check would find the old incomplete demo user and reuse it instead of
 **Cleanup Step (before SELECT):**
 ```sql
 -- Remove incomplete demo users (created before emp_code was added)
-DELETE FROM staff WHERE email = 'demo@fwms.local' AND emp_code IS NULL
+DELETE FROM staff WHERE email = 'demo@fwms-demo.com' AND emp_code IS NULL
 ```
 
 **Benefits:**
@@ -129,6 +129,32 @@ DELETE FROM staff WHERE email = 'demo@fwms.local' AND emp_code IS NULL
 - ✅ Safe: Only deletes if emp_code IS NULL (incomplete record)
 - ✅ Idempotent: Won't affect properly created demo users
 - ✅ Production-ready: Ensures all future demo logins work correctly
+
+### Fix 4: Valid Email Domain (Commit d246319)
+
+**Problem:**
+The demo user email `demo@fwms.local` was failing Pydantic's EmailStr validation because `.local` is a reserved domain that is not recognized as a valid TLD.
+
+**Root Cause:**
+Pydantic's EmailStr validator rejects `.local` domain extensions as they are reserved for local network use and not valid internet domains.
+
+**Fix Applied:**
+Changed all occurrences of the demo email address:
+- **Before:** `demo@fwms.local`
+- **After:** `demo@fwms-demo.com`
+
+**Locations changed:**
+1. DEMO_EMAIL constant
+2. DELETE cleanup query
+3. SELECT lookup query  
+4. INSERT statement (via DEMO_EMAIL variable)
+5. Documentation comment
+
+**Benefits:**
+- ✅ Passes Pydantic EmailStr validation
+- ✅ Valid internet domain format
+- ✅ No authentication/validation errors
+- ✅ Demo login works end-to-end
 
 ## Verification
 
