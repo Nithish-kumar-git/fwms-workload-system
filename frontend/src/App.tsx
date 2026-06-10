@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import LoginPage from './pages/LoginPage';
@@ -20,6 +21,7 @@ import PreferenceReviewDashboardPage from './pages/PreferenceReviewDashboardPage
 /* ── Auth guard: redirects to /login if not authenticated ── */
 function RequireAuth() {
     const { user, loading } = useAuth();
+    const [demoBannerDismissed, setDemoBannerDismissed] = useState(false);
 
     if (loading) {
         return (
@@ -36,10 +38,55 @@ function RequireAuth() {
         return <Navigate to="/login" replace />;
     }
 
+    const isDemoMode = user.email === 'demo@fwms-demo.com';
+    const showDemoBanner = isDemoMode && !demoBannerDismissed;
+    const bannerHeight = 40; // pixels
+
     return (
         <>
-            <Navbar />
-            <Outlet />
+            {showDemoBanner && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    width: '100%',
+                    height: `${bannerHeight}px`,
+                    backgroundColor: '#f59e0b',
+                    color: '#000',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    zIndex: 9999,
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                }}>
+                    <span>👁️ Demo Mode — Exploring as HOD. Some actions are view-only.</span>
+                    <button
+                        onClick={() => setDemoBannerDismissed(true)}
+                        style={{
+                            position: 'absolute',
+                            right: '16px',
+                            background: 'transparent',
+                            border: 'none',
+                            fontSize: '18px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            color: '#000',
+                            padding: '4px 8px',
+                            lineHeight: 1,
+                        }}
+                        aria-label="Dismiss demo banner"
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+            <div style={{ paddingTop: showDemoBanner ? `${bannerHeight}px` : 0 }}>
+                <Navbar />
+                <Outlet />
+            </div>
         </>
     );
 }
