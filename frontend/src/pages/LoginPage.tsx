@@ -1,14 +1,77 @@
 import { useNavigate } from 'react-router-dom';
 import { Shield, User, Crown, Rocket } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { demoLogin } from '../api/client';
+
+type BackendStatus = 'checking' | 'online' | 'waking';
 
 export default function LoginPage() {
     const navigate = useNavigate();
     const [error, setError] = useState('');
     const [loading, setLoading] = useState('');
+    const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
     const { refreshUser } = useAuth();
+
+    // Backend health check on mount
+    useEffect(() => {
+        const checkHealth = async () => {
+            try {
+                const apiUrl = import.meta.env.VITE_API_URL;
+                if (!apiUrl) {
+                    setBackendStatus('online'); // Local dev, assume online
+                    return;
+                }
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+                const response = await fetch(`${apiUrl}/api/health`, {
+                    signal: controller.signal,
+                });
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    setBackendStatus('online');
+                } else {
+                    setBackendStatus('waking');
+                }
+            } catch (err) {
+                // Timeout or network error - backend is waking
+                setBackendStatus('waking');
+            }
+        };
+
+        checkHealth();
+    }, []);
+
+    // Retry health check every 8 seconds when waking
+    useEffect(() => {
+        if (backendStatus !== 'waking') return;
+
+        const intervalId = setInterval(async () => {
+            try {
+                const apiUrl = import.meta.env.VITE_API_URL;
+                if (!apiUrl) return;
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+                const response = await fetch(`${apiUrl}/api/health`, {
+                    signal: controller.signal,
+                });
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    setBackendStatus('online');
+                }
+            } catch {
+                // Still waking, will retry
+            }
+        }, 8000);
+
+        return () => clearInterval(intervalId);
+    }, [backendStatus]);
 
     const handleGoogleLogin = async () => {
         setError('');
@@ -98,6 +161,8 @@ export default function LoginPage() {
         }
     };
 
+    const isBackendReady = backendStatus === 'online';
+
     return (
         <div style={{
             minHeight: '100vh',
@@ -106,6 +171,32 @@ export default function LoginPage() {
             alignItems: 'center',
             justifyContent: 'center',
         }}>
+            {/* Wake-up banner */}
+            {backendStatus === 'waking' && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    background: '#fef3c7',
+                    borderBottom: '1px solid #fde68a',
+                    padding: '12px 20px',
+                    textAlign: 'center',
+                    fontSize: '14px',
+                    color: '#92400e',
+                    zIndex: 1000,
+                    animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                }}>
+                    <style>{`
+                        @keyframes pulse {
+                            0%, 100% { opacity: 1; }
+                            50% { opacity: 0.8; }
+                        }
+                    `}</style>
+                    ⏳ Backend waking up — free tier cold start (~30 sec). Please wait...
+                </div>
+            )}
+
             <div style={{
                 width: '340px',
                 textAlign: 'center',
@@ -163,10 +254,10 @@ export default function LoginPage() {
                     </div>
                 )}
 
-                {/* Google Sign In Button - keep existing onClick */}
+                {/* Google Sign In Button */}
                 <button
                     onClick={handleGoogleLogin}
-                    disabled={!!loading}
+                    disabled={!!loading || !isBackendReady}
                     style={{
                         width: '100%',
                         display: 'flex',
@@ -180,12 +271,13 @@ export default function LoginPage() {
                         fontSize: '14px',
                         fontWeight: '500',
                         color: '#374151',
-                        cursor: loading ? 'not-allowed' : 'pointer',
+                        cursor: (loading || !isBackendReady) ? 'not-allowed' : 'pointer',
                         boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                        opacity: !isBackendReady ? 0.6 : 1,
                     }}
                 >
                     <img src="https://www.google.com/favicon.ico" width="16" height="16" alt="Google" />
-                    {loading === 'google' ? 'Signing in...' : 'Sign in with Google'}
+                    {!isBackendReady ? 'Connecting...' : (loading === 'google' ? 'Signing in...' : 'Sign in with Google')}
                 </button>
 
                 <p style={{
@@ -198,7 +290,7 @@ export default function LoginPage() {
                 <div style={{ marginTop: '24px' }}>
                     <button
                         onClick={handleDemoLogin}
-                        disabled={!!loading}
+                        disabled={!!loading || !isBackendReady}
                         style={{
                             width: '100%',
                             display: 'flex',
@@ -212,12 +304,13 @@ export default function LoginPage() {
                             fontSize: '14px',
                             fontWeight: '500',
                             color: '#6b7280',
-                            cursor: loading ? 'not-allowed' : 'pointer',
+                            cursor: (loading || !isBackendReady) ? 'not-allowed' : 'pointer',
                             boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                            opacity: !isBackendReady ? 0.6 : 1,
                         }}
                     >
                         <Rocket size={16} />
-                        {loading === 'demo' ? 'Loading demo...' : 'Try Demo — No login required'}
+                        {!isBackendReady ? 'Connecting...' : (loading === 'demo' ? 'Loading demo...' : 'Try Demo — No login required')}
                     </button>
 
                     <p style={{
