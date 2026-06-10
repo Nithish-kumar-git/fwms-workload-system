@@ -241,12 +241,11 @@ async def demo_login():
     DEMO_EMAIL = "demo@fwms.local"
     DEMO_NAME = "Demo User"
     DEMO_ROLE = "hod"
-    DEMO_DEPARTMENT = "MCA"
     
     with get_transaction() as db_session:
         # Look up existing demo user
         row = db_session.execute(
-            text("SELECT id, email, name, role FROM staff WHERE email = :email"),
+            text("SELECT id, email, name, role FROM staff WHERE email = :email AND is_active = true"),
             {"email": DEMO_EMAIL}
         ).fetchone()
         
@@ -255,15 +254,14 @@ async def demo_login():
             logger.info(f"Creating demo user: {DEMO_EMAIL}")
             staff_id = db_session.execute(
                 text("""
-                    INSERT INTO staff (email, name, role, department, is_active)
-                    VALUES (:email, :name, :role, :department, true)
+                    INSERT INTO staff (email, name, role, is_active)
+                    VALUES (:email, :name, :role, true)
                     RETURNING id
                 """),
                 {
                     "email": DEMO_EMAIL,
                     "name": DEMO_NAME,
-                    "role": DEMO_ROLE,
-                    "department": DEMO_DEPARTMENT
+                    "role": DEMO_ROLE
                 }
             ).scalar()
             db_session.commit()
