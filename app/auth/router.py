@@ -254,14 +254,27 @@ async def demo_login():
             logger.info(f"Creating demo user: {DEMO_EMAIL}")
             staff_id = db_session.execute(
                 text("""
-                    INSERT INTO staff (email, name, role, is_active)
-                    VALUES (:email, :name, :role, true)
+                    INSERT INTO staff (
+                        email, name, role, is_active, is_coordinator,
+                        emp_code, designation, shift, tch_norm, total_workload_norm,
+                        is_class_teacher
+                    )
+                    VALUES (
+                        :email, :name, :role, true, false,
+                        :emp_code, :designation, :shift, :tch_norm, :total_workload_norm,
+                        false
+                    )
                     RETURNING id
                 """),
                 {
                     "email": DEMO_EMAIL,
                     "name": DEMO_NAME,
-                    "role": DEMO_ROLE
+                    "role": DEMO_ROLE,
+                    "emp_code": "DEMO001",
+                    "designation": "Assistant Professor",
+                    "shift": "Shift1",
+                    "tch_norm": 16,
+                    "total_workload_norm": 16
                 }
             ).scalar()
             db_session.commit()
@@ -301,7 +314,8 @@ async def get_current_user_info(user: UserInfo = Depends(get_current_user)):
             text("""
                 SELECT shift, is_class_teacher, ct_program, ct_section, ct_semester, 
                        CAST(ct_shift AS VARCHAR) AS ct_shift, ct_curriculum_year
-                FROM staff WHERE id = :sid
+                FROM staff 
+                WHERE id = :sid AND is_active = true
             """),
             {"sid": user.staff_id}
         ).fetchone()
