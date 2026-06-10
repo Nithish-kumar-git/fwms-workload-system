@@ -230,6 +230,7 @@ export const downloadWorkloadPdf = () =>
 // ─── Auth ───
 export const getCurrentUser = () => api.get('/auth/me');
 export const logout = () => api.post('/auth/logout');
+export const demoLogin = () => api.post('/auth/demo-login');
 
 // ─── Subject Management ───
 export const getSubjectOfferings = (semesterId?: number, programId?: number) =>

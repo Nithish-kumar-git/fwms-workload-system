@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom';
-import { Shield, User, Crown } from 'lucide-react';
+import { Shield, User, Crown, Rocket } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { demoLogin } from '../api/client';
 
 export default function LoginPage() {
     const navigate = useNavigate();
@@ -62,6 +63,36 @@ export default function LoginPage() {
             }
         } catch {
             setError('Failed to connect to server');
+        } finally {
+            setLoading('');
+        }
+    };
+
+    const handleDemoLogin = async () => {
+        setError('');
+        setLoading('demo');
+        try {
+            const res = await demoLogin();
+            const data = res.data;
+
+            console.log('DEMO LOGIN:', data);
+
+            if (data.access_token) {
+                localStorage.setItem('jwt_token', data.access_token);
+                await refreshUser();
+                // Route by role
+                const role = data.user?.role || 'hod';
+                switch (role) {
+                    case 'hod': navigate('/hod-dashboard'); break;
+                    case 'tt_coordinator': navigate('/dashboard'); break;
+                    default: navigate('/faculty-dashboard'); break;
+                }
+            } else {
+                setError('No token received from server');
+            }
+        } catch (err) {
+            console.error('Demo login error:', err);
+            setError('Demo unavailable — try again');
         } finally {
             setLoading('');
         }
@@ -162,6 +193,47 @@ export default function LoginPage() {
                     color: '#d1d5db',
                     marginTop: '20px'
                 }}>@hindustanuniv.ac.in accounts only</p>
+
+                {/* Demo Login Button */}
+                <div style={{ marginTop: '24px' }}>
+                    <button
+                        onClick={handleDemoLogin}
+                        disabled={!!loading}
+                        style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '10px',
+                            padding: '11px 20px',
+                            background: 'white',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '10px',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            color: '#6b7280',
+                            cursor: loading ? 'not-allowed' : 'pointer',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                        }}
+                    >
+                        <Rocket size={16} />
+                        {loading === 'demo' ? 'Loading demo...' : 'Try Demo — No login required'}
+                    </button>
+
+                    <p style={{
+                        fontSize: '11px',
+                        color: '#9ca3af',
+                        marginTop: '8px',
+                        fontStyle: 'italic'
+                    }}>
+                        Full HOD access • <a 
+                            href="https://github.com/Nithish-kumar-git/fwms-workload-system" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            style={{ color: '#6b7280', textDecoration: 'underline' }}
+                        >Read the code on GitHub</a>
+                    </p>
+                </div>
 
                 {/* Dev mode section */}
                 {import.meta.env.VITE_DEV_MODE === 'true' && (
