@@ -243,6 +243,14 @@ async def demo_login():
     DEMO_ROLE = "hod"
     
     with get_transaction() as db_session:
+        # Cleanup: Remove incomplete demo users (created before emp_code was added)
+        # This ensures stale demo users get recreated with full profiles
+        db_session.execute(
+            text("DELETE FROM staff WHERE email = :email AND emp_code IS NULL"),
+            {"email": DEMO_EMAIL}
+        )
+        db_session.commit()
+        
         # Look up existing demo user
         row = db_session.execute(
             text("SELECT id, email, name, role FROM staff WHERE email = :email AND is_active = true"),

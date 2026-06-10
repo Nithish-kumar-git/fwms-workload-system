@@ -55,14 +55,6 @@ column 'department' of relation 'staff' does not exist
 **Root Cause:**
 The INSERT statement referenced a non-existent `department` column.
 
-**Actual Staff Table Schema:**
-From `migrations/schema.sql` and ALTER TABLE migrations:
-- Base columns: id, email, name, is_coordinator, is_active, created_at, updated_at
-- Workload columns (migration 005): emp_code, designation, shift, tch_norm, total_workload_norm, is_class_teacher, ct_program, ct_section, ct_semester, ct_shift
-- Role column (migration 017): role
-- CT curriculum (migration 036): ct_curriculum_year
-- **NO `department` column exists**
-
 **Fix Applied:**
 ```sql
 -- SELECT query (added is_active filter)
@@ -74,7 +66,7 @@ VALUES (:email, :name, :role, true)
 RETURNING id
 ```
 
-### Fix 2: Demo User Profile + /me Endpoint (Current)
+### Fix 2: Demo User Profile + /me Endpoint (Commit 64f423e)
 
 **Problem:**
 After successful demo-login, the frontend calls `GET /api/auth/me` which was returning 500 errors because the demo user was missing required fields.
@@ -84,7 +76,7 @@ The demo user was created with only 4 columns (email, name, role, is_active), bu
 
 **Fix Applied:**
 
-**Enhanced Demo User INSERT (lines 257-272):**
+**Enhanced Demo User INSERT:**
 ```sql
 INSERT INTO staff (
     email, name, role, is_active, is_coordinator,
@@ -108,14 +100,35 @@ RETURNING id
 - `is_class_teacher`: false
 - `is_coordinator`: false
 
-**Improved /me Endpoint (line 306):**
+**Improved /me Endpoint:**
 ```sql
 SELECT shift, is_class_teacher, ct_program, ct_section, ct_semester, 
        CAST(ct_shift AS VARCHAR) AS ct_shift, ct_curriculum_year
 FROM staff 
 WHERE id = :sid AND is_active = true
 ```
-✅ Added `AND is_active = true` filter for consistency
+
+### Fix 3: Stale Demo User Cleanup (Current)
+
+**Problem:**
+If a demo user was created before the fixes in commit 64f423e, it would exist in the database with incomplete fields (missing emp_code, designation, etc.), preventing it from being recreated with the full profile.
+
+**Root Cause:**
+The SELECT check would find the old incomplete demo user and reuse it instead of creating a new one with all fields properly populated.
+
+**Fix Applied:**
+
+**Cleanup Step (before SELECT):**
+```sql
+-- Remove incomplete demo users (created before emp_code was added)
+DELETE FROM staff WHERE email = 'demo@fwms.local' AND emp_code IS NULL
+```
+
+**Benefits:**
+- ✅ Self-healing: Automatically removes broken demo users
+- ✅ Safe: Only deletes if emp_code IS NULL (incomplete record)
+- ✅ Idempotent: Won't affect properly created demo users
+- ✅ Production-ready: Ensures all future demo logins work correctly
 
 ## Verification
 
