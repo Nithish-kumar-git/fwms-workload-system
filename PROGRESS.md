@@ -171,3 +171,66 @@ Demo login feature is production-ready with:
 3. ✅ All required fields populated with sensible defaults
 4. ✅ TypeScript compilation passes with zero errors
 5. ✅ All changes committed and ready for deployment
+
+
+---
+
+# Task 9: Backend Wake-up Detection - COMPLETE ✅
+
+## Status
+**FEATURE FULLY IMPLEMENTED AND DOCUMENTED**
+
+## Implementation Details
+
+### Backend Health Check Polling
+**File:** `frontend/src/pages/LoginPage.tsx`
+**Features:**
+- Health check on component mount: `GET /api/health`
+- Three states tracked: 'checking' | 'online' | 'waking'
+- 5-second timeout for health check
+- If timeout/error → status = 'waking', retry every 8 seconds
+- When 'waking': shows amber banner with pulse animation
+- Buttons disabled during 'checking' or 'waking' with "Connecting..." text
+
+### Banner Design
+- Amber background (#FEF3C7)
+- Full width, centered text
+- Message: "⏳ Backend waking up — free tier cold start (~30 sec). Please wait..."
+- Subtle pulse animation
+
+### UX Behavior
+- **'checking'**: Initial state, buttons disabled
+- **'waking'**: Banner visible, buttons disabled, auto-retry every 8s
+- **'online'**: Banner hidden, buttons enabled, normal operation
+
+**Commit:** 0cd1766
+
+## Documentation Update
+
+### README.md Updates
+**Features:**
+- Updated Live Demo table with cold start notice
+- Added "⏳ Cold start detection" to features list
+- Enhanced warning message mentions auto-detection
+
+**Content Added:**
+```markdown
+> ⚠️ Backend on Render free tier — first load after inactivity takes ~30s.
+> The login page will show a "waking up" notice automatically.
+```
+
+```markdown
+- ⏳ **Cold start detection** — login page auto-detects backend wake-up
+```
+
+**Commit:** d2d849b
+
+## Summary
+Complete end-to-end cold start detection:
+1. ✅ Frontend polls health endpoint on mount
+2. ✅ Visual feedback during backend wake-up
+3. ✅ Auto-retry mechanism with 8-second intervals
+4. ✅ Disabled buttons prevent premature login attempts
+5. ✅ Documentation updated with feature description
+6. ✅ TypeScript compilation passed
+7. ✅ All changes committed and pushed to main
