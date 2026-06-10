@@ -5,9 +5,16 @@ Tests the /api/auth/me endpoint to ensure proper authentication
 and authorization checks are in place.
 """
 
+import os
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+
+# Skip all tests in this file if DATABASE_URL is not set
+pytestmark = pytest.mark.skipif(
+    not os.getenv("DATABASE_URL"),
+    reason="Skipping: DATABASE_URL not set in this environment"
+)
 
 client = TestClient(app)
 
