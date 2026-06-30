@@ -49,6 +49,20 @@
 
 ---
 
+## 📊 Analytics Dashboard (Power BI)
+
+- 🖥️ **3-page interactive dashboard** built on top of the FWMS workload data
+- 1️⃣ **Page 1 — Faculty Workload Overview**: KPI cards, overload distribution, faculty-level detail table
+- 2️⃣ **Page 2 — Department Summary**: designation-wise workload comparison, deviation analysis
+- 3️⃣ **Page 3 — Program Analysis**: UG vs PG workload split, program-level teaching hour distribution
+- 🧮 **Built using DAX measures**, custom KPI cards, and cross-page navigation
+- 🗄️ **Data sourced** from the FWMS Neon PostgreSQL database via CSV export
+
+> 📸 **Dashboard screenshots below**
+> *(to be added)*
+
+---
+
 ## 🛠 Tech Stack
 
 | Layer | Technology |
