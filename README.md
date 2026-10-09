@@ -24,7 +24,7 @@
 ## ✨ Features
 
 - 🔐 **Google OAuth** login for university staff (@hindustanuniv.ac.in)
-- 👥 **Role-based access** — Admin / HOD / Coordinator / Faculty
+- 👥 **Role-based access** — HOD/Admin, Coordinator, and Faculty (3 enforced roles)
 - 📋 **Subject preference system** — faculty rank preferences (1–5)
 - 📊 **Workload allocation** with teaching norm enforcement:
   Professor 12h · Associate Professor 14h · Assistant Professor 16h
