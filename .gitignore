@@ -11,6 +11,10 @@
 # Secret keys and credentials
 *.key
 *.pem
+service-account*.json
+credentials*.json
+.local-private/
+/verify_dev_auth.py
 *.p12
 *.pfx
 secrets/
