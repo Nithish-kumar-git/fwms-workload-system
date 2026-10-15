@@ -12,6 +12,8 @@ export default function LoginPage() {
     const [loading, setLoading] = useState('');
     const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
     const { refreshUser } = useAuth();
+    const isSyntheticDemo = import.meta.env.VITE_FWMS_DEMO_MODE === 'true';
+    const [demoRole, setDemoRole] = useState<'hod' | 'tt_coordinator' | 'faculty'>('hod');
 
     // Backend health check on mount
     useEffect(() => {
@@ -31,7 +33,7 @@ export default function LoginPage() {
                 });
                 clearTimeout(timeoutId);
 
-                if (response.ok) {
+                if (response.ok && (!isSyntheticDemo || (await response.json()).environment === 'synthetic-demo')) {
                     setBackendStatus('online');
                 } else {
                     setBackendStatus('waking');
@@ -43,7 +45,7 @@ export default function LoginPage() {
         };
 
         checkHealth();
-    }, []);
+    }, [isSyntheticDemo]);
 
     // Retry health check every 8 seconds when waking
     useEffect(() => {
@@ -62,7 +64,7 @@ export default function LoginPage() {
                 });
                 clearTimeout(timeoutId);
 
-                if (response.ok) {
+                if (response.ok && (!isSyntheticDemo || (await response.json()).environment === 'synthetic-demo')) {
                     setBackendStatus('online');
                 }
             } catch {
@@ -71,7 +73,7 @@ export default function LoginPage() {
         }, 8000);
 
         return () => clearInterval(intervalId);
-    }, [backendStatus]);
+    }, [backendStatus, isSyntheticDemo]);
 
     const handleGoogleLogin = async () => {
         setError('');
@@ -135,10 +137,17 @@ export default function LoginPage() {
         setError('');
         setLoading('demo');
         try {
-            const res = await demoLogin();
+            const demoUrl = import.meta.env.VITE_FWMS_DEMO_URL;
+            if (!isSyntheticDemo && demoUrl) {
+                const destination = new URL(demoUrl);
+                if (destination.protocol !== 'https:' || destination.username || destination.password) {
+                    throw new Error('Invalid dedicated demo destination');
+                }
+                window.location.assign(destination.href);
+                return;
+            }
+            const res = await demoLogin(isSyntheticDemo ? demoRole : undefined);
             const data = res.data;
-
-            console.log('DEMO LOGIN:', data);
 
             if (data.access_token) {
                 localStorage.setItem('jwt_token', data.access_token);
@@ -153,9 +162,8 @@ export default function LoginPage() {
             } else {
                 setError('No token received from server');
             }
-        } catch (err) {
-            console.error('Demo login error:', err);
-            setError('Demo unavailable — try again');
+        } catch {
+            setError('Synthetic demo unavailable — try again or contact the operator');
         } finally {
             setLoading('');
         }
@@ -257,7 +265,7 @@ export default function LoginPage() {
                 {/* Google Sign In Button */}
                 <button
                     onClick={handleGoogleLogin}
-                    disabled={!!loading || !isBackendReady}
+                    disabled={!!loading || !isBackendReady || isSyntheticDemo}
                     style={{
                         width: '100%',
                         display: 'flex',
@@ -276,18 +284,30 @@ export default function LoginPage() {
                         opacity: !isBackendReady ? 0.6 : 1,
                     }}
                 >
-                    <img src="https://www.google.com/favicon.ico" width="16" height="16" alt="Google" />
-                    {!isBackendReady ? 'Connecting...' : (loading === 'google' ? 'Signing in...' : 'Sign in with Google')}
+                    {!isSyntheticDemo && <img src="https://www.google.com/favicon.ico" width="16" height="16" alt="Google" />}
+                    {isSyntheticDemo ? 'Google sign-in unavailable in synthetic demo' :
+                        (!isBackendReady ? 'Connecting...' : (loading === 'google' ? 'Signing in...' : 'Sign in with Google'))}
                 </button>
 
                 <p style={{
                     fontSize: '11px',
                     color: '#d1d5db',
                     marginTop: '20px'
-                }}>@hindustanuniv.ac.in accounts only</p>
+                }}>{isSyntheticDemo ? 'Synthetic accounts only. Do not enter institutional data.' : '@hindustanuniv.ac.in accounts only'}</p>
 
                 {/* Demo Login Button */}
                 <div style={{ marginTop: '24px' }}>
+                    {isSyntheticDemo && (
+                        <label style={{ display: 'block', marginBottom: '8px' }}>
+                            Synthetic demo role{' '}
+                            <select value={demoRole} disabled={!!loading}
+                                onChange={event => setDemoRole(event.target.value as typeof demoRole)}>
+                                <option value="hod">HOD</option>
+                                <option value="tt_coordinator">TT Coordinator</option>
+                                <option value="faculty">Teacher</option>
+                            </select>
+                        </label>
+                    )}
                     <button
                         onClick={handleDemoLogin}
                         disabled={!!loading || !isBackendReady}
@@ -319,7 +339,7 @@ export default function LoginPage() {
                         marginTop: '8px',
                         fontStyle: 'italic'
                     }}>
-                        Full HOD access • <a 
+                        Synthetic-only demo • <a
                             href="https://github.com/Nithish-kumar-git/fwms-workload-system" 
                             target="_blank" 
                             rel="noopener noreferrer"

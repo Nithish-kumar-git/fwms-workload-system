@@ -38,7 +38,7 @@ function RequireAuth() {
         return <Navigate to="/login" replace />;
     }
 
-    const isDemoMode = user.email === 'demo@fwms-demo.com';
+    const isDemoMode = user.is_demo === true;
     const showDemoBanner = isDemoMode && !demoBannerDismissed;
     const bannerHeight = 40; // pixels
 
@@ -62,7 +62,7 @@ function RequireAuth() {
                     zIndex: 9999,
                     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                 }}>
-                    <span>👁️ Demo Mode — Exploring as HOD. Some actions are view-only.</span>
+                    <span>Demo Mode — Synthetic data only · {user.role}</span>
                     <button
                         onClick={() => setDemoBannerDismissed(true)}
                         style={{

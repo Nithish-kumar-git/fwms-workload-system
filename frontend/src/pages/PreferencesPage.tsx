@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { getMyPreferences, submitPreference, deletePreference, getPreferenceStatus, getPrefWindowStatus, getSubjectSummary } from '../api/client';
 import { useToast } from '../hooks/useToast';
 import ToastContainer from '../components/ToastContainer';
@@ -54,6 +54,9 @@ export default function PreferencesPage() {
 
     const [offerings, setOfferings] = useState<SubjectOffering[]>([]);
     const [offeringsLoading, setOfferingsLoading] = useState(true);
+    const [offeringsError, setOfferingsError] = useState('');
+    const dataRequest = useRef(0);
+    const offeringsRequest = useRef(0);
     const [filterProgram, setFilterProgram] = useState('');
     const [filterSemester, setFilterSemester] = useState('');
     const [searchText, setSearchText] = useState('');
@@ -80,6 +83,8 @@ export default function PreferencesPage() {
     );
 
     const loadData = async () => {
+        const request = ++dataRequest.current;
+        setLoading(true);
         setError('');
         try {
             const [prefsRes, statusRes, winRes] = await Promise.all([
@@ -87,11 +92,13 @@ export default function PreferencesPage() {
                 getPreferenceStatus(),
                 getPrefWindowStatus(),
             ]);
+            if (request !== dataRequest.current) return;
             setPreferences(Array.isArray(prefsRes.data) ? prefsRes.data : prefsRes.data.preferences || []);
             setStatus(statusRes.data);
             setWindowOpen(winRes.data.is_open);
             setWindowRemaining(winRes.data.remaining_seconds || 0);
         } catch (err: any) {
+            if (request !== dataRequest.current) return;
             const status = err.response?.status;
             const detail = status === 403 
                 ? 'Session expired - please login again'
@@ -99,25 +106,39 @@ export default function PreferencesPage() {
             setError(detail);
             addToast(detail, 'error');
         } finally {
-            setLoading(false);
+            if (request === dataRequest.current) setLoading(false);
         }
     };
 
     const loadOfferings = async () => {
+        const request = ++offeringsRequest.current;
         setOfferingsLoading(true);
+        setOfferingsError('');
         try {
             const res = await getSubjectSummary();
-            console.log('Subject Summary API Response:', res.data);
-            console.log('Records count:', res.data.records?.length || 0);
+            if (request !== offeringsRequest.current) return;
             setOfferings(res.data.records || []);
-        } catch (err) {
-            console.error('Failed to load subject offerings:', err);
+        } catch (err: any) {
+            if (request !== offeringsRequest.current) return;
+            const detail = err.response?.data?.detail || 'Could not load subject catalog. Please retry.';
+            setOfferingsError(detail);
+            addToast(detail, 'error');
         } finally {
-            setOfferingsLoading(false);
+            if (request === offeringsRequest.current) setOfferingsLoading(false);
         }
     };
 
-    useEffect(() => { loadData(); loadOfferings(); }, []);
+    const reloadAll = async () => {
+        await Promise.all([loadData(), loadOfferings()]);
+    };
+
+    useEffect(() => {
+        void reloadAll();
+        return () => {
+            ++dataRequest.current;
+            ++offeringsRequest.current;
+        };
+    }, []);
 
     // ── Auto-select next available pref number when offering is clicked ──
     useEffect(() => {
@@ -266,12 +287,13 @@ export default function PreferencesPage() {
         </div>
     );
 
-    if (error) return (
+    if (error || offeringsError) return (
         <div className="page-container">
             <div className="glass-card" style={{ padding: '2rem', textAlign: 'center' }}>
                 <AlertCircle size={32} style={{ color: '#dc2626', marginBottom: '0.75rem' }} />
-                <p style={{ color: '#dc2626', fontWeight: 600, marginBottom: '0.5rem' }}>{error}</p>
-                <button onClick={loadData} className="btn btn-primary" style={{ marginTop: '0.5rem' }}>
+                {error && <p style={{ color: '#dc2626', fontWeight: 600, marginBottom: '0.5rem' }}>{error}</p>}
+                {offeringsError && <p style={{ color: '#dc2626', fontWeight: 600, marginBottom: '0.5rem' }}>{offeringsError}</p>}
+                <button onClick={reloadAll} className="btn btn-primary" style={{ marginTop: '0.5rem' }}>
                     <RefreshCw size={16} /> Retry
                 </button>
             </div>

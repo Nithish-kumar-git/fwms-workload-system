@@ -1,0 +1,14 @@
+# Allow only runtime code/dependencies. Dockerfile-specific ignore rules.
+**
+!requirements.txt
+!app/
+!app/**
+!demo/
+!demo/start_backend.py
+!demo/healthcheck.py
+**/.env*
+**/__pycache__/**
+**/*.pyc
+**/*.pem
+**/*.key
+**/credentials*

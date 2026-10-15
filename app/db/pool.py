@@ -7,7 +7,7 @@ This file implements the database connection pool using SQLAlchemy.
 Conservative pool sizing is used to prevent connection exhaustion.
 """
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from app.core.config import settings
 
 engine = create_engine(
@@ -24,7 +24,15 @@ engine = create_engine(
     
     # Performance
     echo=False,                # Disable SQL logging in production
+    hide_parameters=settings.DEMO_MODE,
     
     # Isolation (set per-transaction, not globally)
     isolation_level=None,
 )
+
+if settings.DEMO_MODE:
+    from app.demo.isolation import validate_demo_connection
+
+    @event.listens_for(engine, "checkout")
+    def _verify_demo_checkout(dbapi_connection, connection_record, connection_proxy):
+        validate_demo_connection(dbapi_connection)

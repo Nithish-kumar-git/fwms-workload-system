@@ -1,0 +1,26 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm ci --prefix frontend",
+  "buildCommand": "node demo/build_frontend.mjs",
+  "outputDirectory": "frontend/dist-demo",
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/login", "destination": "/index.html" },
+    { "source": "/faculty-dashboard", "destination": "/index.html" },
+    { "source": "/preferences", "destination": "/index.html" },
+    { "source": "/dashboard", "destination": "/index.html" },
+    { "source": "/admin/allocation", "destination": "/index.html" },
+    { "source": "/admin/preference-review", "destination": "/index.html" },
+    { "source": "/admin/review", "destination": "/index.html" },
+    { "source": "/admin/reports", "destination": "/index.html" },
+    { "source": "/admin/window", "destination": "/index.html" },
+    { "source": "/admin/cycles", "destination": "/index.html" },
+    { "source": "/admin/subjects", "destination": "/index.html" },
+    { "source": "/hod-dashboard", "destination": "/index.html" },
+    { "source": "/hod/staff", "destination": "/index.html" },
+    { "source": "/hod/staff-emails", "destination": "/index.html" },
+    { "source": "/hod/curriculum", "destination": "/index.html" },
+    { "source": "/hod/approval", "destination": "/index.html" }
+  ]
+}

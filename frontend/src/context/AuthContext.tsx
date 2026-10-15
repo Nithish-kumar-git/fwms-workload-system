@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import { getCurrentUser } from '../api/client';
 
 interface User {
+    is_demo?: boolean;
     staff_id: number;
     email: string;
     name: string;

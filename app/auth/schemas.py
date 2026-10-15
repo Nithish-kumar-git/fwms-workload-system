@@ -20,6 +20,7 @@ class OAuthCallbackRequest(BaseModel):
 
 class StaffInfoResponse(BaseModel):
     """Current user information with role."""
+    is_demo: bool = False
     staff_id: int
     email: EmailStr
     name: str

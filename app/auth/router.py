@@ -17,6 +17,8 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy import text
 import logging
+from typing import Literal
+from app.demo.accounts import ensure_demo_account
 from app.auth.google_oauth import oauth_client
 from app.auth.session_manager import session_manager
 from app.auth.jwt_utils import create_jwt
@@ -88,6 +90,8 @@ def _create_auth_tokens(staff_id: int, email: str, name: str, role: str) -> dict
 @router.get("/login", response_model=LoginResponse)
 async def login():
     """Return Google OAuth authorization URL."""
+    if settings.DEMO_MODE:
+        raise HTTPException(status_code=403, detail="Use synthetic demo login in this environment")
     url = oauth_client.get_authorization_url()
     return LoginResponse(authorization_url=url)
 
@@ -99,6 +103,8 @@ async def oauth_callback(code: str = Query(...), state: str = Query(None)):
     DEV_AUTH_BYPASS=true: domain skipped, unknown emails map to coordinator.
     DEV_AUTH_BYPASS=false: strict @hindustanuniv.ac.in + staff table match.
     """
+    if settings.DEMO_MODE:
+        raise HTTPException(status_code=403, detail="Google login is not enabled in the synthetic demo")
     try:
         try:
             user_info = oauth_client.exchange_code_for_token(code)
@@ -227,80 +233,23 @@ async def dev_login_by_id(staff_id: int):
 
 
 @router.post("/demo-login")
-async def demo_login():
+async def demo_login(role: Literal["hod", "tt_coordinator", "faculty"] = Query("hod")):
     """
-    Public demo login endpoint for recruiters.
-    
-    - No authentication required
-    - No request body required
-    - Always available (no DEV_AUTH_BYPASS check)
-    - Creates/reuses demo user: demo@fwms-demo.com with HOD role
-    
-    Returns JWT token for immediate frontend access.
+    Public login ONLY in the verified, dedicated synthetic environment.
+    No body is required; default HOD preserves the existing frontend contract.
     """
-    DEMO_EMAIL = "demo@fwms-demo.com"
-    DEMO_NAME = "Demo User"
-    DEMO_ROLE = "hod"
-    
-    with get_transaction() as db_session:
-        # Cleanup: Remove incomplete demo users (created before emp_code was added)
-        # This ensures stale demo users get recreated with full profiles
-        db_session.execute(
-            text("DELETE FROM staff WHERE email = :email AND emp_code IS NULL"),
-            {"email": DEMO_EMAIL}
-        )
-        db_session.commit()
-        
-        # Look up existing demo user
-        row = db_session.execute(
-            text("SELECT id, email, name, role FROM staff WHERE email = :email AND is_active = true"),
-            {"email": DEMO_EMAIL}
-        ).fetchone()
-        
-        # Create demo user if not exists
-        if row is None:
-            logger.info(f"Creating demo user: {DEMO_EMAIL}")
-            staff_id = db_session.execute(
-                text("""
-                    INSERT INTO staff (
-                        email, name, role, is_active, is_coordinator,
-                        emp_code, designation, shift, tch_norm, total_workload_norm,
-                        is_class_teacher
-                    )
-                    VALUES (
-                        :email, :name, :role, true, false,
-                        :emp_code, :designation, :shift, :tch_norm, :total_workload_norm,
-                        false
-                    )
-                    RETURNING id
-                """),
-                {
-                    "email": DEMO_EMAIL,
-                    "name": DEMO_NAME,
-                    "role": DEMO_ROLE,
-                    "emp_code": "DEMO001",
-                    "designation": "Assistant Professor",
-                    "shift": "Shift1",
-                    "tch_norm": 16,
-                    "total_workload_norm": 16
-                }
-            ).scalar()
+    if not settings.DEMO_MODE:
+        raise HTTPException(status_code=403, detail="Public demo requires a dedicated synthetic environment")
+    try:
+        with get_transaction() as db_session:
+            staff_id, email, name, verified_role = ensure_demo_account(
+                lambda sql, params: db_session.execute(text(sql), params), role)
+            token = create_jwt(staff_id=staff_id, email=email, name=name, role=verified_role)
             db_session.commit()
-            
-            email = DEMO_EMAIL
-            name = DEMO_NAME
-            role = DEMO_ROLE
-        else:
-            # Use existing demo user
-            staff_id = row[0]
-            email = row[1]
-            name = row[2]
-            role = row[3] or DEMO_ROLE
-    
-    # Create JWT token
-    token = create_jwt(staff_id=staff_id, email=email, name=name, role=role)
-    
-    logger.info(f"Demo login: staff_id={staff_id}, email={email}, role={role}")
+    except Exception as exc:
+        # Do not log SQL, parameters, credentials or signed tokens.
+        logger.warning("Synthetic demo login failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Synthetic demo unavailable; contact the operator") from None
     
     return JSONResponse(content={
         "access_token": token,
@@ -308,7 +257,7 @@ async def demo_login():
         "user": {
             "name": name,
             "email": email,
-            "role": role
+            "role": verified_role
         }
     })
 
@@ -330,6 +279,7 @@ async def get_current_user_info(user: UserInfo = Depends(get_current_user)):
         
         if row:
             return StaffInfoResponse(
+                is_demo=settings.DEMO_MODE,
                 staff_id=user.staff_id,
                 email=user.email,
                 name=user.name,
@@ -345,6 +295,7 @@ async def get_current_user_info(user: UserInfo = Depends(get_current_user)):
     
     # Fallback if no row found
     return StaffInfoResponse(
+        is_demo=settings.DEMO_MODE,
         staff_id=user.staff_id,
         email=user.email,
         name=user.name,

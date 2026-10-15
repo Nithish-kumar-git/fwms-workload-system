@@ -7,6 +7,7 @@ Window metrics reference: window_lifecycle_design.md Section 13
 from fastapi import APIRouter
 from sqlalchemy import text
 from app.db.session import get_transaction
+from app.core.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,10 @@ router = APIRouter(prefix="/api/health", tags=["health"])
 @router.get("")
 async def health_check():
     """Basic health check endpoint."""
-    return {"status": "ok", "service": "fwms-api"}
+    result = {"status": "ok", "service": "fwms-api"}
+    if settings.DEMO_MODE:
+        result["environment"] = "synthetic-demo"
+    return result
 
 
 @router.get("/deep")
@@ -31,7 +35,7 @@ async def deep_health_check():
             session.execute(text("SELECT 1"))
         db_status = "ok"
     except Exception as e:
-        db_error = str(e)[:200]
+        db_error = "Demo database unavailable" if settings.DEMO_MODE else str(e)[:200]
         logger.warning(f"Deep health check: database unreachable — {db_error}")
 
     result = {"status": "ok" if db_status == "ok" else "degraded", "database": db_status}

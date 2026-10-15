@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { runAllocation, runAllocationForAllSemesters, getActiveCycle } from '../api/client';
+import { runAllocation, runAllocationForAllSemesters, getActiveCycle, getSubjectPrograms } from '../api/client';
 import { useToast } from '../hooks/useToast';
 import ToastContainer from '../components/ToastContainer';
 import { Play, CheckCircle, AlertTriangle, AlertCircle, Calendar, Zap } from 'lucide-react';
@@ -17,7 +17,13 @@ interface AllocResult {
     unallocated: any[];
 }
 
+interface ProgramOption {
+    id: number;
+    name: string;
+}
+
 export default function AllocationPage() {
+    const demoMode = import.meta.env.VITE_FWMS_DEMO_MODE === 'true';
     const [result, setResult] = useState<AllocResult | null>(null);
     const [running, setRunning] = useState(false);
     const [loadingCycle, setLoadingCycle] = useState(true);
@@ -26,22 +32,38 @@ export default function AllocationPage() {
     const [cycleYear, setCycleYear] = useState('');
     const [cycleSem, setCycleSem] = useState<number>(0); // Now stores semester_id (1-6)
     const [programId, setProgramId] = useState<number | null>(null);
+    const [demoPrograms, setDemoPrograms] = useState<ProgramOption[]>([]);
 
     const { toasts, addToast, removeToast } = useToast();
 
     useEffect(() => {
-        getActiveCycle()
-            .then(res => {
+        let cancelled = false;
+        Promise.all([getActiveCycle(), demoMode ? getSubjectPrograms() : Promise.resolve(null)])
+            .then(([res, programsRes]) => {
+                if (cancelled) return;
+                if (demoMode) {
+                    const programs = programsRes?.data;
+                    if (!Array.isArray(programs) || programs.some(program =>
+                        !program || !Number.isSafeInteger(program.id) || program.id <= 0 ||
+                        typeof program.name !== 'string' || !program.name.trim())) {
+                        throw new Error('Invalid demo program metadata');
+                    }
+                    setDemoPrograms(programs);
+                }
                 const ac = res.data;
                 setCycleYear(ac.academic_year);
                 setCycleSem(ac.semester_id); // Now returns semester_id (1-6)
             })
             .catch(err => {
-                const msg = err.response?.data?.detail || 'Failed to load active academic cycle';
+                if (cancelled) return;
+                const msg = err.response?.data?.detail || (demoMode
+                    ? 'Failed to load demo program filters or active academic cycle'
+                    : 'Failed to load active academic cycle');
                 setCycleError(msg);
                 addToast(msg, 'error');
             })
-            .finally(() => setLoadingCycle(false));
+            .finally(() => { if (!cancelled) setLoadingCycle(false); });
+        return () => { cancelled = true; };
     }, []);
 
     const handleRun = async () => {
@@ -151,8 +173,12 @@ export default function AllocationPage() {
                             disabled={running}
                         >
                             <option value="">All Programs (Entire Cycle)</option>
-                            <option value="1">MCA</option>
-                            <option value="2">BCA</option>
+                            {demoMode ? demoPrograms.map(program => (
+                                <option key={program.id} value={program.id}>{program.name}</option>
+                            )) : <>
+                                <option value="1">MCA</option>
+                                <option value="2">BCA</option>
+                            </>}
                         </select>
                     </div>
                     <div className="ml-2">

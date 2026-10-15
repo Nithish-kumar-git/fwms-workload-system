@@ -48,7 +48,7 @@ def create_app() -> FastAPI:
     frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
+        allow_origins=[settings.FRONTEND_URL] if settings.DEMO_MODE else [
             'http://localhost:5173',
             'http://localhost:5174',
             'http://localhost:5175',
@@ -72,9 +72,11 @@ def create_app() -> FastAPI:
         import traceback
         return JSONResponse(
             status_code=500,
-            content={"detail": str(exc), "traceback": traceback.format_exc()},
+            content=({"detail": "Synthetic demo request failed"} if settings.DEMO_MODE else
+                     {"detail": str(exc), "traceback": traceback.format_exc()}),
             headers={
-                "Access-Control-Allow-Origin": "https://fwms-workload-system.vercel.app",
+                "Access-Control-Allow-Origin": (settings.FRONTEND_URL if settings.DEMO_MODE
+                                                else "https://fwms-workload-system.vercel.app"),
                 "Access-Control-Allow-Credentials": "true",
             },
         )
@@ -98,7 +100,8 @@ def create_app() -> FastAPI:
     app.include_router(subjects_router.router)
     app.include_router(curriculum_router.router)
     app.include_router(reports_router.router)
-    app.include_router(debug_router.router)
+    if not settings.DEMO_MODE:
+        app.include_router(debug_router.router)
     
     # TODO: Include additional routers when implemented:
     # app.include_router(staff_router.router)
@@ -113,6 +116,12 @@ app = create_app()
 @app.on_event("startup")
 async def startup_event():
     """Application startup handler."""
+    if settings.DEMO_MODE:
+        # Checkout verifies database identity, role privileges and immutable marker.
+        # No schema changes, seed scripts or account creation during startup.
+        from app.db.pool import engine
+        with engine.connect():
+            pass
     configure_logging()
     logger.info("Faculty Subject Selection System starting up")
     

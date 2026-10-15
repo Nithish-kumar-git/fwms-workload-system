@@ -7,6 +7,7 @@ import os
 import sys
 from pydantic_settings import BaseSettings
 from typing import Literal
+from app.demo.config import demo_settings_from_env
 
 
 def _check_required_env_vars():
@@ -59,10 +60,13 @@ def _check_required_env_vars():
 
 
 # Check required vars before Pydantic tries to load them
-_check_required_env_vars()
+_demo_overrides = demo_settings_from_env(os.environ)
+if _demo_overrides is None:
+    _check_required_env_vars()
 
 
 class Settings(BaseSettings):
+    DEMO_MODE: bool = False
     # Environment
     ENV: Literal["development", "staging", "production", "test"] = "development"
     
@@ -140,7 +144,7 @@ class Settings(BaseSettings):
             raise ValueError("DATABASE_URL must be a PostgreSQL connection string")
         
         # Production-specific validation
-        if self.ENV == "production":
+        if self.ENV == "production" and not self.DEMO_MODE:
             # Enforce HTTPS cookies in production
             if not self.SESSION_COOKIE_SECURE:
                 raise ValueError("SESSION_COOKIE_SECURE must be True in production")
@@ -165,4 +169,5 @@ class Settings(BaseSettings):
                 )
 
 
-settings = Settings()
+settings = (Settings(_env_file=None, **_demo_overrides) if _demo_overrides is not None
+            else Settings(DEMO_MODE=False))

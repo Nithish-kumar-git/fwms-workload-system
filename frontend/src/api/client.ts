@@ -1,9 +1,31 @@
 import axios from 'axios';
 
 // Construct baseURL: use VITE_API_URL if set, otherwise fallback to relative '/api'
-const baseURL = import.meta.env.VITE_API_URL 
-    ? `${import.meta.env.VITE_API_URL}/api`
+if (import.meta.env.VITE_FWMS_DEMO_MODE === 'true') {
+    const configuredUrl = import.meta.env.VITE_API_URL;
+    if (!configuredUrl) throw new Error('Dedicated demo requires VITE_API_URL; no API fallback is allowed');
+    const destination = new URL(configuredUrl);
+    if (destination.username || destination.password || destination.search || destination.hash ||
+        !['', '/'].includes(destination.pathname) ||
+        (destination.protocol !== 'https:' &&
+            !(destination.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(destination.hostname)))) {
+        throw new Error('Invalid dedicated demo API origin');
+    }
+}
+
+const baseURL = import.meta.env.VITE_API_URL
+    ? `${import.meta.env.VITE_FWMS_DEMO_MODE === 'true'
+        ? import.meta.env.VITE_API_URL.replace(/\/$/, '') : import.meta.env.VITE_API_URL}/api`
     : '/api';
+
+// Documentation belongs to the dedicated demo backend, not /api or the
+// institutional service. Hide the link on known institutional misconfiguration.
+const institutionalDocsUrl = 'https://fwms-workload-system.onrender.com/docs';
+const demoDocsUrl = import.meta.env.VITE_FWMS_DEMO_MODE === 'true'
+    ? new URL('/docs', import.meta.env.VITE_API_URL).href : null;
+export const apiDocsUrl = import.meta.env.VITE_FWMS_DEMO_MODE === 'true'
+    ? (demoDocsUrl === institutionalDocsUrl ? null : demoDocsUrl)
+    : institutionalDocsUrl;
 
 const api = axios.create({
     baseURL,
@@ -230,7 +252,8 @@ export const downloadWorkloadPdf = () =>
 // ─── Auth ───
 export const getCurrentUser = () => api.get('/auth/me');
 export const logout = () => api.post('/auth/logout');
-export const demoLogin = () => api.post('/auth/demo-login');
+export const demoLogin = (role?: 'hod' | 'tt_coordinator' | 'faculty') =>
+    api.post('/auth/demo-login', undefined, role ? { params: { role } } : undefined);
 
 // ─── Subject Management ───
 export const getSubjectOfferings = (semesterId?: number, programId?: number) =>
