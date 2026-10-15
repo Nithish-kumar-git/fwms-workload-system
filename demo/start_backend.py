@@ -47,36 +47,96 @@ class RedactingFormatter(logging.Formatter):
 
 
 def main():
+    configuration = None
+
     try:
         configuration, port = validate_startup(os.environ)
-        secrets = (configuration['DATABASE_URL'], configuration['SECRET_KEY'])
-        # Ordinary configuration cannot be consumed by accidentally imported code.
-        for name in ('DATABASE_URL', 'SECRET_KEY', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET',
-                     'GOOGLE_REDIRECT_URI', 'REDIS_URL', 'DEV_AUTH_BYPASS'):
+        secrets = (
+            configuration['DATABASE_URL'],
+            configuration['SECRET_KEY'],
+        )
+
+        # Prevent accidental use of institutional configuration.
+        for name in (
+            'DATABASE_URL',
+            'SECRET_KEY',
+            'GOOGLE_CLIENT_ID',
+            'GOOGLE_CLIENT_SECRET',
+            'GOOGLE_REDIRECT_URI',
+            'REDIS_URL',
+            'DEV_AUTH_BYPASS',
+        ):
             os.environ.pop(name, None)
+
         import uvicorn
         from app import main as application
+
         original_logging = application.configure_logging
 
         def configure_demo_logging():
             original_logging()
             for handler in logging.getLogger().handlers:
-                handler.setFormatter(RedactingFormatter(handler.formatter or logging.Formatter(), secrets))
+                handler.setFormatter(
+                    RedactingFormatter(
+                        handler.formatter or logging.Formatter(),
+                        secrets,
+                    )
+                )
 
         application.configure_logging = configure_demo_logging
-        safe_formatter = lambda: RedactingFormatter(logging.Formatter('%(levelname)s: %(message)s'), secrets)
-        uvicorn.run(application.app, host='0.0.0.0', port=port, access_log=False,
-                    log_config={'version': 1, 'disable_existing_loggers': False,
-                                'formatters': {'safe': {'()': safe_formatter}},
-                                'handlers': {'safe': {'class': 'logging.StreamHandler', 'formatter': 'safe'}},
-                                'loggers': {'uvicorn': {'handlers': ['safe'], 'level': 'INFO', 'propagate': False},
-                                            'uvicorn.error': {'level': 'INFO'},
-                                            'uvicorn.access': {'handlers': [], 'propagate': False}}})
-        return 0
-    except Exception as error:
-        print('Dedicated demo startup refused (' + type(error).__name__ + '). Check demo configuration and isolation prerequisites.', file=sys.stderr)
-        return 1
 
+        safe_formatter = lambda: RedactingFormatter(
+            logging.Formatter('%(levelname)s: %(message)s'),
+            secrets,
+        )
+
+        uvicorn.run(
+            application.app,
+            host='0.0.0.0',
+            port=port,
+            access_log=False,
+            log_config={
+                'version': 1,
+                'disable_existing_loggers': False,
+                'formatters': {
+                    'safe': {'()': safe_formatter},
+                },
+                'handlers': {
+                    'safe': {
+                        'class': 'logging.StreamHandler',
+                        'formatter': 'safe',
+                    },
+                },
+                'loggers': {
+                    'uvicorn': {
+                        'handlers': ['safe'],
+                        'level': 'INFO',
+                        'propagate': False,
+                    },
+                    'uvicorn.error': {'level': 'INFO'},
+                    'uvicorn.access': {
+                        'handlers': [],
+                        'propagate': False,
+                    },
+                },
+            },
+        )
+        return 0
+
+    except Exception as error:
+        stage = 'application startup'
+        if configuration is None:
+            stage = 'configuration validation'
+
+        print(
+            'Dedicated demo startup refused during '
+            + stage
+            + ' ('
+            + type(error).__name__
+            + '). Check demo configuration and isolation prerequisites.',
+            file=sys.stderr,
+        )
+        return 1
 
 if __name__ == '__main__':
     sys.exit(main())
