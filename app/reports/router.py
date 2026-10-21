@@ -35,13 +35,20 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
+# Historical diagnostics and one-off data repairs are NOT mounted by app.main.
+# HOD authorization is defense in depth, not permission to publish this router.
+maintenance_router = APIRouter(
+    prefix="/api/reports", tags=["maintenance"],
+    dependencies=[Depends(get_current_hod_id)], include_in_schema=False,
+)
 
-# ─── DEBUG Endpoints (public, no auth) ──────────────────────────────────────
 
-@router.get("/export/staff-debug")
+# ─── Historical maintenance endpoints (not served) ──────────────────────────────────────
+
+@maintenance_router.get("/export/staff-debug")
 async def get_staff_debug():
     """
-    PUBLIC DEBUG endpoint - Get list of all staff with is_active status.
+    UNMOUNTED MAINTENANCE endpoint - Get list of all staff with is_active status.
     No authentication required for debugging.
     """
     from app.db.session import get_transaction
@@ -69,10 +76,10 @@ async def get_staff_debug():
         ]
 
 
-@router.get("/debug-offerings")
+@maintenance_router.get("/debug-offerings")
 async def debug_offerings():
     """
-    PUBLIC DEBUG endpoint - Show subject offerings grouped by program and semester.
+    UNMOUNTED MAINTENANCE endpoint - Show subject offerings grouped by program and semester.
     No authentication required for debugging.
     """
     from app.db.session import get_transaction
@@ -113,11 +120,11 @@ async def debug_offerings():
         }
 
 
-# ─── Admin Seeding Endpoints (public, no auth - for one-time setup) ──────────
+# ─── Historical seeding endpoints (unmounted; not a provisioning procedure) ──────────
 
-@router.get("/admin/db-state")
+@maintenance_router.get("/admin/db-state")
 async def db_state():
-    """PUBLIC DEBUG - Show current database state for MCA seeding."""
+    """UNMOUNTED MAINTENANCE - Show current database state for MCA seeding."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -154,9 +161,9 @@ async def db_state():
     return result
 
 
-@router.post("/admin/fix-duplicate-programs")
+@maintenance_router.post("/admin/fix-duplicate-programs")
 async def fix_duplicate_programs():
-    """PUBLIC - Fix duplicate program names (case-insensitive consolidation)."""
+    """UNMOUNTED MAINTENANCE - Fix duplicate program names (case-insensitive consolidation)."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -208,9 +215,9 @@ async def fix_duplicate_programs():
     return results
 
 
-@router.post("/admin/seed-mca-odd")
+@maintenance_router.post("/admin/seed-mca-odd")
 async def seed_mca_odd_semesters():
-    """PUBLIC - One-time endpoint to seed MCA Sem I and III subject offerings."""
+    """UNMOUNTED MAINTENANCE - One-time endpoint to seed MCA Sem I and III subject offerings."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -361,9 +368,9 @@ async def seed_mca_odd_semesters():
     return results
 
 
-@router.get("/admin/shift-state")
+@maintenance_router.get("/admin/shift-state")
 async def shift_state():
-    """PUBLIC DEBUG - Show shift distribution in database."""
+    """UNMOUNTED MAINTENANCE - Show shift distribution in database."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -401,9 +408,9 @@ async def shift_state():
     return result
 
 
-@router.post("/admin/fix-shift2-offerings")
+@maintenance_router.post("/admin/fix-shift2-offerings")
 async def fix_shift2_offerings():
-    """PUBLIC - Update shift=1 to shift=2 for all subject offerings."""
+    """UNMOUNTED MAINTENANCE - Update shift=1 to shift=2 for all subject offerings."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -462,9 +469,9 @@ async def fix_shift2_offerings():
     return results
 
 
-@router.get("/admin/program-shifts")
+@maintenance_router.get("/admin/program-shifts")
 async def program_shifts():
-    """PUBLIC DEBUG - Show all sections and their shift values."""
+    """UNMOUNTED MAINTENANCE - Show all sections and their shift values."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -475,9 +482,9 @@ async def program_shifts():
         return {"sections": [dict(r._mapping) for r in sections]}
 
 
-@router.post("/admin/fix-shift-from-program")
+@maintenance_router.post("/admin/fix-shift-from-program")
 async def fix_shift_from_program():
-    """PUBLIC - Set subject_offering.shift to match section.shift for every offering."""
+    """UNMOUNTED MAINTENANCE - Set subject_offering.shift to match section.shift for every offering."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -525,9 +532,9 @@ async def fix_shift_from_program():
     return results
 
 
-@router.post("/admin/create-shift2-offerings")
+@maintenance_router.post("/admin/create-shift2-offerings")
 async def create_shift2_offerings():
-    """PUBLIC - Create shift=2 duplicate offerings for every existing shift=1 offering."""
+    """UNMOUNTED MAINTENANCE - Create shift=2 duplicate offerings for every existing shift=1 offering."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -655,9 +662,9 @@ async def create_shift2_offerings():
     return results
 
 
-@router.get("/admin/shift2-check")
+@maintenance_router.get("/admin/shift2-check")
 async def shift2_check():
-    """PUBLIC DEBUG - Check shift 2 offerings in open semesters."""
+    """UNMOUNTED MAINTENANCE - Check shift 2 offerings in open semesters."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -813,7 +820,7 @@ async def approve_workload(
 
 # ─── Debug Endpoints (Temporary) ──────────────────────────────────────────────
 
-@router.get("/export/debug-test")
+@maintenance_router.get("/export/debug-test")
 async def debug_export_test():
     """Temporary debug endpoint - returns JSON with traceback instead of file"""
     import traceback as tb_module
@@ -840,7 +847,7 @@ async def debug_export_test():
         }
 
 
-@router.get("/export/debug-pdf")
+@maintenance_router.get("/export/debug-pdf")
 async def debug_pdf_test():
     """Temporary debug endpoint - tests PDF generation, returns JSON"""
     import traceback as tb_module
@@ -868,7 +875,7 @@ async def debug_pdf_test():
         }
 
 
-@router.get("/export/debug-excel")
+@maintenance_router.get("/export/debug-excel")
 async def debug_excel_test():
     """Temporary debug endpoint - tests master workload Excel generation"""
     import traceback as tb_module
@@ -1067,9 +1074,9 @@ async def export_pdf(
     )
 
 
-@router.get("/admin/shift-deep-check")
+@maintenance_router.get("/admin/shift-deep-check")
 async def shift_deep_check():
-    """PUBLIC DEBUG - Deep diagnostic of shift distribution across all tables."""
+    """UNMOUNTED MAINTENANCE - Deep diagnostic of shift distribution across all tables."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -1127,9 +1134,9 @@ async def shift_deep_check():
     return result
 
 
-@router.get("/admin/test-catalog-for-staff/{emp_code}")
+@maintenance_router.get("/admin/test-catalog-for-staff/{emp_code}")
 async def test_catalog_for_staff(emp_code: str):
-    """PUBLIC DEBUG - Test what catalog data a specific staff member would see."""
+    """UNMOUNTED MAINTENANCE - Test what catalog data a specific staff member would see."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -1206,9 +1213,9 @@ async def test_catalog_for_staff(emp_code: str):
     return result
 
 
-@router.get("/admin/window-status")
+@maintenance_router.get("/admin/window-status")
 async def window_status():
-    """PUBLIC DEBUG - Show preference window status."""
+    """UNMOUNTED MAINTENANCE - Show preference window status."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -1235,9 +1242,9 @@ async def window_status():
         }
 
 
-@router.get("/admin/test-catalog-for-staff/{emp_code}")
+@maintenance_router.get("/admin/test-catalog-for-staff/{emp_code}")
 async def test_catalog_for_staff(emp_code: str):
-    """PUBLIC DEBUG - Test what catalog data a specific staff member would see."""
+    """UNMOUNTED MAINTENANCE - Test what catalog data a specific staff member would see."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -1315,9 +1322,9 @@ async def test_catalog_for_staff(emp_code: str):
     return result
 
 
-@router.get("/admin/window-status")
+@maintenance_router.get("/admin/window-status")
 async def window_status():
-    """PUBLIC DEBUG - Check preference window status."""
+    """UNMOUNTED MAINTENANCE - Check preference window status."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -1341,9 +1348,9 @@ async def window_status():
         }
 
 
-@router.post("/admin/create-shift2-offerings")
+@maintenance_router.post("/admin/create-shift2-offerings")
 async def create_shift2_offerings():
-    """PUBLIC - Create shift=2 duplicate offerings for all shift=1 offerings."""
+    """UNMOUNTED MAINTENANCE - Create shift=2 duplicate offerings for all shift=1 offerings."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -1502,9 +1509,9 @@ async def create_shift2_offerings():
     return results
 
 
-@router.get("/admin/section-check/{emp_code}")
+@maintenance_router.get("/admin/section-check/{emp_code}")
 def section_check(emp_code: str):
-    """PUBLIC DEBUG - Diagnose section B offerings for a specific staff member."""
+    """UNMOUNTED MAINTENANCE - Diagnose section B offerings for a specific staff member."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     
@@ -1566,9 +1573,9 @@ def section_check(emp_code: str):
     return result
 
 
-@router.post("/admin/create-secb-offerings")
+@maintenance_router.post("/admin/create-secb-offerings")
 def create_secb_offerings():
-    """PUBLIC - Create Section B offerings for MCA General Sem II by copying from Section A."""
+    """UNMOUNTED MAINTENANCE - Create Section B offerings for MCA General Sem II by copying from Section A."""
     from app.db.session import get_transaction
     from sqlalchemy import text
     

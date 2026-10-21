@@ -88,10 +88,8 @@ clean:
 	@echo "✅ Cleanup complete"
 
 migrate:
-	@echo "Running migrations..."
-	docker-compose exec app sh -c "psql $$DATABASE_URL -f migrations/schema.sql"
-	docker-compose exec app sh -c "psql $$DATABASE_URL -f migrations/002_window_lifecycle.sql"
-	@echo "✅ Migrations complete"
+	@echo "Automatic migration replay is disabled. Follow docs/SECURITY_CONTAINMENT.md."
+	@exit 1
 
 psql:
 	@echo "Connecting to development database..."

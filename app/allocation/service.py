@@ -15,6 +15,7 @@ This module implements the complete allocation pipeline:
 All SQL uses parameterized queries. All mutations happen in a single transaction.
 """
 
+from contextlib import nullcontext
 from sqlalchemy import text
 from app.db.session import get_transaction
 import logging
@@ -58,7 +59,8 @@ def _run_allocation_for_semester(
     semester_id: int,
     semester_label: str,
     semester_capacity: dict,
-    program_id: int | None = None
+    program_id: int | None = None,
+    *, session,
 ) -> dict:
     """
     Run allocation for a single semester.
@@ -78,7 +80,7 @@ def _run_allocation_for_semester(
     allocations = []
     unallocated = []
     
-    with get_transaction() as session:
+    with nullcontext(session):
         # ================================================================
         # STEP 1: Load staff data (fresh capacity for this semester)
         # ================================================================
@@ -107,7 +109,7 @@ def _run_allocation_for_semester(
                 "tch_assigned": semester_capacity[staff_id]["tch_assigned"],  # Fresh for this semester
                 "is_class_teacher": r[6], "ct_program": r[7],
                 "ct_section": r[8], "ct_semester": r[9], "ct_shift": r[10],
-                "assigned_codes": set(),  # Per-semester tracking for multi-section constraint
+                "assigned_codes": set(semester_capacity[staff_id].get("assigned_codes", ())),  # Per-semester tracking for multi-section constraint
             }
         
         logger.info(f"  Semester {semester_label}: Loaded {len(staff_map)} faculty (single-semester capacity)")
@@ -172,6 +174,7 @@ def _run_allocation_for_semester(
                 JOIN cycle c ON c.academic_year_id = so.academic_year_id 
                             AND c.semester_id = so.semester_id
                 WHERE c.id = :cid
+                  AND fp.cycle_id = :cid
                   AND so.semester_id = :sem_id
                 ORDER BY fp.preference_number, fp.submitted_at
             """),
@@ -438,207 +441,120 @@ def _run_allocation_for_semester(
     }
 
 
-def run_allocation(
-    academic_year: str | None = None, 
-    semester_type: str | None = None,  # DEPRECATED: No longer used, kept for API compatibility
-    academic_cycle_id: int | None = None,
-    program_id: int | None = None,
-    semester_id: int | None = None
-) -> dict:
+class AllocationScopeError(ValueError):
+    """Invalid allocation scope; no data changes may survive this error."""
+
+
+def _failure(message):
+    return {
+        "success": False, "message": message,
+        "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
+        "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
+        "allocations": [], "unallocated": [], "workload_summary": [],
+    }
+
+
+def _resolve_scope(session, academic_year=None, semester_id=None,
+                   academic_cycle_id=None, program_id=None):
+    """Resolve and lock the requested OPEN cycle and semester before any writes."""
+    if semester_id is None and not academic_year and academic_cycle_id is None:
+        raise AllocationScopeError("Must provide either semester_id OR academic_year")
+    if any(value is not None and value <= 0
+           for value in (semester_id, academic_cycle_id, program_id)):
+        raise AllocationScopeError("Scope IDs must be positive")
+    query = """
+        SELECT c.id, ay.name, sem.id, sem.label, sem.state
+        FROM cycle c
+        JOIN academic_year ay ON ay.id = c.academic_year_id
+        JOIN semester sem ON sem.id = c.semester_id
+        WHERE c.status = 'OPEN'
     """
-    Run the complete allocation engine for a SINGLE SEMESTER.
-    
-    PHASE 1: Single-semester allocation only.
-    - Allocates subjects for ONE semester at a time
-    - No cross-semester capacity tracking
-    - Workload calculated within this semester only
-    
-    Required parameters (at least one combination):
-    - semester_id: Direct semester ID (preferred)
-    - OR academic_year (resolved via active cycle)
-    
-    NOTE: semester_type parameter is deprecated and ignored.
-    The system now uses semester_id (1-6) instead of semester_type (ODD/EVEN).
-    
-    Steps:
-    1. Validate semester selection
-    2. Load staff with workload norms
-    3. Load subject offerings for THIS SEMESTER ONLY
-    4. Load faculty preferences for THIS SEMESTER ONLY
-    5. Stage 1: Process pref=1 allocations
-    6. Stage 2: Process pref=2-5 allocations  
-    7. Final pass: assign remaining to lowest-load compatible faculty
-    8. Persist allocation records
-    9. Update workload_summary table
-    10. Log and return results
-    
-    Returns:
-        dict with allocation results, unallocated list, workload summaries
-    """
-    # ================================================================
-    # CYCLE LOCK GUARD: Block writes after HOD approval
-    # ================================================================
-    from app.reports.cycle_guard import require_cycle_unlocked
+    params = {}
+    for value, clause, name in (
+        (academic_year, "ay.name = :year", "year"),
+        (semester_id, "sem.id = :sid", "sid"),
+        (academic_cycle_id, "c.id = :cid", "cid"),
+    ):
+        if value is not None:
+            query += " AND " + clause
+            params[name] = value
+    # Year-only requests retain the existing single-active-semester behavior.
+    row = session.execute(text(query + " ORDER BY sem.id, c.id LIMIT 1 FOR UPDATE OF c, sem"), params).fetchone()
+    if not row:
+        raise AllocationScopeError("No open academic cycle matches the requested scope")
+    cid, year, sid, label, state = row
+    if state not in ("OPEN", "CLOSED"):
+        raise AllocationScopeError(
+            "Cannot run allocation: semester is " + state + "; reopen it first if allocation is allowed"
+        )
+    if program_id is not None:
+        if not session.execute(text("SELECT id FROM program WHERE id = :pid AND is_active = true"),
+                               {"pid": program_id}).fetchone():
+            raise AllocationScopeError("Program not found or inactive")
+    scope_filter = "so.semester_id = :sid AND so.academic_year_id = c.academic_year_id"
+    offering_params = {"cid": cid, "sid": sid}
+    if program_id is not None:
+        scope_filter += " AND so.program_id = :pid"
+        offering_params["pid"] = program_id
+    offerings = session.execute(text("""
+        SELECT count(*) FROM subject_offering so JOIN cycle c ON c.id = :cid
+        WHERE """ + scope_filter + " AND so.is_active = true"), offering_params).scalar()
+    if not offerings:
+        raise AllocationScopeError("No active offerings in the requested scope")
+    preferences = session.execute(text("""
+        SELECT count(*) FROM faculty_preference fp
+        JOIN subject_offering so ON so.id = fp.subject_offering_id
+        JOIN cycle c ON c.id = fp.cycle_id
+        WHERE fp.cycle_id = :cid AND """ + scope_filter), offering_params).scalar()
+    if not preferences:
+        raise AllocationScopeError("No preferences submitted in the requested scope")
+    return {"cycle_id": cid, "academic_year": year, "semester_id": sid,
+            "semester_label": label, "semester_type": "ODD" if label in ("I", "III", "V") else "EVEN"}
+
+
+def run_allocation(academic_year=None, semester_type=None, academic_cycle_id=None,
+                   program_id=None, semester_id=None):
+    """Validate, calculate, persist and change status in one transaction."""
+    if semester_id is None and not academic_year and academic_cycle_id is None:
+        return _failure("Must provide either semester_id OR academic_year")
     try:
-        require_cycle_unlocked()
-    except RuntimeError as e:
-        return {
-            "success": False,
-            "message": str(e),
-            "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
-            "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
-            "allocations": [], "unallocated": [], "workload_summary": [],
-        }
-
-    # ================================================================
-    # CYCLE GUARD: Resolve active academic cycle
-    # ================================================================
-    from app.admin.cycle_service_new import get_active_cycle
-    active_cycle = get_active_cycle()
-    if active_cycle is None:
-        return {
-            "success": False,
-            "message": "No active academic cycle. Create and activate one first.",
-            "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
-            "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
-            "allocations": [], "unallocated": [], "workload_summary": [],
-        }
-    
-    # Use cycle values (override params for safety)
-    if academic_cycle_id and academic_cycle_id != active_cycle["id"]:
-        return {
-            "success": False,
-            "message": f"Must run allocation for the active academic cycle (ID {active_cycle['id']}).",
-            "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
-            "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
-            "allocations": [], "unallocated": [], "workload_summary": [],
-        }
-
-    if academic_year:
-        # Verify provided academic_year matches active cycle
-        if academic_year != active_cycle["academic_year"]:
-            return {
-                "success": False,
-                "message": f"Must run allocation for the active academic cycle ({active_cycle['academic_year']}).",
-                "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
-                "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
-                "allocations": [], "unallocated": [], "workload_summary": [],
-            }
-
-    cycle_id = active_cycle["id"]
-    # Always resolve these from the active cycle so they're never None
-    academic_year = active_cycle["academic_year"]
-    # Convert semester_id to semester_type for workload_summary (legacy schema)
-    # ODD semesters: I, III, V (1, 3, 5)
-    # EVEN semesters: II, IV, VI (2, 4, 6)
-    semester_type = "ODD" if active_cycle["semester_id"] in (1, 3, 5) else "EVEN"
-    
-    # ================================================================
-    # RESOLVE TARGET SEMESTER
-    # ================================================================
-    target_semester_id = None
-    target_semester_label = None
-    
-    if semester_id:
-        # Direct semester ID provided
         with get_transaction() as session:
-            sem_row = session.execute(
-                text("SELECT id, label FROM semester WHERE id = :sid"),
-                {"sid": semester_id}
-            ).fetchone()
-            
-            if not sem_row:
-                return {
-                    "success": False,
-                    "message": f"Semester ID {semester_id} not found.",
-                    "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
-                    "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
-                    "allocations": [], "unallocated": [], "workload_summary": [],
-                }
-            
-            target_semester_id = sem_row[0]
-            target_semester_label = sem_row[1]
-    else:
-        # No semester_id provided - return error (PHASE 1: require explicit semester)
-        return {
-            "success": False,
-            "message": "semester_id is required for allocation. Please specify which semester to allocate.",
-            "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
-            "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
-            "allocations": [], "unallocated": [], "workload_summary": [],
-        }
-    
-    logger.info(f"Running allocation for Semester {target_semester_label} (ID {target_semester_id})")
-    
-    # ================================================================
-    # PHASE 2: Validate semester state (must be CLOSED, not ALLOCATED or FROZEN)
-    # ================================================================
-    from app.coordinator.semester_state_service import get_semester_state, SemesterState, mark_semester_allocated
-    
-    semester_info = get_semester_state(target_semester_id)
-    if not semester_info:
-        return {
-            "success": False,
-            "message": f"Semester {target_semester_id} not found",
-            "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
-            "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
-            "allocations": [], "unallocated": [], "workload_summary": [],
-        }
-    
-    current_state = semester_info["state"]
-    
-    if current_state == SemesterState.FROZEN:
-        return {
-            "success": False,
-            "message": "Cannot run allocation: Semester is FROZEN (finalized by HOD). No modifications allowed.",
-            "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
-            "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
-            "allocations": [], "unallocated": [], "workload_summary": [],
-        }
-    
-    if current_state == SemesterState.ALLOCATED:
-        return {
-            "success": False,
-            "message": "Cannot run allocation: Semester is already ALLOCATED. Reopen semester first to rerun allocation.",
-            "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
-            "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
-            "allocations": [], "unallocated": [], "workload_summary": [],
-        }
-    
-    # ALLOW OPEN status - this is the normal state when preferences are collected
-    if current_state not in (SemesterState.OPEN, SemesterState.CLOSED):
-        return {
-            "success": False,
-            "message": f"Cannot run allocation: Semester must be OPEN or CLOSED (currently {current_state})",
-            "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
-            "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
-            "allocations": [], "unallocated": [], "workload_summary": [],
-        }
-    
-    # ================================================================
-    # FIX 1: CHECK IF ANY PREFERENCES EXIST BEFORE RUNNING ALLOCATION
-    # ================================================================
-    with get_transaction() as session:
-        pref_count = session.execute(
-            text("SELECT COUNT(*) FROM faculty_preference WHERE cycle_id = :cid"),
-            {"cid": cycle_id}
-        ).scalar()
-        
-        if pref_count == 0:
-            return {
-                "success": False,
-                "message": "No preferences submitted yet. Ask faculty to submit preferences before running allocation.",
-                "subjects_total": 0, "subjects_assigned": 0, "subjects_unassigned": 0,
-                "faculty_overloaded": 0, "faculty_underloaded": 0, "faculty_balanced": 0,
-                "allocations": [], "unallocated": [], "workload_summary": [],
-            }
-        
-        logger.info(f"Found {pref_count} preferences for cycle {cycle_id}")
-    
+            scope = _resolve_scope(session, academic_year, semester_id, academic_cycle_id, program_id)
+            result = _allocate_in_transaction(session, scope, program_id)
+            session.commit()
+            return result
+    except AllocationScopeError as error:
+        return _failure(str(error))
+
+
+def run_all_open_semesters():
+    """Validate every selected cycle first; commit the whole batch or none."""
+    try:
+        with get_transaction() as session:
+            cycles = session.execute(text(
+                "SELECT id FROM cycle WHERE status = 'OPEN' ORDER BY semester_id, id"
+            )).fetchall()
+            if not cycles:
+                raise AllocationScopeError("No open cycles found. Please open cycles first.")
+            scopes = [_resolve_scope(session, academic_cycle_id=row[0]) for row in cycles]
+            results = [_allocate_in_transaction(session, scope) for scope in scopes]
+            session.commit()
+            return {"success": True, "results": results}
+    except AllocationScopeError as error:
+        return _failure(str(error))
+
+
+def _allocate_in_transaction(session, scope, program_id=None):
+    """Caller owns the transaction; this function must never commit."""
+    cycle_id = scope["cycle_id"]
+    academic_year = scope["academic_year"]
+    semester_type = scope["semester_type"]
+    target_semester_id = scope["semester_id"]
+    target_semester_label = scope["semester_label"]
     # ================================================================
     # LOAD STAFF CAPACITY (SINGLE SEMESTER SCOPE)
     # ================================================================
-    with get_transaction() as session:
+    with nullcontext(session):
         staff_rows = session.execute(
             text("""
                 SELECT s.id, s.name, s.emp_code,
@@ -669,6 +585,18 @@ def run_allocation(
     # ================================================================
     logger.info(f"Processing Semester {target_semester_label} (ID {target_semester_id})")
     
+    if program_id is not None:
+        retained = session.execute(text("""
+            SELECT a.staff_id, sub.code, COALESCE(sub.tch, sub.l + sub.t + sub.p, 0)
+            FROM allocation a JOIN subject_offering so ON so.id = a.subject_offering_id
+            JOIN subject sub ON sub.id = so.subject_id
+            WHERE a.cycle_id = :cid AND so.semester_id = :sid AND so.program_id <> :pid
+        """), {"cid": cycle_id, "sid": target_semester_id, "pid": program_id}).fetchall()
+        for staff_id, code, tch in retained:
+            if staff_id in staff_capacity:
+                staff_capacity[staff_id]["tch_assigned"] += tch
+                staff_capacity[staff_id].setdefault("assigned_codes", set()).add(code)
+
     # Run allocation for this specific semester
     sem_result = _run_allocation_for_semester(
         cycle_id=cycle_id,
@@ -677,7 +605,7 @@ def run_allocation(
         semester_id=target_semester_id,
         semester_label=target_semester_label,
         semester_capacity=staff_capacity,
-        program_id=program_id
+        program_id=program_id, session=session,
     )
     
     all_allocations = sem_result["allocations"]
@@ -687,20 +615,21 @@ def run_allocation(
     # PERSIST ALLOCATION RESULTS (SINGLE SEMESTER)
     # HARDENING: Ensure idempotent operation - clear stale data for THIS semester only
     # ================================================================
-    with get_transaction() as session:
+    with nullcontext(session):
         # Clear existing allocations for this specific semester ONLY
         # CRITICAL: Maintains single-semester isolation
         deleted_allocs = session.execute(
             text("""
                 DELETE FROM allocation 
-                WHERE subject_offering_id IN (
+                WHERE cycle_id = :cid AND subject_offering_id IN (
                     SELECT so.id FROM subject_offering so
-                    JOIN cycle c ON c.academic_year_id = so.academic_year_id 
+                    JOIN cycle c ON c.academic_year_id = so.academic_year_id
                                 AND c.semester_id = so.semester_id
                     WHERE c.id = :cid AND so.semester_id = :sem_id
+                      AND (:pid IS NULL OR so.program_id = :pid)
                 )
             """),
-            {"cid": cycle_id, "sem_id": target_semester_id}
+            {"cid": cycle_id, "sem_id": target_semester_id, "pid": program_id}
         ).rowcount
         
         logger.info(f"Cleared {deleted_allocs} existing allocations for semester {target_semester_label}")
@@ -726,7 +655,7 @@ def run_allocation(
         logger.info(f"Persisted {len(all_allocations)} allocation records for semester {target_semester_label}")
         
         # ================================================================
-        # RECOMPUTE WORKLOAD SUMMARIES FROM ALL ALLOCATIONS IN CYCLE
+        # RECOMPUTE THE SHARED YEAR/PARITY WORKLOAD SUMMARY BUCKET
         # CRITICAL: This ensures semester isolation - we recompute from actual data
         # instead of blindly deleting everything
         # ================================================================
@@ -741,14 +670,19 @@ def run_allocation(
                     COALESCE(s.tch_norm, 40) AS tch_norm,
                     COALESCE(SUM(sub.tch), 0) AS tch_assigned
                 FROM staff s
-                LEFT JOIN allocation a ON a.staff_id = s.id AND a.cycle_id = :cid
+                LEFT JOIN allocation a ON a.staff_id = s.id AND a.cycle_id IN (
+                    SELECT c.id FROM cycle c JOIN academic_year ay ON ay.id = c.academic_year_id
+                    JOIN semester sem ON sem.id = c.semester_id
+                    WHERE ay.name = :year
+                      AND CASE WHEN sem.label IN ('I','III','V') THEN 'ODD' ELSE 'EVEN' END = :sem_type
+                )
                 LEFT JOIN subject_offering so ON so.id = a.subject_offering_id
                 LEFT JOIN subject sub ON sub.id = so.subject_id
                 WHERE s.is_active = true AND s.emp_code IS NOT NULL
                 GROUP BY s.id, s.emp_code, s.name, s.designation, s.tch_norm
                 ORDER BY s.id
             """),
-            {"cid": cycle_id}
+            {"year": academic_year, "sem_type": semester_type}
         ).fetchall()
         
         workload_summaries = []
@@ -842,7 +776,6 @@ def run_allocation(
             }
         )
         
-        session.commit()
         
         # Log allocation summary
         logger.info("=" * 60)
@@ -857,20 +790,20 @@ def run_allocation(
         logger.info("=" * 60)
     
     # ================================================================
-    # PHASE 2: Mark ALL semesters as ALLOCATED and update cycle status
+    # PHASE 2: Mark the selected semester as ALLOCATED and update cycle status
     # ================================================================
-    with get_transaction() as session:
+    with nullcontext(session):
         session.execute(
-            text("UPDATE semester SET state = 'ALLOCATED', allocated_at = now()")
+            text("UPDATE semester SET state = 'ALLOCATED', allocated_at = now() WHERE id = :sid"),
+            {"sid": target_semester_id}
         )
         # Update cycle status to ALLOCATED after successful allocation
         session.execute(
             text("UPDATE cycle SET status = 'ALLOCATED' WHERE id = :cid"),
             {"cid": cycle_id}
         )
-        session.commit()
     
-    logger.info("All semesters marked as ALLOCATED, cycle status updated to ALLOCATED")
+    logger.info("Selected semester and cycle marked as ALLOCATED")
     
     return {
         "success": True,

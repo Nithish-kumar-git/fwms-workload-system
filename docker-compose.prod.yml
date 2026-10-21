@@ -19,9 +19,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
-      - ./migrations/002_window_lifecycle.sql:/docker-entrypoint-initdb.d/002_window_lifecycle.sql:ro
-      - ./migrations/003_seed_minimal.sql:/docker-entrypoint-initdb.d/003_seed.sql:ro
     networks:
       - backend
     healthcheck:

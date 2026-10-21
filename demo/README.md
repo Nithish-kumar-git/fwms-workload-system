@@ -95,8 +95,9 @@ Frontend builds:
 
    For a separately approved Render **native Python** service, use the same entry
    point with host 0.0.0.0 and the platform PORT. **Do not use the existing Docker
-   default or startup.sh:** it prints a database URL and runs institutional seed,
-   cleanup and data-change migrations. No production startup script was modified.
+   default or startup.sh:** the institutional launcher now refuses demo mode.
+   Its former SQL replay and URL logging were removed in the containment repair;
+   see `docs/SECURITY_CONTAINMENT.md`. Keep using the dedicated demo launcher.
 
 5. Configure/build the separate frontend and verify locally before any deployment.
    Use a separate output directory and demo API origin. Set the frontend marker

@@ -15,6 +15,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 from app.core.config import settings
+from app.core.log_redaction import RedactingFormatter
 
 
 class JSONFormatter(logging.Formatter):
@@ -98,6 +99,11 @@ def configure_logging():
         formatter = JSONFormatter()
     else:
         formatter = HumanReadableFormatter()
+
+    formatter = RedactingFormatter(formatter, (
+        settings.DATABASE_URL, settings.SECRET_KEY,
+        settings.GOOGLE_CLIENT_SECRET, settings.SMTP_PASSWORD,
+    ))
     
     # Configure root logger
     root_logger = logging.getLogger()

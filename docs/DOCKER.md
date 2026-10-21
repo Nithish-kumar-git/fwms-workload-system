@@ -2,6 +2,10 @@
 
 ## One-Command Setup
 
+Provision the approved empty development database explicitly before starting the
+application. Follow [the containment and provisioning procedure](SECURITY_CONTAINMENT.md).
+Serving no longer runs migrations or seeds.
+
 ```bash
 # Start development environment
 make up
@@ -39,7 +43,7 @@ SESSION_BACKEND=memory
 ## Available Commands
 
 ### Development
-- `make up` — Start DB + App (auto-migrates)
+- `make up` — Start DB + App (database must already be provisioned)
 - `make down` — Stop all services
 - `make restart` — Restart services
 - `make logs` — View application logs
@@ -53,7 +57,7 @@ SESSION_BACKEND=memory
 ### Maintenance
 - `make build` — Rebuild Docker images
 - `make clean` — Remove all containers/volumes
-- `make migrate` — Run migrations manually
+- `make migrate` — Refuses legacy automatic replay; use the reviewed provisioning procedure
 - `make psql` — Connect to development DB
 - `make health` — Check application health
 
@@ -62,7 +66,7 @@ SESSION_BACKEND=memory
 ```
 docker-compose.yml          # Development environment
 ├── db (postgres:16)        # Port 5432
-└── app (python:3.12-slim)  # Port 8000 (hot reload)
+└── app (python:3.12-slim)  # Port 8000 (guarded serving launcher)
 
 docker-compose.test.yml     # Test environment
 ├── test_db (postgres:16)   # Port 5433 (tmpfs)
@@ -72,8 +76,7 @@ docker-compose.test.yml     # Test environment
 ## Features
 
 ✅ **Zero Global Dependencies** — No Python/pytest/uvicorn required on host  
-✅ **Automatic Migrations** — Runs on startup  
-✅ **Hot Reload** — Code changes reflected immediately  
+✅ **Explicit Provisioning** — Separate from application startup
 ✅ **Isolated Testing** — Separate test DB with tmpfs  
 ✅ **Health Checks** — Built-in container health monitoring  
 ✅ **Multi-Stage Build** — Minimal production image  
@@ -82,8 +85,8 @@ docker-compose.test.yml     # Test environment
 
 - **API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
-- **Health**: http://localhost:8000/health
-- **Metrics**: http://localhost:8000/health/metrics
+- **Health**: http://localhost:8000/api/health
+- **Metrics**: http://localhost:8000/api/health/metrics
 - **Database**: localhost:5432 (user: postgres, pass: postgres)
 
 ## Troubleshooting
@@ -100,11 +103,9 @@ make logs  # Check if DB is healthy
 make psql  # Test direct connection
 ```
 
-**Migrations failed**:
-```bash
-make shell
-psql $DATABASE_URL -f migrations/schema.sql
-```
+**Provisioning failed**: stop and review the failed SQL and approved target using
+[the explicit provisioning procedure](SECURITY_CONTAINMENT.md). Do not replay seeds
+or cleanup scripts automatically.
 
 ## Production Deployment
 

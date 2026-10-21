@@ -1,7 +1,8 @@
 # Separate synthetic demo deployment — prepared, NOT deployed
 
-These files are opt-in. The root `vercel.json`, root `Dockerfile`, `startup.sh`,
-institutional settings and all existing application files are unchanged.
+These files are opt-in. The root `vercel.json` remains institutional-only.
+The later containment repair makes root serving SQL-free and rejects demo mode;
+see `docs/SECURITY_CONTAINMENT.md`. Keep the dedicated demo entrypoint below.
 Do not enable automatic deployment or run a deploy command until separately approved.
 
 ## Architecture and boundary

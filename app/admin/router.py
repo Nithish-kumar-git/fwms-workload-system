@@ -16,7 +16,7 @@ Endpoints:
 from fastapi import APIRouter, Depends, HTTPException
 import logging
 
-from app.auth.dependencies import get_current_coordinator_id
+from app.auth.dependencies import get_current_coordinator_id, get_current_hod_id
 from app.admin.schemas import (
     AllocationReviewResponse, AllocationDetail,
     OverrideRequest, OverrideResponse,
@@ -45,10 +45,9 @@ async def get_staff_list(
 
 
 @router.get("/staff/list-debug")
-async def get_staff_list_debug():
+async def get_staff_list_debug(_hod_id: int = Depends(get_current_hod_id)):
     """
-    PUBLIC DEBUG endpoint - Get list of all staff with is_active status.
-    No authentication required for debugging.
+    HOD-only diagnostic list of staff and active status.
     """
     from app.db.session import get_transaction
     from sqlalchemy import text
@@ -76,10 +75,9 @@ async def get_staff_list_debug():
 
 
 @router.get("/staff/debug-role-ct")
-async def debug_role_ct():
+async def debug_role_ct(_hod_id: int = Depends(get_current_hod_id)):
     """
-    PUBLIC DEBUG endpoint - Test role and CT field mapping.
-    No authentication required for debugging.
+    HOD-only diagnostic of role and class-teacher field mapping.
     """
     from app.admin.staff_service import list_staff
     

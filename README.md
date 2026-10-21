@@ -115,7 +115,7 @@ fwms-workload-system/
  ├── docs/                  # Setup guides
  ├── Dockerfile
  ├── docker-compose.yml
- └── startup.sh             # Runs migrations then starts API
+ └── startup.sh             # Starts API only; no migrations or seeds
 ```
 
 ---
