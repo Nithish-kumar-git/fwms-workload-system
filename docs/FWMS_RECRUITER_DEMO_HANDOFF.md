@@ -5,6 +5,57 @@
 **Checkpoint commit (code):** `5680f73` — `fix: add safe demo startup diagnostics`
 **Status:** Feature development paused. Demo is live. Institutional production is untouched.
 
+## 21 October 2026 documentation and Git closeout
+
+This snapshot supersedes the older checkpoint fields below while preserving the
+complete security, isolation and deployment history.
+
+| Item | Verified value |
+|---|---|
+| Repository | <https://github.com/Nithish-kumar-git/fwms-workload-system> |
+| Authoritative local path | `C:\Users\itsni\.gemini\antigravity\scratch\faculty_selection` |
+| Default branch | `main`; remote tip `878032465ed052de078b0715fd57049590a9d24c` |
+| Active branch | `feature/recruiter-demo` |
+| Local HEAD | `cb9f324ffd96f580062cc542c3e46c107e109630` |
+| Tracked upstream | `origin/feature/recruiter-demo` at `15fdeb3f42a86e662609c9aa960df87599af3ebf` |
+| Synchronization | Local branch is two commits ahead, zero behind |
+| Working tree at closeout start | Tracked tree clean; the pre-existing untracked files listed in historical section 3 were present and must be preserved |
+
+The two unpublished repair commits are retained intact:
+
+- `f6b61d3e9ae314e20ec941fb709d8fab8dfddb2b` — administrative containment and atomic allocation repair.
+- `cb9f324ffd96f580062cc542c3e46c107e109630` — shared workload concurrency and programme finalization repair.
+
+Do **not** push this branch. Render confirms `fwms-workload-system-1` tracks it
+with automatic deployment on every commit. Its current live deploy is still
+`15fdeb3`; therefore neither repair commit is deployed. The institutional Render
+service and Vercel frontend remain at `main` commit `8780324`. Platform metadata
+reports both Render deploys as live, but bounded HTTP probes during this closeout
+did not return before timeout; current browser/API health is therefore not freshly
+verified.
+
+Latest repair evidence, not rerun for this documentation edit: 24 focused offline
+security/allocation/startup tests, 12 demo launcher/deployment tests and 10 tests
+against a disposable loopback PostgreSQL 18.1 cluster passed. This establishes the
+reported PostgreSQL repair checks. Docker's engine was unavailable, and full
+Compose plus hosted browser/permission workflows remain unverified.
+
+Environment-variable names only: institutional `DATABASE_URL`, `FRONTEND_URL`,
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `SECRET_KEY`,
+`REDIS_URL`, `VITE_API_URL`, `VITE_DEV_MODE`; recruiter demo
+`FWMS_DEMO_MODE`, `FWMS_DEMO_DATABASE_URL`, `FWMS_DEMO_SECRET_KEY`,
+`FWMS_DEMO_FRONTEND_URL`, `VITE_FWMS_DEMO_MODE`, `VITE_API_URL`,
+`VITE_DEV_MODE` and host-supplied `PORT`. Never publish values.
+
+Safe focused commands are documented below and in `docs/SECURITY_CONTAINMENT.md`.
+The exact next action is an externally reviewed, explicitly approved rollout plan:
+confirm credential containment and deployed schema, stop/drain old writers, verify
+Docker/Compose and hosted browser/RBAC paths, then decide whether to disable
+automatic deploy before pushing. Credential rotation, provider-log review, database
+access, Render/Vercel settings, pushes, deployments and any history rewrite require
+explicit approval. The project remains **needs code/security rollout work** and
+must not be frozen as production-ready.
+
 ---
 
 ## Table of Contents
@@ -29,11 +80,11 @@
 
 ## 1. Project Purpose and Scope
 
-**FWMS** (Faculty Workload Management System) is a production system for the
-Department of Computer Applications at Hindustan Institute of Technology and
-Science. It implements a first-come-first-served (FCFS) subject-preference and
+**FWMS** (Faculty Workload Management System) implements a subject-preference and
 workload-allocation workflow for teaching faculty, coordinated by a timetable
-coordinator (TT Coordinator) and the Head of Department (HOD).
+coordinator (TT Coordinator) and the Head of Department (HOD). Repository and
+hosting evidence do not by themselves establish institutional adoption or
+production readiness.
 
 **Recruiter-demo scope** (`feature/recruiter-demo`): A fully isolated, synthetic,
 read-safe replica of FWMS intended for portfolio/recruiter evaluation. It runs
@@ -80,7 +131,7 @@ Institutional production is a completely separate path; no demo activity affects
 
 ---
 
-## 3. Repository and Git State
+## 3. Repository and Git State — historical checkpoint
 
 | Item | Value |
 |------|-------|

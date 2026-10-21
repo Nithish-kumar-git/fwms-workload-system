@@ -1,30 +1,37 @@
-# 🎓 Faculty Workload Management System (FWMS)
+# Faculty Workload Management System (FWMS)
 
-> A full-stack web app for managing faculty teaching workload allocation
-> at Hindustan University — replacing manual Excel-based tracking.
+A FastAPI, React and PostgreSQL system for faculty subject preferences,
+semester/cycle administration, workload allocation and reporting. The repository
+contains two distinct operating contexts: an institutional configuration on
+`main` and an isolated synthetic recruiter demo on `feature/recruiter-demo`.
+Neither is presented here as evidence of institutional adoption or production
+readiness.
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20App-blue?style=for-the-badge)](https://fwms-workload-system.vercel.app)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/Frontend-React%2018-61DAFB?style=for-the-badge)](https://react.dev)
 [![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-4169E1?style=for-the-badge)](https://neon.tech)
 
-## 🔗 Live Demo
+## Hosted paths and current status
 
 | | |
 |---|---|
-| **App** | https://fwms-workload-system.vercel.app |
-| **API Docs** | https://fwms-workload-system.onrender.com/docs |
-| **Demo Login** | Click **"Try Demo"** on the login page — no account needed |
+| **Institutional frontend** | https://fwms-workload-system.vercel.app — Vercel reports `main` commit `8780324` |
+| **Institutional backend** | https://fwms-workload-system.onrender.com — Render reports commit `8780324` live |
+| **Recruiter-demo backend** | https://fwms-workload-system-1.onrender.com — isolated synthetic data, Render reports `15fdeb3` live |
+| **Recruiter-demo login** | Role-selected synthetic login; Google OAuth is disabled in demo mode |
 
-> ⚠️ Backend on Render free tier — first load after inactivity takes ~30s.
-> The login page will show a "waking up" notice automatically.
+The recruiter demo is separate from the institutional path. Its Render service
+tracks `feature/recruiter-demo` and automatic commit deployment is enabled. Local
+repair commits `f6b61d3` and `cb9f324` are not pushed or deployed. Do not push this
+branch or change hosting settings without explicit rollout approval.
 
 ---
 
 ## ✨ Features
 
-- 🔐 **Google OAuth** login for university staff (@hindustanuniv.ac.in)
-- 👥 **Role-based access** — HOD/Admin, Coordinator, and Faculty (3 enforced roles)
+- **Institutional Google OAuth** for configured university staff; deliberately blocked in recruiter-demo mode
+- **Three enforced roles** — faculty, timetable coordinator and HOD; there is no separately enforced Admin role
 - 📋 **Subject preference system** — faculty rank preferences (1–5)
 - 📊 **Workload allocation** with teaching norm enforcement:
   Professor 12h · Associate Professor 14h · Assistant Professor 16h
@@ -67,31 +74,33 @@
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18 + TypeScript + Vite |
-| Backend | FastAPI (Python 3.11) + Uvicorn |
-| Database | PostgreSQL on Neon (serverless) |
+| Frontend | React 19 + TypeScript + Vite 7 |
+| Backend | FastAPI + SQLAlchemy + Uvicorn (Python 3.12 used by the latest repair run) |
+| Database | PostgreSQL; the recruiter demo uses a dedicated isolated Neon database |
 | Auth | Google OAuth 2.0 + JWT (HS256) |
 | Containerization | Docker + Docker Compose |
 | Frontend Hosting | Vercel (auto-deploy from main) |
 | Backend Hosting | Render (Docker, free tier) |
-| Schema Management | 39 raw SQL migrations — no ORM |
+| Schema Management | Raw SQL migrations plus SQLAlchemy access; startup no longer replays SQL |
 
 ---
 
 ## 🚀 Local Development
 
-```bash
+```powershell
 # Clone
 git clone https://github.com/Nithish-kumar-git/fwms-workload-system
 cd fwms-workload-system
 
-# Backend
-cp .env.example .env    # fill in DATABASE_URL, SECRET_KEY, etc.
-docker-compose up --build
+# Backend (use only an isolated development database)
+Copy-Item .env.example .env
+docker compose up --build
 # API at http://localhost:8000 | Docs at http://localhost:8000/docs
 
 # Frontend (separate terminal)
-cd frontend && npm install && npm run dev
+cd frontend
+npm ci
+npm run dev
 # App at http://localhost:5173
 ```
 
@@ -120,28 +129,20 @@ fwms-workload-system/
 
 ---
 
-## 🧪 Testing
+## Focused verification
 
 ```bash
-# Install test dependencies
-pip install pytest httpx
-
-# Run all tests
-pytest tests/ -v
-
-# Run specific test file
-pytest tests/test_health.py -v
-
-# Run with coverage
-pip install pytest-cov
-pytest tests/ --cov=app --cov-report=html
+python -B tests/verify_security_repairs.py -v
+python -B tests/verify_allocation_postgres.py -v
+python -B demo/verify_offline.py -v
+python -B demo/test_deployment.py -v
 ```
 
-**Test Coverage:**
-- Health endpoint (service status)
-- Demo login (no-auth user creation)
-- Authentication & authorization (JWT validation)
-- Integration tests (window lifecycle, FCFS)
+The latest repair record reports 24 focused offline tests, 12 demo launcher tests
+and 10 isolated PostgreSQL 18.1 checks passing. Those are recorded results from the
+repair run, not tests rerun for this documentation closeout. PostgreSQL behavior was
+verified in a disposable loopback cluster. Docker builds/full Compose and hosted
+browser workflows remain unverified.
 
 ---
 
@@ -154,12 +155,33 @@ pytest tests/ --cov=app --cov-report=html
 | `GOOGLE_CLIENT_ID` | OAuth client ID |
 | `FRONTEND_URL` | Allowed CORS origin |
 | `VITE_API_URL` | Backend URL (set in Vercel dashboard) |
+| `FWMS_DEMO_MODE` | Enables fail-closed recruiter-demo isolation |
+| `FWMS_DEMO_DATABASE_URL` | Recruiter-demo database connection |
+| `FWMS_DEMO_SECRET_KEY` | Recruiter-demo signing key |
+| `FWMS_DEMO_FRONTEND_URL` | Exact recruiter-demo frontend origin |
+| `VITE_FWMS_DEMO_MODE` | Enables recruiter-demo UI/build boundary |
 
 Full list in `.env.example`.
 
 ---
 
-## 📄 License
+## Allocation workflow and limitations
 
-MIT
+Faculty rank subject preferences during an open window. Coordinators/HOD operate
+semester and cycle state, run programme-filtered or full allocation, review or
+override assignments, and the HOD can approve/freeze a finalized workload. A
+programme-filtered run does not by itself finalize a multi-programme semester;
+an explicit full run completes the cycle. Allocation is rules-based and does not
+prove optimality or fairness. The shared advisory-lock repair only protects writers
+running the repaired version; old instances and direct SQL writers do not
+participate.
+
+## Security and release blockers
+
+- Retain the complete assessment in [docs/SECURITY_CONTAINMENT.md](docs/SECURITY_CONTAINMENT.md) and the historical incident record in `SECURITY_BREACH_REPORT.md`.
+- Credential rotation, provider-log review, session invalidation and any history rewrite remain separate explicitly approved operations.
+- External review of the allocation critical path, deployed-schema confirmation, Docker/Compose verification and hosted browser/permission checks remain required before rollout.
+- Do not claim the local repair commits are pushed or deployed.
+
+See [docs/FWMS_RECRUITER_DEMO_HANDOFF.md](docs/FWMS_RECRUITER_DEMO_HANDOFF.md) for the exact Git, test and deployment handoff.
 
