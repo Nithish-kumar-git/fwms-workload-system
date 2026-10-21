@@ -17,6 +17,7 @@ from collections import defaultdict
 
 from sqlalchemy import text
 from app.db.session import get_transaction
+from app.db.workload import workload_transaction
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +118,9 @@ def get_pipeline_status() -> dict:
             {"year": ay, "sem_id": semester_id},
         ).scalar()
         
-        allocation_complete = (allocations_count > 0)
+        allocation_complete = (allocations_count > 0 and
+                               status in ('ALLOCATED', 'FROZEN') and
+                               semester_state in ('ALLOCATED', 'FROZEN'))
 
         # ── Stage 3: hod_approved ──
         # Simple check: snapshot exists
@@ -354,7 +357,7 @@ def create_snapshot(approved_by: int) -> dict:
     Raises:
         RuntimeError on validation failure
     """
-    with get_transaction() as session:
+    with workload_transaction() as session:
         # Get active cycle (OPEN or ALLOCATED, not FROZEN)
         cycle = session.execute(
             text("""
@@ -375,6 +378,9 @@ def create_snapshot(approved_by: int) -> dict:
             raise RuntimeError("No active cycle found.")
 
         cycle_id, ay, semester_id, status = cycle
+
+        if status != 'ALLOCATED':
+            raise RuntimeError("Complete a full-semester allocation before HOD approval.")
 
         # Check if snapshot already exists — idempotent: return existing
         existing = session.execute(

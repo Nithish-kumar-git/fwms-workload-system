@@ -18,6 +18,7 @@ CRITICAL CONSTRAINTS:
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from app.db.session import get_transaction
+from app.db.workload import workload_transaction
 import logging
 
 logger = logging.getLogger(__name__)
@@ -284,7 +285,7 @@ def open_window_transaction(
     """
     
     try:
-        with get_transaction(isolation_level="READ COMMITTED") as session:
+        with workload_transaction() as session:
             session.execute(text("SET LOCAL lock_timeout = '5s'"))
             
             # Lock window row
@@ -367,7 +368,7 @@ def open_window_transaction(
                         opened_at = :now,
                         closed_at = NULL,
                         allocated_at = NULL
-                    WHERE id IN (SELECT id FROM semester)
+                    WHERE id IN (SELECT id FROM semester) AND state <> 'FROZEN'
                 """),
                 {"now": datetime.utcnow()}
             )
@@ -427,7 +428,7 @@ def close_window_transaction(
         dict with keys: success (bool), message (str), window_id (int or None)
     """
     
-    with get_transaction(isolation_level="READ COMMITTED") as session:
+    with workload_transaction() as session:
         session.execute(text("SET LOCAL lock_timeout = '5s'"))
         
         # Lock window row
@@ -491,6 +492,7 @@ def close_window_transaction(
                 UPDATE semester
                 SET state = 'CLOSED',
                     closed_at = now()
+                WHERE state <> 'FROZEN'
             """)
         )
         logger.info(f"All semesters state transitioned to CLOSED (triggered by window {window_id})")

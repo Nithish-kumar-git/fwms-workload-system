@@ -8,6 +8,7 @@ All SQL uses parameterized queries.
 
 from sqlalchemy import text
 from app.db.session import get_transaction
+from app.db.workload import workload_transaction
 import logging
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,7 @@ def override_allocation(allocation_id: int, new_staff_id: int, actor_id: int) ->
     
     Validates shift compatibility, workload capacity (≤ 20% overload), and multi-section.
     """
-    with get_transaction() as session:
+    with workload_transaction() as session:
         # PHASE 3: Check cycle status - must be ALLOCATED, not FROZEN
         alloc_cycle_state = session.execute(
             text("""
@@ -301,7 +302,7 @@ def reassign_subject(
     
     Deletes old allocation, creates new one, updates workload_summary atomically.
     """
-    with get_transaction() as session:
+    with workload_transaction() as session:
         # PHASE 3: Check semester state - must be ALLOCATED, not FROZEN
         offering_semester_state = session.execute(
             text("""
@@ -334,7 +335,7 @@ def reassign_subject(
         alloc = session.execute(
             text("""
                 SELECT a.id, a.cycle_id,
-                       so.shift, c.academic_year, s.label AS semester_name,
+                       so.shift, ay.name, s.label AS semester_name,
                        sub.code, sub.name, sub.tch, sub.l, sub.t, sub.p,
                        from_staff.name AS from_staff_name, from_staff.emp_code AS from_emp_code
                 FROM allocation a
@@ -342,6 +343,7 @@ def reassign_subject(
                 JOIN subject sub ON sub.id = so.subject_id
                 JOIN staff from_staff ON from_staff.id = a.staff_id
                 JOIN cycle c ON c.id = a.cycle_id
+                JOIN academic_year ay ON ay.id = c.academic_year_id
                 JOIN semester s ON s.id = c.semester_id
                 WHERE a.staff_id = :from_sid AND a.subject_offering_id = :oid
             """),
@@ -600,7 +602,10 @@ def get_workload_summary(
                 FROM staff s
                 LEFT JOIN workload_summary ws ON ws.staff_id = s.id
                     AND ws.academic_year = :year
-                    AND ws.semester_id = :sem_id
+                    AND ws.semester_type = (
+                        SELECT CASE WHEN label IN ('I','III','V') THEN 'ODD' ELSE 'EVEN' END
+                        FROM semester WHERE id = :sem_id
+                    )
                 WHERE s.emp_code IS NOT NULL AND s.is_active = true
                 ORDER BY s.designation, s.name
             """),
@@ -654,19 +659,24 @@ def _refresh_workload_summary_for_cycle(
     """
     Recalculate and upsert workload_summary for one faculty member.
     
-    PHASE 3: Cycle-aware - computes workload from ALL allocations in the cycle.
-    This ensures workload reflects all allocated semesters, not just one.
+    Recomputes the shared year/parity bucket under the workload transaction lock.
     """
-    # Compute total TCH from ALL allocations in this cycle
+    # Caller holds workload_transaction's lock. Match the summary's actual
+    # year/parity key, including contributions from retained frozen cycles.
+    semester_type = "ODD" if semester_name in ("I", "III", "V") else "EVEN"
     tch_total = session.execute(
         text("""
             SELECT COALESCE(SUM(sub.tch), 0)
             FROM allocation a
             JOIN subject_offering so ON so.id = a.subject_offering_id
             JOIN subject sub ON sub.id = so.subject_id
-            WHERE a.staff_id = :sid AND a.cycle_id = :cid
+            JOIN cycle c ON c.id = a.cycle_id
+            JOIN academic_year ay ON ay.id = c.academic_year_id
+            JOIN semester sem ON sem.id = c.semester_id
+            WHERE a.staff_id = :sid AND ay.name = :year
+              AND CASE WHEN sem.label IN ('I','III','V') THEN 'ODD' ELSE 'EVEN' END = :sem_type
         """),
-        {"sid": staff_id, "cid": cycle_id}
+        {"sid": staff_id, "year": academic_year, "sem_type": semester_type}
     ).scalar()
     
     tch_norm = session.execute(
@@ -675,15 +685,6 @@ def _refresh_workload_summary_for_cycle(
     ).scalar()
     
     deviation = tch_total - tch_norm
-    
-    # Get semester_id from cycle and convert to semester_type
-    semester_id = session.execute(
-        text("SELECT semester_id FROM cycle WHERE id = :cid"),
-        {"cid": cycle_id}
-    ).scalar()
-    
-    # Convert semester_id to semester_type (ODD: 1,3,5 / EVEN: 2,4,6)
-    semester_type = "ODD" if semester_id in (1, 3, 5) else "EVEN"
     
     # UPSERT workload_summary
     session.execute(

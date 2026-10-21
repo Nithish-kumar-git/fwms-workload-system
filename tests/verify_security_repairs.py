@@ -37,6 +37,9 @@ class TestSession(Session):
             raise RuntimeError('Injected transaction failure')
         # These are explicit SQLite adapters, not PostgreSQL verification.
         sql = sql.replace(' FOR UPDATE OF c, sem', '').replace('now()', 'CURRENT_TIMESTAMP')
+        if 'pg_advisory_xact_lock' in sql:
+            # Syntax adapter only. Concurrency is tested separately on PostgreSQL.
+            sql, params = 'SELECT 1', {}
         return super().execute(text(sql), params or {}, **kwargs)
 
     def commit(self):
@@ -195,7 +198,7 @@ class RepairsTests(unittest.TestCase):
         for payload in (None,{}, {'program_id':1}):
             response=self.client.post('/api/allocation/run',json=payload,headers=self.headers())
             self.assertEqual(response.status_code,400)
-        with patch.object(service,'get_transaction',side_effect=AssertionError('No transaction expected')):
+        with patch.object(service,'workload_transaction',side_effect=AssertionError('No transaction expected')):
             self.assertFalse(service.run_allocation()['success'])
         self.assert_no_writes()
         self.assertEqual(self.snapshot(),before)
@@ -246,6 +249,23 @@ class RepairsTests(unittest.TestCase):
                          [row for row in original if row[0]==102])
         self.assertFalse(any(a['staff_id']==3 for a in result['allocations']))
         self.assertEqual(result['subjects_total'],1)
+
+    def test_programs_can_run_in_sequence_until_explicit_full_finalization(self):
+        first=service.run_allocation(semester_id=2,program_id=1)
+        self.assertTrue(first['success'])
+        retained=[row for row in self.rows('allocation') if row[2]==201 and row[6]==11]
+        second=service.run_allocation(semester_id=2,program_id=2)
+        self.assertTrue(second['success'])
+        self.assertEqual([row for row in self.rows('allocation') if row[2]==201 and row[6]==11],retained)
+        self.assertEqual(next(row for row in self.rows('semester') if row[0]==2)[2],'OPEN')
+        self.assertEqual(next(row for row in self.rows('cycle') if row[0]==11)[3],'OPEN')
+        self.assertTrue(service.run_allocation(semester_id=2)['success'])
+        self.assertEqual(next(row for row in self.rows('cycle') if row[0]==11)[3],'ALLOCATED')
+
+    def test_single_program_scope_still_finalizes_whole_semester(self):
+        result=service.run_allocation(semester_id=4,program_id=1)
+        self.assertTrue(result['success'])
+        self.assertEqual(next(row for row in self.rows('cycle') if row[0]==12)[3],'ALLOCATED')
 
     def test_ranking_and_fallback_are_preserved(self):
         result=service.run_allocation(semester_id=2)
@@ -349,6 +369,11 @@ class StartupTests(unittest.TestCase):
         self.assertNotIn('postgresql://',batch)
         self.assertIn('exit /b 1',batch)
         self.assertNotIn('/docker-entrypoint-initdb.d/',(ROOT/'docker-compose.prod.yml').read_text())
+        import yaml
+        production=yaml.safe_load((ROOT/'docker-compose.prod.yml').read_text())['services']['app']
+        self.assertEqual(production['command'],['sh','startup.sh'])
+        self.assertIn('/api/health',str(production['healthcheck']))
+        self.assertNotIn('--access-log',str(production))
 
     def test_native_launcher_only_runs_server_and_passes_port(self):
         from app import start_backend

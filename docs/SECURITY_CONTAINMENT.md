@@ -233,3 +233,130 @@ run_migrations.bat
 startup.sh
 tests/verify_security_repairs.py
 ```
+
+## Allocation and production Compose follow-up (2026-10-21)
+
+This bounded follow-up starts at local commit
+`f6b61d3e9ae314e20ec941fb709d8fab8dfddb2b`. The 19-file manifest above describes
+that original commit; the separate 12-file manifest below describes this follow-up.
+The original credential assessment and authorization policy remain unchanged.
+
+### Shared summary transaction contract
+
+`workload_summary` is shared by `(staff_id, academic_year, semester_type)`, not
+by semester or cycle. Both writer paths were traced: allocation replacement and
+administrative override/reassignment. Readers are the administrative summary,
+report/export services and persisted workload snapshots. The administrative
+reader now uses the actual parity key, and override/reassignment refresh totals
+across the whole year/parity bucket, including retained frozen allocations.
+Reassignment also resolves the year through `academic_year_id`, matching the
+current cycle schema.
+
+`app/db/workload.py` acquires database-local transaction advisory lock
+`(1179995475, 1)` before any application reads, row locks or writes. Single and
+batch allocations, both administrative writers, snapshot approval and the
+cycle/semester/window lifecycle paths that can invalidate their state use the
+same entry point. A whole batch acquires the lock once. Consistent lock-first
+ordering prevents competing participating paths from holding row locks while
+waiting for each other's workload lock. Existing READ COMMITTED transactions and
+five-second lock timeout remain; exceptions roll back allocations, summaries,
+statuses and audit rows together. PostgreSQL releases the advisory lock on commit
+or rollback. Independent reports read committed data without taking this lock;
+approval takes it before constructing a persisted snapshot.
+
+This intentionally serializes infrequent workload operations even across
+different year/parity buckets. It trades parallel throughput for a small,
+reviewable locking contract. All serving instances must run this version before
+the guarantee applies; old instances or direct SQL writers do not cooperate with
+advisory locks. Stop/drain old writers for an approved rollout. Reopening retains
+its existing behavior of clearing allocations and refreshing summaries on the
+next allocation. Window open/close no longer changes a FROZEN semester's state.
+
+See PostgreSQL's [advisory lock documentation](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS).
+
+### Programme completion and serving
+
+A filtered run for a semester containing other active programmes keeps the
+semester's existing OPEN/CLOSED state and cycle OPEN. Programme A then programme B
+can both run without discarding each other's allocations. An explicit full-semester
+run (or run-all) finalizes the cycle; it recalculates the semester using the
+existing allocation rules. A filtered run covering the only active programme
+still finalizes normally. No implicit progress table or inference from allocation
+counts is introduced. Pipeline completion and HOD approval require finalized
+allocation status, so a partial result cannot be approved as a complete workload.
+
+Production Compose now runs `sh startup.sh`, which executes only the guarded
+institutional launcher. It uses one Uvicorn process, matching that launcher,
+instead of the previous direct two-worker override. Ordinary access logs remain
+disabled; the health probe uses the configured PORT/default 8000 and `/api/health`.
+Serving never replays SQL. Dedicated demo Docker/native startup, its restricted
+database role/marker, demo signing boundary and Google prohibition remain intact.
+
+### Verification and rollout prerequisites
+
+Executed with existing dependencies; no packages installed:
+
+- 24 focused offline security/allocation/startup tests passed, including programme
+  sequencing, single-programme finalization and production Compose assertions.
+  SQLite is used only for offline persistence checks, never as concurrency proof.
+- 12 existing demo launcher/deployment tests passed, rerun because the guarded
+  production launch path and imported services changed.
+- 10 tests passed on PostgreSQL 18.1 in a newly created, loopback-only disposable
+  cluster. Actual demo schema/fixtures were applied only there; application
+  transactions used restricted `fwms_demo_test_app`, not the schema owner.
+  Checks covered different semesters sharing a bucket plus frozen contributions;
+  same-semester serialization/revalidation; A then B then explicit full
+  finalization; a real database constraint failure rolling back an entire batch;
+  both orderings of allocation racing with HOD approval; real lock timeout and
+  subsequent recovery; administrative summary refresh/reader; frozen-semester
+  preservation on window close; and real native institutional/demo startup,
+  shallow/deep health, both configured probes and absence of the synthetic query
+  canary/credentials in logs. Competing transactions were observed waiting in
+  `pg_locks`. No existing PostgreSQL server, Neon or production data was accessed.
+- Docker's engine pipe was unavailable. Container builds and full production
+  Compose (including Redis/Nginx) remain unverified. Native probes do not establish
+  container networking, hosted browser behavior or provider readiness.
+- Python syntax, Compose YAML, guarded shell syntax and whitespace checks passed.
+  Previously recorded demo suites above were not rerun without a relevant change.
+
+Reproduce real PostgreSQL checks with existing local binaries and dependencies:
+`python -B tests/verify_allocation_postgres.py -v`. The script creates and stops
+only its own disposable cluster. `FWMS_PG_BIN` may select an existing Windows
+PostgreSQL binary directory. It refuses existing database/provider configuration.
+
+No new application schema migration is introduced. Rollout still requires the
+previously reviewed institutional schema/provisioning, including the year FK on
+cycle, unique year/parity workload key, audit and immutable snapshot support.
+Confirm actual deployed schema privately; removed startup replay cannot provision
+an empty database. The demo needs its separately initialized synthetic schema,
+marker, fixtures and exact runtime role `fwms_demo_runtime`; neither an owner role
+nor institutional credentials are compatible. This task did not initialize Neon.
+Critical-path external review, Docker/hosted checks and credential-containment
+approval remain deployment prerequisites.
+
+With the user's permission, Render configuration was inspected read-only on
+2026-10-21. `fwms-workload-system-1` tracks `feature/recruiter-demo`, uses
+`demo/Dockerfile`, and has automatic commit deployment **enabled**. Its provider
+health-check path is blank. `fwms-workload-system` tracks `main` and also has
+automatic commit deployment enabled. These settings do not prove either service
+is healthy. A feature-branch push is therefore **not review-only**; do not push
+until the user separately approves disabling automatic deployment or an actual
+rollout. Any provider health-check change to `/api/health` also needs approval.
+No settings were changed. See [Render deployment controls](https://render.com/docs/deploys).
+
+Follow-up manifest (pre-existing untracked files are excluded and preserved):
+
+```text
+app/admin/cycle_service_new.py
+app/admin/service.py
+app/allocation/router.py
+app/allocation/service.py
+app/coordinator/semester_state_service.py
+app/coordinator/window_transactions.py
+app/db/workload.py
+app/reports/snapshot_service.py
+docker-compose.prod.yml
+docs/SECURITY_CONTAINMENT.md
+tests/verify_allocation_postgres.py
+tests/verify_security_repairs.py
+```

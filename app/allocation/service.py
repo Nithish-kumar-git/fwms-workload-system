@@ -17,7 +17,7 @@ All SQL uses parameterized queries. All mutations happen in a single transaction
 
 from contextlib import nullcontext
 from sqlalchemy import text
-from app.db.session import get_transaction
+from app.db.workload import workload_transaction
 import logging
 
 logger = logging.getLogger(__name__)
@@ -518,7 +518,7 @@ def run_allocation(academic_year=None, semester_type=None, academic_cycle_id=Non
     if semester_id is None and not academic_year and academic_cycle_id is None:
         return _failure("Must provide either semester_id OR academic_year")
     try:
-        with get_transaction() as session:
+        with workload_transaction() as session:
             scope = _resolve_scope(session, academic_year, semester_id, academic_cycle_id, program_id)
             result = _allocate_in_transaction(session, scope, program_id)
             session.commit()
@@ -530,7 +530,7 @@ def run_allocation(academic_year=None, semester_type=None, academic_cycle_id=Non
 def run_all_open_semesters():
     """Validate every selected cycle first; commit the whole batch or none."""
     try:
-        with get_transaction() as session:
+        with workload_transaction() as session:
             cycles = session.execute(text(
                 "SELECT id FROM cycle WHERE status = 'OPEN' ORDER BY semester_id, id"
             )).fetchall()
@@ -660,8 +660,8 @@ def _allocate_in_transaction(session, scope, program_id=None):
         # instead of blindly deleting everything
         # ================================================================
         
-        # Step 1: Calculate workload for ALL staff based on ALL allocations in this cycle
-        # This aggregates across ALL semesters that have been allocated
+        # Step 1: Aggregate all persisted contributions to this year/parity bucket,
+        # including frozen semesters, while holding the shared workload lock.
         workload_rows = session.execute(
             text("""
                 SELECT 
@@ -745,7 +745,7 @@ def _allocate_in_transaction(session, scope, program_id=None):
                 "status": status,
             })
         
-        logger.info(f"Updated workload summaries for {len(workload_summaries)} staff (computed from all allocations in cycle)")
+        logger.info(f"Updated shared year/parity workload summaries for {len(workload_summaries)} staff")
         
         # ================================================================
         # AUDIT LOG
@@ -790,9 +790,18 @@ def _allocate_in_transaction(session, scope, program_id=None):
         logger.info("=" * 60)
     
     # ================================================================
-    # PHASE 2: Mark the selected semester as ALLOCATED and update cycle status
+    # Finalize only a whole-semester scope. A multi-program partial run keeps
+    # its existing OPEN/CLOSED state; an explicit full run finalizes the cycle.
     # ================================================================
-    with nullcontext(session):
+    covers_semester = program_id is None or not session.execute(text("""
+        SELECT EXISTS (
+            SELECT 1 FROM subject_offering so JOIN cycle c ON c.id = :cid
+            WHERE so.academic_year_id = c.academic_year_id
+              AND so.semester_id = :sid AND so.is_active = true
+              AND so.program_id <> :pid
+        )
+    """), {"cid": cycle_id, "sid": target_semester_id, "pid": program_id}).scalar()
+    if covers_semester:
         session.execute(
             text("UPDATE semester SET state = 'ALLOCATED', allocated_at = now() WHERE id = :sid"),
             {"sid": target_semester_id}
@@ -803,7 +812,7 @@ def _allocate_in_transaction(session, scope, program_id=None):
             {"cid": cycle_id}
         )
     
-    logger.info("Selected semester and cycle marked as ALLOCATED")
+    logger.info("Allocation persisted; whole-semester finalization=%s", covers_semester)
     
     return {
         "success": True,

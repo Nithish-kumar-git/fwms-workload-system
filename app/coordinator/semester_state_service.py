@@ -15,6 +15,7 @@ State descriptions:
 
 from sqlalchemy import text
 from app.db.session import get_transaction
+from app.db.workload import workload_transaction
 import logging
 from datetime import datetime
 
@@ -78,7 +79,7 @@ def open_semester(semester_id: int, coordinator_id: int) -> dict:
     Returns:
         dict with success status and message
     """
-    with get_transaction() as session:
+    with workload_transaction() as session:
         # Get current state and cycle_id
         row = session.execute(
             text("""
@@ -194,7 +195,7 @@ def close_semester(semester_id: int, coordinator_id: int) -> dict:
     Returns:
         dict with success status and message
     """
-    with get_transaction() as session:
+    with workload_transaction() as session:
         # Get current state
         row = session.execute(
             text("SELECT state FROM semester WHERE id = :sid"),
@@ -268,7 +269,7 @@ def mark_semester_allocated(semester_id: int) -> dict:
     Returns:
         dict with success status and message
     """
-    with get_transaction() as session:
+    with workload_transaction() as session:
         # Get current state
         row = session.execute(
             text("SELECT state FROM semester WHERE id = :sid"),
@@ -313,7 +314,7 @@ def freeze_semester(semester_id: int, hod_id: int) -> dict:
     Returns:
         dict with success status and message
     """
-    with get_transaction() as session:
+    with workload_transaction() as session:
         # Get current state
         row = session.execute(
             text("SELECT state FROM semester WHERE id = :sid"),

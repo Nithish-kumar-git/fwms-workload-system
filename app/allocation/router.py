@@ -39,7 +39,7 @@ async def run_allocation(
         )
     except Exception as error:
         logger.error("Allocation failed (%s)", type(error).__name__)
-        raise HTTPException(status_code=500, detail="Allocation failed; no changes committed") from None
+        raise HTTPException(status_code=500, detail="Allocation failed; check current status before retrying") from None
     return _require_success(result)
 
 
@@ -52,7 +52,7 @@ async def run_all_open_semesters(
         batch = allocation_service.run_all_open_semesters()
     except Exception as error:
         logger.error("Batch allocation failed (%s)", type(error).__name__)
-        raise HTTPException(status_code=500, detail="Allocation failed; no changes committed") from None
+        raise HTTPException(status_code=500, detail="Allocation failed; check current status before retrying") from None
     _require_success(batch)
     results = batch["results"]
     assigned = sum(result["subjects_assigned"] for result in results)

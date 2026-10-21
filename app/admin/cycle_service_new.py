@@ -11,6 +11,7 @@ IMPORTANT: This service uses the NEW cycle table schema from migration 021:
 import logging
 from sqlalchemy import text
 from app.db.session import get_transaction
+from app.db.workload import workload_transaction
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ def create_cycle(academic_year: str, semester_id: int, start_date: str | None = 
     Returns:
         {"success": bool, "message": str, "cycle_id": int | None}
     """
-    with get_transaction() as session:
+    with workload_transaction() as session:
         # Ensure academic_year exists in academic_year table
         year_row = session.execute(
             text("SELECT id FROM academic_year WHERE name = :name"),
@@ -91,7 +92,7 @@ def activate_cycle(cycle_id: int) -> dict:
     Returns:
         {"success": bool, "message": str}
     """
-    with get_transaction() as session:
+    with workload_transaction() as session:
         # Check if cycle exists
         cycle = session.execute(
             text("SELECT id, status FROM cycle WHERE id = :id"),
@@ -232,7 +233,7 @@ def archive_cycle(cycle_id: int) -> dict:
     Returns:
         {"success": bool, "message": str, "cycle_id": int | None}
     """
-    with get_transaction() as session:
+    with workload_transaction() as session:
         # Check if cycle exists
         cycle = session.execute(
             text("SELECT id, status FROM cycle WHERE id = :id"),
@@ -328,7 +329,7 @@ def create_new_semester_cycle(academic_year: str, semester_id: int) -> dict:
     Returns:
         {"success": bool, "message": str, "cycle_id": int | None}
     """
-    with get_transaction() as session:
+    with workload_transaction() as session:
         # Ensure academic_year exists in academic_year table
         year_row = session.execute(
             text("SELECT id FROM academic_year WHERE name = :name"),
@@ -405,7 +406,7 @@ def activate_semester_group(academic_year: str, semester_group: str) -> dict:
     Returns:
         {"success": bool, "message": str, "opened_cycles": list[int]}
     """
-    with get_transaction() as session:
+    with workload_transaction() as session:
         # Ensure academic_year exists
         year_row = session.execute(
             text("SELECT id FROM academic_year WHERE name = :name"),
