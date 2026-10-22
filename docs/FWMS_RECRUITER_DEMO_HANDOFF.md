@@ -123,6 +123,104 @@ must prevent the live `8780324` startup from logging the replacement credential,
 rotate/revoke the exposed Railway credential, review provider logs, and decide
 session invalidation before any feature-branch push or rollout.
 
+### Approved credential-containment window — operator checklist
+
+This is a preparation runbook, not authorization to make the changes. Do not put
+credential values, connection strings, key fingerprints, deploy hooks or log
+exports in the ticket, Git history or this document. Record only the operator,
+time window, service/commit identifiers and a redacted result.
+
+1. **Name the approving owners before the window.** The Railway/PostgreSQL owner
+   owns database credential generation, revocation and database audit-log access.
+   The institutional Render owner owns the institutional service configuration and
+   deployment controls; the recruiter-demo Render owner owns the demo service.
+   The database/schema owner owns compatibility and backup/restore decisions; the
+   application-security owner owns signing-key reuse and session invalidation; the
+   release owner owns the final go/no-go and rollback call. Every state-changing
+   step below requires the relevant owner's explicit approval.
+
+2. **Freeze automatic deployment deliberately.** Before any branch push, capture
+   the live commits and an available rollback artifact for both services, confirm
+   that no deploy is running, and obtain release-owner approval to turn off
+   On-Commit deployment for both `fwms-workload-system-1` and
+   `fwms-workload-system`. This prevents an ordinary push from deploying an
+   unreviewed image. Re-enable it only after the release owner closes the window.
+
+3. **Remove the unsafe institutional startup path first.** Do not restart,
+   redeploy or apply a configuration-only change to the currently live
+   institutional `8780324` image: its `startup.sh` can print the configured
+   database URL and replay legacy migration/seed/cleanup SQL. Before a replacement
+   database credential is introduced, the institutional Render owner must approve
+   and deploy a reviewed `main` commit that uses the guarded `app.start_backend`
+   launcher, excludes migration files from the image, emits no database setting,
+   and has an approved `/api/health` readiness configuration. Confirm the Docker
+   command has no provider override. This safe image, not `8780324`, becomes the
+   only acceptable post-rotation rollback target.
+
+4. **Rotate the database credential in a tight, owner-run sequence.** First
+   prepare the replacement in Railway using the provider's private workflow,
+   without testing or copying the exposed value. Once the safe institutional image
+   is live and its startup behaviour is verified from redacted provider logs,
+   rotate according to the provider's semantics, securely update the institutional
+   Render secret, and perform a normal deployment of that safe image (not a
+   restart). Verify readiness and redacted logs, then revoke the old credential if
+   the provider did not revoke it atomically. If Railway can only rotate
+   immediately, pre-stage the safe image and execute the credential update and
+   safe-image deployment as one approved, monitored change with a planned limited
+   outage. Do not use the former credential as a verification probe.
+
+5. **Review provider evidence without exporting secrets.** The Railway owner
+   reviews credential/authentication and relevant access logs from the exposure
+   period through revocation. The Render owners review build and runtime logs for
+   both services over the window, including any database-setting disclosure or
+   unexpected migration execution. Record the review source, time range, operator,
+   retention location and outcome as `no evidence`, `suspicious`, or
+   `inconclusive`; a suspicious or inconclusive result extends containment rather
+   than closing it.
+
+6. **Make a private signing-key and session decision.** The application-security
+   owner compares deployed signing-key material with historical candidates through
+   an approved private channel only. If reuse is found—or cannot be ruled out—the
+   owner must schedule key rotation and explicit JWT, cookie and server-session
+   invalidation/forced reauthentication. Keep institutional and recruiter-demo
+   keys independent. Review OAuth/SMTP candidates separately; rotate only a
+   provider credential shown to have been reused.
+
+7. **Clear schema and provisioning gates before any institutional rollout.** The
+   database/schema owner must confirm through approved metadata/provisioning
+   evidence that cycle/year linkage exists, `workload_summary` has the unique
+   `(staff_id, academic_year, semester_type)` key, audit logging supports the
+   required actions, workload snapshots are immutable, and the runtime role has
+   only the expected permissions. Confirm a tested backup/restore path and that no
+   startup migration, seed or cleanup step is needed; the repair commits add no
+   schema migration. For the demo, separately confirm its synthetic marker,
+   `fwms_demo` schema and restricted runtime role. Any mismatch is a stop: do not
+   attempt to repair it through application startup.
+
+8. **Use a staged rollout with safe rollback rules.** After the pre-push gates,
+   manually deploy the reviewed target commit to the recruiter-demo service first
+   and verify only synthetic authentication, RBAC and health behaviour. Roll back
+   demo to its recorded compatible artifact if those gates fail, then re-check
+   automatic-deployment state. Roll out institutional Render only after the safe
+   launcher, schema gates, credential plan and session decision all pass. Monitor
+   its application readiness and redacted logs. Because this window makes no
+   schema change, code rollback does not require a database rollback; however,
+   Render rollback does not reverse database or environment state. Never roll back
+   to `8780324` after the replacement credential exists—it can disclose that
+   credential and replay SQL. If the safe target fails post-rotation, keep a safe
+   launcher in place and escalate to the institutional Render, Railway and release
+   owners rather than returning to the unsafe artifact.
+
+9. **Require written go/no-go gates before a Git push or deployment.** The release
+   owner confirms: exact target commit and reviewed diff; clean tracked worktree;
+   current upstream synchronization; no secret-bearing files; focused tests and
+   Docker/Compose checks with recorded results; both auto-deploy controls held as
+   intended; a safe institutional artifact and rollback artifact identified;
+   schema/backup evidence accepted; credential, logging and session plans approved;
+   no active deploy; and named operators available for monitoring and rollback.
+   A push or a provider deployment without all applicable approvals is out of
+   scope for this runbook.
+
 ## 21 October 2026 documentation and Git closeout
 
 This snapshot supersedes the older checkpoint fields below while preserving the
