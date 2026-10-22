@@ -23,8 +23,9 @@ readiness.
 
 The recruiter demo is separate from the institutional path. Its Render service
 tracks `feature/recruiter-demo` and automatic commit deployment is enabled. Local
-repair commits `f6b61d3` and `cb9f324` are not pushed or deployed. Do not push this
-branch or change hosting settings without explicit rollout approval.
+review started at `f4adc29`, then three commits ahead of the remote branch; repair commits
+`f6b61d3` and `cb9f324` are not pushed or deployed. Do not push this branch or
+change hosting settings without explicit rollout approval.
 
 ---
 
@@ -179,6 +180,8 @@ participate.
 ## Security and release blockers
 
 - Retain the complete assessment in [docs/SECURITY_CONTAINMENT.md](docs/SECURITY_CONTAINMENT.md) and the historical incident record in `SECURITY_BREACH_REPORT.md`.
+- Public Git history and current `main` contain an embedded Railway PostgreSQL credential candidate. The feature tip removes it, but rotation/revocation and provider-log review still require the credential owner. Do not test the old value.
+- The institutional Render service remains on `main` commit `8780324`; that deployed startup logs its database URL and replays migrations/seeds. The guarded no-migration launcher exists only in the unpublished repair commits.
 - Credential rotation, provider-log review, session invalidation and any history rewrite remain separate explicitly approved operations.
 - External review of the allocation critical path, deployed-schema confirmation, Docker/Compose verification and hosted browser/permission checks remain required before rollout.
 - Do not claim the local repair commits are pushed or deployed.

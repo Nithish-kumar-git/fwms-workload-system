@@ -5,6 +5,124 @@
 **Checkpoint commit (code):** `5680f73` — `fix: add safe demo startup diagnostics`
 **Status:** Feature development paused. Demo is live. Institutional production is untouched.
 
+## 22 October 2026 security-containment and rollout-readiness review
+
+This bounded review supersedes the 21 October Git, credential and Render status
+below. It did not query application tables, test credentials, change provider
+settings, deploy, restart a service, alter a schema, push, or rewrite history.
+
+### Current Git state
+
+| Item | Verified value |
+|---|---|
+| Active branch | `feature/recruiter-demo` |
+| Review base HEAD (before this documentation commit) | `f4adc2925510f7ea4bf999fec088716d7bbd3ff4` |
+| Upstream | `origin/feature/recruiter-demo` at `15fdeb3f42a86e662609c9aa960df87599af3ebf` |
+| Ahead / behind after fetch at review start | 3 ahead / 0 behind |
+| Tracked worktree | Clean before this documentation update |
+| Untracked worktree | The same 20 migration/security notes and helper files listed in section 3; all preserved and excluded from this commit |
+
+The unpublished sequence is `f6b61d3` (administrative containment and atomic
+allocation), `cb9f324` (shared-workload serialization and programme finalization),
+then `f4adc29` (documentation reconciliation). No remote branch contains either
+repair commit.
+
+### Redacted credential-containment findings
+
+No credential was tested or used, and no value is recorded here. Classification
+is based only on file shape, host class and placeholder markers.
+
+| Location | Finding | Current containment |
+|---|---|---|
+| Feature-tip `.env.example` | Placeholder-only database, OAuth and signing settings | Safe template at local HEAD and `origin/feature/recruiter-demo` |
+| Feature-tip `run_migrations.bat` | No credential; refuses automatic replay and points to the reviewed procedure | Contained in unpublished `f6b61d3` |
+| Public `main` and history: `run_migrations.bat` | Embedded Railway PostgreSQL connection credential candidate | Still present on `origin/main` and in public history; activity was not tested |
+| Public `main`: `.env.example` | Explicit signing/OAuth placeholders plus a local/Compose database credential literal | Not evidence of a remote secret; rotate anywhere it was reused outside disposable local development |
+| Public `main` and history: `verify_dev_auth.py` | Local/test database, OAuth and signing literals | Removed from the feature branch by `cd3b220`; an ignored untracked local copy remains preserved |
+
+The Railway connection material has the structure of a real remote credential,
+but whether it is still active cannot be established safely without testing it,
+which is prohibited. The named Google values are placeholders/test-like, not
+evidence of a real Google client secret. The signing literals are usable values;
+whether either was copied into Render or another deployed environment remains
+**UNVERIFIED** and requires a private equality/reuse assessment by the application
+owner. If a deployed signing key matches, rotation invalidates existing JWTs and
+cookies and must be treated as a planned session-invalidation event. Institutional
+and recruiter-demo signing keys must remain independent.
+
+Containment checklist requiring owner approval:
+
+1. Railway/PostgreSQL owner: identify the credential by repository location,
+   rotate or revoke it without testing the old value, and review database access
+   logs from the exposure window.
+2. Render/institutional service owner: determine privately whether the exposed
+   Railway credential is the service's database credential. Do not introduce a
+   replacement while the deployed `8780324` startup can print it; first approve a
+   guarded-launcher rollout or an equivalent no-log maintenance path.
+3. Application security owner: compare deployed signing-key fingerprints or values
+   privately against historical/local candidates. If reused or uncertain, rotate
+   the affected key and explicitly invalidate sessions/JWTs; do not copy values
+   into tickets, commits or logs.
+4. Google/SMTP owners: confirm the template/test-looking values were never reused.
+   Rotate only an actual matching provider credential; repository evidence alone
+   does not establish one.
+5. GitHub owner: after provider containment, decide whether to rewrite public
+   history and coordinate clones, forks, caches and deployment references. History
+   rewriting is not a substitute for rotation and was not attempted here.
+
+### Current Render rollout evidence
+
+Read-only Render metadata was retrieved from the user-confirmed workspace on
+2026-10-22. Environment variables and logs were not requested.
+
+| Service | Branch / automatic deployment | Current live deploy | Runtime configuration |
+|---|---|---|---|
+| `fwms-workload-system-1` | `feature/recruiter-demo`; **On Commit enabled** | `15fdeb3`; Render status `live` | Docker, context `.`, `demo/Dockerfile`, no command override |
+| `fwms-workload-system` | `main`; **On Commit enabled** | `8780324`; Render status `live` | Docker, context `.`, `./Dockerfile`, no command override |
+
+Both services have a blank provider HTTP health-check path, so Render does not
+currently use `/api/health` as an application-level readiness check. A `live`
+deploy status is provider metadata, not a fresh endpoint or browser verification;
+no hosted request was made during this review.
+
+The live recruiter image uses `demo/Dockerfile`, the fail-closed
+`demo/start_backend.py` launcher and its loopback `demo/healthcheck.py`. It does
+not copy or replay migration/fixture files. A push of local HEAD would immediately
+roll out all three unpublished commits unless auto-deploy is disabled first.
+
+The live institutional image is materially different. Commit `8780324` uses the
+old root `startup.sh`, prints the configured database URL, and automatically
+replays the legacy migration/seed/cleanup list before starting Uvicorn. Its Docker
+health probe targets the historical `/health` path. The local `f6b61d3` repair
+removes migration files from the image, routes startup through `app.start_backend`,
+suppresses credential logging and probes `/api/health`, but that repair is neither
+on `main` nor deployed. Do not restart or redeploy the institutional service as a
+containment shortcut without an approved plan.
+
+### Schema, provisioning and verification boundary
+
+The two repair commits add no schema migration. They rely on the already-provisioned
+contract documented in `docs/SECURITY_CONTAINMENT.md`: cycle/year linkage, the
+unique `(staff_id, academic_year, semester_type)` workload-summary key, audit-log
+support and immutable workload snapshots. The demo additionally requires its
+separately initialized `fwms_demo` schema, synthetic marker and restricted
+`fwms_demo_runtime` role. Disposable PostgreSQL 18.1 tests exercised that contract,
+but neither the deployed institutional schema nor the Neon demo schema was queried
+in this review, so current compatibility remains **UNVERIFIED**.
+
+No test suite was rerun because application code did not change. Evidence reviewed:
+the previously recorded 24 focused offline tests, 12 demo launcher/deployment tests
+and 10 disposable-PostgreSQL checks passed at `cb9f324`; Python syntax, Compose
+parsing, shell syntax and whitespace were also recorded as passing. Docker/Compose,
+hosted endpoints, browser workflows, live RBAC and deployed-schema checks remain
+unverified.
+
+**Single next action:** obtain a jointly approved containment window from the
+Railway/PostgreSQL credential owner and the institutional Render owner. The plan
+must prevent the live `8780324` startup from logging the replacement credential,
+rotate/revoke the exposed Railway credential, review provider logs, and decide
+session invalidation before any feature-branch push or rollout.
+
 ## 21 October 2026 documentation and Git closeout
 
 This snapshot supersedes the older checkpoint fields below while preserving the

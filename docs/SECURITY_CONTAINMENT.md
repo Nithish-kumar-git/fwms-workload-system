@@ -123,6 +123,19 @@ Rotation/revocation, session invalidation, provider log review, changes to main,
 and any eventual history rewrite require a separately authorized follow-up. Review
 past deployment logs because the old startup script printed the database URL.
 
+### 22 October 2026 credential-evidence correction
+
+After an authorized remote fetch, `origin/main` remained at `8780324` and
+`origin/feature/recruiter-demo` at `15fdeb3`. A redacted structural recheck corrects
+the table above: `origin/main:.env.example` contains explicit signing/OAuth
+placeholders and a local/Compose database credential literal, not evidence of a
+remote signing or Google credential. `origin/main:verify_dev_auth.py` contains
+local/test literals; production signing-key reuse remains unknown. The embedded
+Railway PostgreSQL credential candidate in `origin/main:run_migrations.bat` and
+public history remains the confirmed remote containment concern. Current feature
+HEAD removes that value, but neither the remote branch nor public history is
+remediated. No value is recorded in this document.
+
 ## Focused verification
 
 Using the existing isolated dependencies, run these independently; do not invoke
