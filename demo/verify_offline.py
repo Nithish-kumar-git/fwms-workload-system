@@ -435,6 +435,67 @@ class DemoApiTests(unittest.TestCase):
         app = create_app()
         self.assertFalse(any(route.path.startswith('/api/debug') for route in app.routes))
 
+    def test_full_demo_app_unmounts_all_maintenance_aliases_and_docs(self):
+        """Actual requests must not reach historical diagnostics or repairs."""
+        from app.main import create_app
+        from app.reports.router import maintenance_router
+
+        explicitly_removed = {
+            '/api/reports/export/staff-debug',
+            '/api/reports/debug-offerings',
+            '/api/reports/admin/db-state',
+            '/api/reports/admin/fix-duplicate-programs',
+            '/api/reports/admin/seed-mca-odd',
+            '/api/reports/admin/fix-shift2-offerings',
+            '/api/reports/admin/fix-shift-from-program',
+            '/api/reports/admin/create-shift2-offerings',
+            '/api/reports/admin/create-secb-offerings',
+        }
+        maintenance_paths = {route.path for route in maintenance_router.routes}
+        self.assertTrue(explicitly_removed <= maintenance_paths)
+
+        app = create_app()
+        self.assertIsNone(app.docs_url)
+        self.assertIsNone(app.redoc_url)
+        self.assertIsNone(app.openapi_url)
+        self.assertFalse(maintenance_paths & {route.path for route in app.routes})
+
+        client = TestClient(app)
+        try:
+            # Handlers obtain a transaction at call time.  A 404 therefore
+            # proves every path below is rejected before any mutation can run.
+            with patch('app.db.session.get_transaction',
+                       side_effect=AssertionError('Unserved route opened a transaction')):
+                for route in maintenance_router.routes:
+                    path = route.path
+                    for parameter in route.param_convertors:
+                        path = path.replace('{' + parameter + '}', 'SYNTHETIC')
+                    method = sorted(route.methods - {'HEAD', 'OPTIONS'})[0]
+                    response = client.request(method, path)
+                    self.assertEqual(response.status_code, 404, (method, path))
+                for path in ('/docs', '/redoc', '/openapi.json'):
+                    self.assertEqual(client.get(path).status_code, 404, path)
+        finally:
+            client.close()
+
+    def test_institutional_app_retains_documentation_routes(self):
+        from app.main import create_app
+        original_demo_mode = settings.DEMO_MODE
+        settings.DEMO_MODE = False
+        try:
+            app = create_app()
+            self.assertEqual(app.docs_url, '/docs')
+            self.assertEqual(app.redoc_url, '/redoc')
+            self.assertEqual(app.openapi_url, '/openapi.json')
+            client = TestClient(app)
+            try:
+                self.assertEqual(client.get('/docs').status_code, 200)
+                self.assertEqual(client.get('/openapi.json').status_code, 200)
+            finally:
+                client.close()
+        finally:
+            settings.DEMO_MODE = original_demo_mode
+
     def test_full_demo_startup_fails_before_logging_or_application_queries(self):
         from app.main import app
         with patch('app.db.pool.engine.connect',side_effect=RuntimeError('Demo isolation unavailable')):

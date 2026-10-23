@@ -38,7 +38,14 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI application."""
+    # The recruiter demo is public.  Its API schema would advertise internal
+    # operational endpoints even when those endpoints are unmounted, so do not
+    # publish interactive API documentation from that deployment.
+    documentation_url = None if settings.DEMO_MODE else "/docs"
     app = FastAPI(
+        docs_url=documentation_url,
+        redoc_url=None if settings.DEMO_MODE else "/redoc",
+        openapi_url=None if settings.DEMO_MODE else "/openapi.json",
         title="Faculty Subject Selection System",
         description="Production-critical FCFS-based subject allocation system",
         version="1.0.0"
