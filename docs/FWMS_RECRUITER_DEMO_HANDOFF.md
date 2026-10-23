@@ -2,8 +2,61 @@
 
 **Created:** 2026-10-15
 **Branch:** `feature/recruiter-demo`
-**Checkpoint commit (code):** `5680f73` — `fix: add safe demo startup diagnostics`
-**Status:** Feature development paused. Demo is live. Institutional production is untouched.
+**Checkpoint commit (code):** `0c5f639c1d9eabb46ed282cc41e7e45c0be79577` — `fix: contain recruiter demo navigation on mobile`
+**Status:** Isolated recruiter demo released and verified on 2026-10-23. Institutional production is untouched.
+
+## 2026-10-23 — Verified isolated recruiter-demo release
+
+The approved code at `4f90fb80fcd9e4f8524955661f0d30cd378a4755` was reviewed
+and built locally. Live 390 px testing identified one release-blocking mobile
+navigation overflow; the narrow, tested fix is `0c5f639c1d9eabb46ed282cc41e7e45c0be79577`.
+That commit is the source recorded in the final frontend deployment.
+
+| Item | Verified value |
+|---|---|
+| Public demo URL | `https://fwms-recruiter-demo.vercel.app` |
+| Dedicated Vercel project | `fwms-recruiter-demo` (separate from `fwms-workload-system`) |
+| Vercel production deployment | `dpl_5EzTy4Fn2TJLgTXTbXwvMqnN6DT8`, `READY`, source commit `0c5f639c1d9eabb46ed282cc41e7e45c0be79577` |
+| Dedicated Render backend | `fwms-workload-system-1`; health response identifies environment `synthetic-demo` |
+| Render CORS change | Only `FWMS_DEMO_FRONTEND_URL` was set to `https://fwms-recruiter-demo.vercel.app` (no trailing slash) |
+| Render deployment after CORS update | `dep-dbdckghsrm7s73b9le90`, `live`, existing remote source `15fdeb3f42a86e662609c9aa960df87599af3ebf` |
+
+The Vercel deployment used a static artifact made with `node demo/build_frontend.mjs`
+and the approved demo environment values. Its routing rules match
+`demo/vercel.json`; the new Vercel project was configured to serve that inspected
+artifact rather than attempt a remote source build. No Git branch was pushed.
+
+### Release verification performed
+
+- `python -B demo/test_deployment.py -v`: 12 of 12 passed.
+- The focused Node regression suite (including `demo/test_navbar_responsive.mjs`):
+  36 of 36 passed.
+- `node demo/verify_frontend.mjs`: both TypeScript configurations reported zero
+  diagnostics and the Vite production build passed. `git diff --check` passed.
+- The emitted artifact contained the dedicated Render origin, no institutional
+  Render origin, and an exact CSP `connect-src` for the dedicated backend.
+- The public URL returned HTTPS 200. Its final emitted bundle likewise contained
+  the dedicated origin and no institutional origin; the live CSP contains only
+  the dedicated backend in `connect-src`.
+- Read-only health and CORS checks returned `environment: synthetic-demo` and
+  `access-control-allow-origin: https://fwms-recruiter-demo.vercel.app` for that
+  exact origin. An institutional frontend origin received no CORS allow-origin
+  header.
+- Browser review at a 390 px viewport showed no horizontal overflow on login or
+  after HOD demo login; the authenticated `/api/auth/me` flow succeeded, and the
+  browser console had no errors. The responsive navigation fix is covered by a
+  focused source-level regression test.
+- The institutional Vercel deployment remained
+  `dpl_AFQpzGgSuMR5WYADhByGDCrfMzfU` at `878032465ed052de078b0715fd57049590a9d24c`.
+  The institutional Render service remained on `main` with its prior metadata.
+
+### Evidence limitation
+
+The browser automation bridge did not expose request-event tracing. The absence
+of institutional backend traffic was verified by the final bundle scan, the live
+CSP, the dedicated API documentation link, and the successful live `/api/auth/me`
+flow—not by a raw browser request-event export. No database migration, seed,
+cleanup script, or institutional configuration was run or changed.
 
 ## 22 October 2026 security-containment and rollout-readiness review
 

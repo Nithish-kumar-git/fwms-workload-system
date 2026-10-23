@@ -19,13 +19,15 @@ readiness.
 | **Institutional frontend** | https://fwms-workload-system.vercel.app — Vercel reports `main` commit `8780324` |
 | **Institutional backend** | https://fwms-workload-system.onrender.com — Render reports commit `8780324` live |
 | **Recruiter-demo backend** | https://fwms-workload-system-1.onrender.com — isolated synthetic data, Render reports `15fdeb3` live |
+| **Recruiter-demo frontend** | https://fwms-recruiter-demo.vercel.app — separate Vercel project; release artifact from `0c5f639` |
 | **Recruiter-demo login** | Role-selected synthetic login; Google OAuth is disabled in demo mode |
 
 The recruiter demo is separate from the institutional path. Its Render service
-tracks `feature/recruiter-demo` and automatic commit deployment is enabled. Local
-review started at `f4adc29`, then three commits ahead of the remote branch; repair commits
-`f6b61d3` and `cb9f324` are not pushed or deployed. Do not push this branch or
-change hosting settings without explicit rollout approval.
+tracks `feature/recruiter-demo` and automatic commit deployment is enabled. The
+frontend release was uploaded as a reviewed static artifact, without pushing that
+branch, so it uses only the dedicated synthetic backend. See the [demo handoff]
+(docs/FWMS_RECRUITER_DEMO_HANDOFF.md) for the release evidence and remaining
+limitations.
 
 ---
 
