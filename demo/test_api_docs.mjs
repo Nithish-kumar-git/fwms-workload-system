@@ -21,6 +21,11 @@ function docsLink(node) {
     if (node.type === 'a' && node.props.title === 'View API documentation (Swagger)') return node;
     return docsLink(node.props?.children);
 }
+function containsText(node, expected) {
+    if (node === expected) return true;
+    if (Array.isArray(node)) return node.some(child => containsText(child, expected));
+    return Boolean(node && typeof node === 'object' && containsText(node.props?.children, expected));
+}
 async function render(environment, role = 'faculty') {
     const forbidden = () => { throw new Error('Network/storage/mutation forbidden'); };
     const context = createContext({ URL, URLSearchParams, console, fetch: forbidden,
@@ -44,7 +49,7 @@ async function render(environment, role = 'faculty') {
         '../context/AuthContext': { useAuth: () => ({ user: { name: 'Synthetic User', role } }) },
         'lucide-react': Object.fromEntries(['LayoutDashboard', 'BookOpen', 'Settings', 'FileText', 'LogOut',
             'Clock', 'CalendarDays', 'Users', 'Shield', 'Upload', 'CheckCircle', 'ClipboardList',
-            'ExternalLink'].map(name => [name, name])),
+        ].map(name => [name, name])),
     };
     const navbar = new SourceTextModule(navbarSource, { context });
     await navbar.link(name => {
@@ -56,31 +61,36 @@ async function render(environment, role = 'faculty') {
         }, { context });
     });
     await navbar.evaluate();
-    return docsLink(navbar.namespace.default());
+    return { apiDocsUrl: client.namespace.apiDocsUrl, navbar: navbar.namespace.default() };
 }
 
-test('demo Docs link uses configured backend /docs for all supported roles', async () => {
-    for (const role of ['hod', 'tt_coordinator', 'faculty']) {
-        const link = await render({ VITE_FWMS_DEMO_MODE: 'true', VITE_API_URL: 'https://synthetic-api.example.com' }, role);
-        assert.equal(link.props.href, 'https://synthetic-api.example.com/docs');
-        assert.notEqual(link.props.href, institutional);
-        assert.equal(link.props.target, '_blank');
-        assert.equal(link.props.rel, 'noopener noreferrer');
+test('recruiter-facing authenticated navigation never renders API Docs', async () => {
+    const expectedBadge = { hod: 'HOD', tt_coordinator: 'Coordinator', faculty: 'Faculty' };
+    for (const role of Object.keys(expectedBadge)) {
+        const { navbar } = await render({ VITE_FWMS_DEMO_MODE: 'true', VITE_API_URL: 'https://synthetic-api.example.com' }, role);
+        assert.equal(docsLink(navbar), undefined);
+        assert.ok(containsText(navbar, 'FWMS'));
+        assert.ok(containsText(navbar, 'Dashboard'));
+        assert.ok(containsText(navbar, role === 'hod' || role === 'tt_coordinator' ? 'My Preferences' : 'Preferences'));
+        assert.ok(containsText(navbar, expectedBadge[role]));
+        assert.ok(containsText(navbar, 'Logout'));
     }
 });
 
-test('demo localhost and trailing-slash configuration never use a production fallback', async () => {
+test('demo documentation destination remains the configured backend endpoint', async () => {
     for (const origin of ['http://localhost:8001', 'http://127.0.0.1:8001/', 'http://[::1]:8001/']) {
-        const link = await render({ VITE_FWMS_DEMO_MODE: 'true', VITE_API_URL: origin });
-        assert.equal(link.props.href, new URL('/docs', origin).href);
-        assert.notEqual(link.props.href, institutional);
+        const { apiDocsUrl } = await render({ VITE_FWMS_DEMO_MODE: 'true', VITE_API_URL: origin });
+        assert.equal(apiDocsUrl, new URL('/docs', origin).href);
+        assert.notEqual(apiDocsUrl, institutional);
     }
 });
 
-test('demo hides Docs link even if configured with the known institutional backend', async () => {
+test('demo client never falls back to the known institutional documentation endpoint', async () => {
     for (const origin of ['https://fwms-workload-system.onrender.com',
         'https://fwms-workload-system.onrender.com/', 'https://FWMS-WORKLOAD-SYSTEM.onrender.com:443/']) {
-        assert.equal(await render({ VITE_FWMS_DEMO_MODE: 'true', VITE_API_URL: origin }), undefined);
+        const { apiDocsUrl, navbar } = await render({ VITE_FWMS_DEMO_MODE: 'true', VITE_API_URL: origin });
+        assert.equal(apiDocsUrl, null);
+        assert.equal(docsLink(navbar), undefined);
     }
 });
 
@@ -93,6 +103,6 @@ test('missing or invalid demo API configuration fails closed rather than renderi
 
 test('institutional Docs destination remains unchanged', async () => {
     for (const environment of [{}, { VITE_FWMS_DEMO_MODE: 'false', VITE_API_URL: 'https://other.example.com' }]) {
-        assert.equal((await render(environment)).props.href, institutional);
+        assert.equal((await render(environment)).apiDocsUrl, institutional);
     }
 });

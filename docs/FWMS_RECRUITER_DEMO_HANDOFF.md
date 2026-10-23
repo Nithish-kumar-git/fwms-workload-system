@@ -58,6 +58,21 @@ CSP, the dedicated API documentation link, and the successful live `/api/auth/me
 flow—not by a raw browser request-event export. No database migration, seed,
 cleanup script, or institutional configuration was run or changed.
 
+### Pending review — recruiter header API Docs removal
+
+The shared authenticated recruiter header in `frontend/src/components/Navbar.tsx`
+no longer renders its external **API Docs** link. FWMS branding, role-specific
+navigation, the role badge, and Logout remain. The client-side documentation URL
+calculation and all backend documentation routes are intentionally unchanged.
+
+The regression suite renders the header for HOD, coordinator, and faculty demo
+roles and confirms that API Docs is absent while FWMS and Logout remain. As of
+2026-10-23, read-only checks of the dedicated synthetic backend returned HTTP 200
+for both `/docs` and `/openapi.json` without a `WWW-Authenticate` challenge;
+this UI-only change does not alter that public accessibility. The change is local
+and awaiting review—do not deploy or push `feature/recruiter-demo` from this
+checkpoint.
+
 ## 22 October 2026 security-containment and rollout-readiness review
 
 This bounded review supersedes the 21 October Git, credential and Render status
