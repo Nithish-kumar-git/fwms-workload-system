@@ -17,8 +17,10 @@ The root institutional config proxies `/api` to the institutional backend; the
 demo config has no proxy and rewrites only declared client routes. `/api` paths
 are not rewritten to HTML. The demo build requires an explicit backend origin,
 rejects the known institutional origins, never loads `.env`, and embeds a CSP
-whose `connect-src` allows only that origin. Unknown aliases still require operator
-verification. Changes to declared client routes require updating/testing the demo rewrites.
+whose `connect-src` allows only that origin. It also defines a demo-only compile-time
+marker so the entire emitted asset set excludes the institutional API/docs origin.
+Unknown aliases still require operator verification. Changes to declared client routes
+require updating/testing the demo rewrites.
 
 ## Frontend — separate Vercel project
 
@@ -36,12 +38,41 @@ Manual settings for a later review:
 - Do not give the frontend database credentials, signing secrets, Google secrets,
   or other sensitive `VITE_*` variables.
 
+### Exact configuration manifest (approval-gated)
+
+| Setting | Required value |
+| --- | --- |
+| Vercel project | A newly approved, dedicated recruiter-demo project; never `fwms-workload-system` |
+| Root directory | Repository root |
+| Configuration file | `demo/vercel.json` |
+| Install command | `npm ci --prefix frontend` |
+| Build command | `node demo/build_frontend.mjs` |
+| Output directory | `frontend/dist-demo` |
+| `VITE_FWMS_DEMO_MODE` | `true` |
+| `VITE_API_URL` | `https://fwms-workload-system-1.onrender.com` |
+| `VITE_DEV_MODE` | `false` |
+| Render `FWMS_DEMO_FRONTEND_URL` | Exact final HTTPS origin of the separate Vercel project, without a trailing slash |
+
+Changing `FWMS_DEMO_FRONTEND_URL` is a demo-backend CORS configuration change and
+requires owner approval. Do not set it to an institutional origin.
+
 Vercel CLI supports `--local-config demo/vercel.json`. This file is NOT automatically
 selected by an ordinary Git deployment using the root config. Before any future
 CLI deployment, explicitly select the separately approved demo project; do not
 reuse `.vercel` metadata or the institutional project ID. No project was selected,
 linked or created here. A Git-based deployment must first have an independently
 reviewed configuration-selection workflow; dashboard selection is not assumed.
+
+### Source-release constraint
+
+The committed demo backend is configured for automatic Render deployment from
+`feature/recruiter-demo`. Therefore, **pushing this branch is not an isolated
+frontend release**: it can trigger a Render deployment. After written approval,
+a Vercel CLI deployment of the reviewed local commit using `--local-config
+demo/vercel.json` and an explicitly selected dedicated Vercel project can avoid a
+Git push and therefore avoid that Render trigger. It is still a provider deployment
+and is prohibited until the Vercel, Render/CORS, security and release owners approve
+it. This document does not authorize or execute that command.
 
 Reference: https://vercel.com/docs/cli/global-options#local-config
 

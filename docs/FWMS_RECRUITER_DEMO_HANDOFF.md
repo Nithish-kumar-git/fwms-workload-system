@@ -420,6 +420,37 @@ cd3b220  chore: untrack local credential helper
 
 The demo frontend has **no `/api` proxy**. All API traffic goes directly to the
 Render demo backend via `VITE_API_URL`. The `/api` path is not rewritten to HTML.
+The isolated builder sets a demo-only compile-time marker and the regression suite
+scans every emitted asset: the dedicated demo origin must be present and
+`https://fwms-workload-system.onrender.com` must not be emitted anywhere. This is
+local build evidence only; no demo frontend has been created or deployed here.
+
+### Approved-operator manifest (do not apply without written approval)
+
+| Setting | Required value |
+|---|---|
+| Vercel project | New, dedicated recruiter-demo project (never `fwms-workload-system`) |
+| Repository root | Repository root |
+| Config | `demo/vercel.json` |
+| Install | `npm ci --prefix frontend` |
+| Build | `node demo/build_frontend.mjs` |
+| Output | `frontend/dist-demo` |
+| `VITE_FWMS_DEMO_MODE` | `true` |
+| `VITE_API_URL` | `https://fwms-workload-system-1.onrender.com` |
+| `VITE_DEV_MODE` | `false` |
+| Render `FWMS_DEMO_FRONTEND_URL` | Exact HTTPS origin of the approved dedicated Vercel project, no trailing slash |
+
+The Render variable is the required demo-only CORS update. It must be approved and
+changed by the demo-backend owner; it must never contain an institutional origin.
+
+### Release-path constraint
+
+Render auto-deploy is enabled for `feature/recruiter-demo`. A Git push of this
+branch can therefore deploy the demo backend and is not an isolated frontend
+release. Once all named owners approve, a Vercel CLI deployment of the reviewed
+local source using `--local-config demo/vercel.json` and an explicitly selected
+dedicated project can avoid a Git push and therefore avoid triggering Render.
+That is still a provider change and is not authorized or performed by this review.
 
 ### C. Recruiter-Demo Backend (Render)
 

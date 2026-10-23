@@ -19,8 +19,12 @@ const baseURL = import.meta.env.VITE_API_URL
     : '/api';
 
 // Documentation belongs to the dedicated demo backend, not /api or the
-// institutional service. Hide the link on known institutional misconfiguration.
-const institutionalDocsUrl = 'https://fwms-workload-system.onrender.com/docs';
+// institutional service. The isolated build supplies this compile-time marker
+// so its emitted assets never contain the institutional origin.
+const isDedicatedDemoBuild = typeof __FWMS_DEMO_BUILD__ !== 'undefined' && __FWMS_DEMO_BUILD__;
+const institutionalDocsUrl = isDedicatedDemoBuild
+    ? null
+    : 'https://fwms-workload-system.onrender.com/docs';
 const demoDocsUrl = import.meta.env.VITE_FWMS_DEMO_MODE === 'true'
     ? new URL('/docs', import.meta.env.VITE_API_URL).href : null;
 export const apiDocsUrl = import.meta.env.VITE_FWMS_DEMO_MODE === 'true'

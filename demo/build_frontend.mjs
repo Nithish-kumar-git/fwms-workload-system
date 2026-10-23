@@ -34,6 +34,7 @@ export async function buildDemoFrontend(env = process.env, outDir = path.join(ro
     const { default: react } = await import(pathToFileURL(require.resolve('@vitejs/plugin-react')));
     const { default: tailwind } = await import(pathToFileURL(require.resolve('@tailwindcss/vite')));
     await build({ configFile: false, envFile: false, root: path.join(root, 'frontend'),
+        define: { __FWMS_DEMO_BUILD__: 'true' },
         plugins: [react(), tailwind(), { name: 'demo-api-boundary', transformIndexHtml() {
             return [{ tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: configuration.csp }, injectTo: 'head-prepend' }];
         } }], mode: 'production', build: { outDir, emptyOutDir: false },

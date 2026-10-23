@@ -1,6 +1,6 @@
 // Deployment configuration checks + real isolated demo build; no services/DB.
 import assert from 'node:assert/strict';
-import { readFileSync, mkdtempSync, existsSync } from 'node:fs';
+import { readFileSync, mkdtempSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,6 +63,10 @@ test('real demo build embeds the exact API boundary and never reads Vite env fil
     const html = readFileSync(path.join(out, 'index.html'), 'utf8');
     assert.match(html, /http-equiv="Content-Security-Policy"/);
     assert.ok(html.includes('connect-src https://synthetic-api.example.com'));
+    const emittedAssets = readdirSync(path.join(out, 'assets'))
+        .map(file => readFileSync(path.join(out, 'assets', file), 'utf8')).join('\n');
+    assert.ok(emittedAssets.includes('https://synthetic-api.example.com'));
+    assert.ok(!emittedAssets.includes('https://fwms-workload-system.onrender.com'));
     assert.equal(process.env.VITE_UNUSED_SENSITIVE_SETTING, undefined);
     assert.match(read('demo/build_frontend.mjs'), /envFile: false/);
     assert.match(read('demo/build_frontend.mjs'), /emptyOutDir: false/);
