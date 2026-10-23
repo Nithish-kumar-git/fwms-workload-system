@@ -3,21 +3,26 @@
 > A full-stack web app for managing faculty teaching workload allocation
 > at Hindustan University — replacing manual Excel-based tracking.
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20App-blue?style=for-the-badge)](https://fwms-workload-system.vercel.app)
+[![Recruiter Demo](https://img.shields.io/badge/Recruiter%20Demo-Visit%20App-blue?style=for-the-badge)](https://fwms-recruiter-demo.vercel.app/)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/Frontend-React%2018-61DAFB?style=for-the-badge)](https://react.dev)
 [![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-4169E1?style=for-the-badge)](https://neon.tech)
 
-## 🔗 Live Demo
+## 🔗 Public deployments
 
 | | |
 |---|---|
-| **App** | https://fwms-workload-system.vercel.app |
-| **API Docs** | https://fwms-workload-system.onrender.com/docs |
-| **Demo Login** | Click **"Try Demo"** on the login page — no account needed |
+| **Recruiter demo (isolated synthetic data)** | https://fwms-recruiter-demo.vercel.app/ |
+| **Institutional application** | https://fwms-workload-system.vercel.app |
+| **Institutional API docs** | https://fwms-workload-system.onrender.com/docs |
+| **Recruiter-demo sign-in** | Select a synthetic demo role; no institutional account is used |
 
 > ⚠️ Backend on Render free tier — first load after inactivity takes ~30s.
 > The login page will show a "waking up" notice automatically.
+
+The recruiter demo is a separate synthetic-data environment. It is not evidence
+of institutional adoption or production readiness. See
+[Recruiter demo notes](docs/RECRUITER_DEMO.md) for release evidence and limits.
 
 ---
 
@@ -37,7 +42,7 @@
 
 ## 📸 Screenshots
 
-> 💡 **Try it yourself:** Click [Try Demo](https://fwms-workload-system.vercel.app/login) on the login page for instant HOD access — no account needed.
+> 💡 **Institutional application:** Visit the [institutional login](https://fwms-workload-system.vercel.app/login) only for its configured university workflow. Use the recruiter-demo link above for the isolated synthetic-data experience.
 
 | Login Page | HOD Dashboard |
 |---|---|
