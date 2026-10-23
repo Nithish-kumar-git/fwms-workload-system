@@ -45,7 +45,7 @@ change hosting settings without explicit rollout approval.
 
 ## 📸 Screenshots
 
-> 💡 **Try it yourself:** Click [Try Demo](https://fwms-workload-system.vercel.app/login) on the login page for instant HOD access — no account needed.
+> 💡 **Demo availability:** The synthetic demo is a separately configured deployment. An institutional build only offers a demo redirect when its dedicated demo URL is configured; it never posts demo-login requests to the institutional API. See the [demo handoff](docs/FWMS_RECRUITER_DEMO_HANDOFF.md) for operator verification requirements.
 
 | Login Page | HOD Dashboard |
 |---|---|

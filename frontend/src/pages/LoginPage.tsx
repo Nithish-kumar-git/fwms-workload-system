@@ -3,6 +3,7 @@ import { Shield, User, Crown, Rocket } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { demoLogin } from '../api/client';
+import { resolveDedicatedDemoDestination } from '../demo/destination';
 
 type BackendStatus = 'checking' | 'online' | 'waking';
 
@@ -13,6 +14,7 @@ export default function LoginPage() {
     const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
     const { refreshUser } = useAuth();
     const isSyntheticDemo = import.meta.env.VITE_FWMS_DEMO_MODE === 'true';
+    const dedicatedDemoDestination = resolveDedicatedDemoDestination(import.meta.env.VITE_FWMS_DEMO_URL);
     const [demoRole, setDemoRole] = useState<'hod' | 'tt_coordinator' | 'faculty'>('hod');
 
     // Backend health check on mount
@@ -137,16 +139,15 @@ export default function LoginPage() {
         setError('');
         setLoading('demo');
         try {
-            const demoUrl = import.meta.env.VITE_FWMS_DEMO_URL;
-            if (!isSyntheticDemo && demoUrl) {
-                const destination = new URL(demoUrl);
-                if (destination.protocol !== 'https:' || destination.username || destination.password) {
-                    throw new Error('Invalid dedicated demo destination');
+            if (!isSyntheticDemo) {
+                if (!dedicatedDemoDestination) {
+                    setError('Demo is not configured for this site. Contact the operator.');
+                    return;
                 }
-                window.location.assign(destination.href);
+                window.location.assign(dedicatedDemoDestination);
                 return;
             }
-            const res = await demoLogin(isSyntheticDemo ? demoRole : undefined);
+            const res = await demoLogin(demoRole);
             const data = res.data;
 
             if (data.access_token) {
@@ -310,7 +311,7 @@ export default function LoginPage() {
                     )}
                     <button
                         onClick={handleDemoLogin}
-                        disabled={!!loading || !isBackendReady}
+                        disabled={!!loading || !isBackendReady || (!isSyntheticDemo && !dedicatedDemoDestination)}
                         style={{
                             width: '100%',
                             display: 'flex',
@@ -324,13 +325,13 @@ export default function LoginPage() {
                             fontSize: '14px',
                             fontWeight: '500',
                             color: '#6b7280',
-                            cursor: (loading || !isBackendReady) ? 'not-allowed' : 'pointer',
+                            cursor: (loading || !isBackendReady || (!isSyntheticDemo && !dedicatedDemoDestination)) ? 'not-allowed' : 'pointer',
                             boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                            opacity: !isBackendReady ? 0.6 : 1,
+                            opacity: (!isBackendReady || (!isSyntheticDemo && !dedicatedDemoDestination)) ? 0.6 : 1,
                         }}
                     >
                         <Rocket size={16} />
-                        {!isBackendReady ? 'Connecting...' : (loading === 'demo' ? 'Loading demo...' : 'Try Demo — No login required')}
+                        {!isBackendReady ? 'Connecting...' : (!isSyntheticDemo && !dedicatedDemoDestination ? 'Demo unavailable — contact operator' : (loading === 'demo' ? 'Loading demo...' : 'Try Demo — No login required'))}
                     </button>
 
                     <p style={{

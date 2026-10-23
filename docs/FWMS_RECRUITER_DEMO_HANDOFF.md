@@ -635,6 +635,7 @@ fallback prevention, and startup without shell or migrations.
 node --experimental-vm-modules --test \
   demo/test_deployment.mjs \
   demo/test_frontend_config.mjs \
+  demo/test_demo_destination.mjs \
   demo/test_preferences_retry.mjs \
   demo/test_api_docs.mjs \
   demo/test_allocation_filters.mjs
@@ -674,7 +675,7 @@ All checks against the live hosted demo on 2026-10-15 (IST).
 | DB isolation | `GET /api/health/deep` | `200 {database: "ok"}` | **200 VERIFIED** |
 | Google login blocked | `GET /api/auth/login` | `403` | **403 VERIFIED** |
 | Google callback blocked | `GET /api/auth/callback?code=fake` | `403` | **403 VERIFIED** |
-| HOD demo login | `POST /api/auth/demo-login?role=hod` | `200 + JWT` | **VERIFIED** (prior session) |
+| HOD demo login | `POST /api/auth/demo-login?role=hod` | `200 + JWT` | **STALE** — the currently observed Vercel build targets the institutional backend; see the 2026-10-23 incident note below. |
 | `/api/auth/me` | `GET /api/auth/me` with HOD token | `200 {role: "hod"}` | **VERIFIED** |
 | RBAC — HOD programs | `GET /api/subjects/programs` as HOD | `200` | **VERIFIED** |
 | RBAC — coordinator | `GET /api/subjects/programs` as coordinator | `200` | **VERIFIED** |
@@ -709,8 +710,34 @@ Google sign-in is **by design** disabled and blocked in synthetic demo mode:
   to the decommissioned Railway domain. Not committed; no deployment impact.
 - **Render SHA UNVERIFIED:** Dashboard requires authentication; cannot read commit SHA
   programmatically from outside.
-- **Vercel Preview SHA UNVERIFIED:** Same limitation. Behaviorally consistent with
-  `5680f73` (Vercel `Last-Modified` header is after the commit timestamp).
+- **Vercel Preview SHA UNVERIFIED:** The current public bundle was found to target
+  the institutional backend, so it must not be presumed to represent the documented
+  synthetic-demo build.
+
+### 2026-10-23 — Demo-login routing incident
+
+Read-only public checks confirmed that the observed Vercel frontend bundle embeds
+`https://fwms-workload-system.onrender.com`. Its `/api/health` response does **not**
+identify itself as `synthetic-demo`. The documented dedicated demo backend,
+`https://fwms-workload-system-1.onrender.com`, does identify itself as
+`synthetic-demo`; both expose the demo-login route in OpenAPI.
+
+The observed HTTP 500 therefore comes from sending a synthetic demo request to the
+institutional backend, not from a bad frontend route path. No production login POST
+was replayed during diagnosis, because it can create a session or audit record.
+Render logs and the exact exception remain owner-only evidence; current local source
+would reject a non-demo request safely rather than expose an internal error.
+
+The frontend now disables the demo action in an institutional build without a valid,
+dedicated HTTPS demo destination. This prevents the incorrect backend fallback but
+does not make the hosted demo available. An owner must set the intended Vercel build
+variables or publish the separately configured demo build, then verify the resulting
+bundle and Render deployment before release.
+
+Local verification on 2026-10-23: the 12-test deployment safety suite and 9 Node
+frontend configuration/regression tests passed, and the frontend production build
+completed. `npm run lint` remains failing on pre-existing codebase-wide findings
+(57 errors, 19 warnings); the demo-routing change adds none.
 
 ---
 
@@ -720,9 +747,10 @@ Google sign-in is **by design** disabled and blocked in synthetic demo mode:
 |------|--------|
 | Verify exact Render deployed commit SHA | UNVERIFIED — requires dashboard login |
 | Verify exact Vercel Preview deployed commit SHA | UNVERIFIED — requires dashboard login |
-| Verify `FWMS_DEMO_FRONTEND_URL` on Render matches active Vercel Preview URL | VERIFIED indirectly (CORS passes, credentials succeed) |
+| Verify `FWMS_DEMO_FRONTEND_URL` on Render matches active Vercel Preview URL | REQUIRES OWNER VERIFICATION — the current public bundle targets the institutional backend |
 | Confirm Vercel Preview not promoted to Production | Not promoted; institutional Production is unmodified |
 | Add demo link to README | Pending operator decision — not done |
+| Correct the live frontend's demo build configuration | REQUIRED — current bundle targets the institutional backend, not the documented synthetic backend |
 
 ---
 
