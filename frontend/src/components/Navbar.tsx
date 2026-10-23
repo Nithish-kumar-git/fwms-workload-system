@@ -72,13 +72,13 @@ export default function Navbar() {
     };
 
     return (
-        <div className="px-6 pt-4 pb-2 sticky top-0 z-50 max-w-[1400px] mx-auto w-full">
-            <nav className="glass-panel flex items-center justify-between px-6 py-2.5">
-                <div className="flex items-center gap-8">
+        <div className="px-3 pt-3 pb-2 sticky top-0 z-50 max-w-[1400px] mx-auto w-full sm:px-6 sm:pt-4">
+            <nav className="glass-panel flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                <div className="flex min-w-0 items-center gap-3 sm:gap-8">
                     <span className="font-bold text-lg tracking-tight text-[#2563eb]">
                         FWMS
                     </span>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:flex-none sm:overflow-visible sm:pb-0">
                         {navItems.map((item) => {
                             const isActive = location.pathname.startsWith(item.path);
                             const Icon = item.icon;
@@ -98,9 +98,9 @@ export default function Navbar() {
                         })}
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 items-center justify-between gap-2 border-t border-gray-100 pt-2 sm:justify-normal sm:gap-3 sm:border-0 sm:pt-0">
                     {user && (
-                        <span className="text-[12px] text-gray-400 font-medium">
+                        <span className="min-w-0 truncate text-[12px] text-gray-400 font-medium">
                             {user.name}
                             <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[11px] uppercase ${badge.bg} ${badge.text}`}>
                                 {badge.label}
