@@ -58,7 +58,7 @@ CSP, the dedicated API documentation link, and the successful live `/api/auth/me
 flow—not by a raw browser request-event export. No database migration, seed,
 cleanup script, or institutional configuration was run or changed.
 
-### Pending review — recruiter header API Docs removal
+### 2026-10-23 — recruiter header API Docs removal released
 
 The shared authenticated recruiter header in `frontend/src/components/Navbar.tsx`
 no longer renders its external **API Docs** link. FWMS branding, role-specific
@@ -66,12 +66,27 @@ navigation, the role badge, and Logout remain. The client-side documentation URL
 calculation and all backend documentation routes are intentionally unchanged.
 
 The regression suite renders the header for HOD, coordinator, and faculty demo
-roles and confirms that API Docs is absent while FWMS and Logout remain. As of
-2026-10-23, read-only checks of the dedicated synthetic backend returned HTTP 200
-for both `/docs` and `/openapi.json` without a `WWW-Authenticate` challenge;
-this UI-only change does not alter that public accessibility. The change is local
-and awaiting review—do not deploy or push `feature/recruiter-demo` from this
-checkpoint.
+roles and confirms that API Docs is absent while FWMS and Logout remain. The
+change was released as an inspected static artifact from local commit
+`3f50c7a40ce9ccb26939dbcd7b5f1b2dec7cf97b` to the existing separate Vercel
+project `fwms-recruiter-demo`: deployment
+`dpl_13vANc2VC38pVsvUh2A1Zgze82dR` is `READY` at
+`https://fwms-recruiter-demo.vercel.app`. No Git branch was pushed and no Render
+deployment, environment, CORS, backend route, database, authentication setting,
+or institutional infrastructure was changed.
+
+The deployed HTML and asset were read back successfully: the API Docs navigation
+literal and institutional backend origin are absent, while the dedicated backend
+origin and its exact CSP `connect-src` remain. A live HOD demo login reached the
+authenticated dashboard at desktop and 390 px mobile widths; FWMS, Dashboard,
+Preferences, the HOD badge, and Logout remained visible. A bounded demo login
+and bearer-authenticated `/api/auth/me` check both returned HTTP 200 for role
+`hod`, without recording session material. The browser bridge did not expose
+console or failed-request diagnostics; that limitation is retained explicitly.
+
+As of 2026-10-23, read-only checks of the dedicated synthetic backend returned
+HTTP 200 for both `/docs` and `/openapi.json` without a `WWW-Authenticate`
+challenge; this UI-only change does not alter that public accessibility.
 
 ## 22 October 2026 security-containment and rollout-readiness review
 
