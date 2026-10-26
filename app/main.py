@@ -127,8 +127,8 @@ async def startup_event():
         # Checkout verifies database identity, role privileges and immutable marker.
         # No schema changes, seed scripts or account creation during startup.
         from app.db.pool import engine
-        with engine.connect():
-            pass
+        from app.demo.startup import verify_demo_startup_database
+        verify_demo_startup_database(engine)
     configure_logging()
     logger.info("Faculty Subject Selection System starting up")
     

@@ -11,6 +11,9 @@ import types
 import unittest
 from unittest.mock import Mock, patch
 
+import psycopg2
+from sqlalchemy.exc import OperationalError
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -24,6 +27,7 @@ def load(name, filename):
 
 launcher = load('demo_launcher_test', 'start_backend.py')
 probe = load('demo_probe_test', 'healthcheck.py')
+from app.demo import startup as demo_startup
 
 
 def configuration():
@@ -32,6 +36,61 @@ def configuration():
 
 
 class DeploymentTests(unittest.TestCase):
+    class _Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    class _Engine:
+        def __init__(self, outcomes):
+            self.outcomes = list(outcomes)
+            self.calls = 0
+
+        def connect(self):
+            self.calls += 1
+            outcome = self.outcomes.pop(0)
+            if isinstance(outcome, BaseException):
+                raise outcome
+            return outcome
+
+    @staticmethod
+    def _transport_error(message='SSL connection has been closed unexpectedly'):
+        return OperationalError(
+            'show standard_conforming_strings',
+            {},
+            psycopg2.OperationalError(message),
+        )
+
+    def test_startup_retries_transient_connection_then_runs_verified_checkout(self):
+        engine = self._Engine([self._transport_error(), self._Connection()])
+        sleep = Mock()
+        demo_startup.verify_demo_startup_database(engine, sleep=sleep)
+        self.assertEqual(engine.calls, 2)
+        sleep.assert_called_once_with(0.5)
+
+    def test_startup_stops_after_bounded_transient_connection_retries(self):
+        engine = self._Engine([self._transport_error()] * 3)
+        sleep = Mock()
+        with self.assertRaises(OperationalError):
+            demo_startup.verify_demo_startup_database(engine, sleep=sleep)
+        self.assertEqual(engine.calls, 3)
+        self.assertEqual(sleep.call_args_list, [((0.5,),), ((1.0,),)])
+
+    def test_startup_does_not_retry_isolation_or_configuration_failures(self):
+        for failure in (
+            RuntimeError('Demo database isolation verification failed'),
+            self._transport_error('password authentication failed for user'),
+        ):
+            with self.subTest(failure=type(failure).__name__):
+                engine = self._Engine([failure])
+                sleep = Mock()
+                with self.assertRaises(type(failure)):
+                    demo_startup.verify_demo_startup_database(engine, sleep=sleep)
+                self.assertEqual(engine.calls, 1)
+                sleep.assert_not_called()
+
     def test_launcher_refuses_absent_false_and_invalid_demo_mode(self):
         for mode in (None, 'false', 'yes'):
             env = configuration()
