@@ -12,7 +12,8 @@
 
 | | |
 |---|---|
-| **Recruiter demo (isolated synthetic data)** | https://fwms-recruiter-demo.vercel.app/ |
+| **Recruiter-demo frontend (isolated synthetic data)** | https://fwms-recruiter-demo.vercel.app/ |
+| **Recruiter-demo backend health** | https://fwms-workload-system-1.onrender.com/api/health |
 | **Institutional application** | https://fwms-workload-system.vercel.app |
 | **Institutional API docs** | https://fwms-workload-system.onrender.com/docs |
 | **Recruiter-demo sign-in** | Select a synthetic demo role; no institutional account is used |
@@ -23,6 +24,7 @@
 The recruiter demo is a separate synthetic-data environment. It is not evidence
 of institutional adoption or production readiness. See
 [Recruiter demo notes](docs/RECRUITER_DEMO.md) for release evidence and limits.
+The dedicated backend does not publish interactive API documentation.
 
 ---
 

@@ -13,6 +13,29 @@ data, or used as evidence of institutional adoption or production readiness.
 The institutional application remains separately available at
 [https://fwms-workload-system.vercel.app](https://fwms-workload-system.vercel.app).
 
+## Public endpoints and current release
+
+- Recruiter-demo frontend:
+  [fwms-recruiter-demo.vercel.app](https://fwms-recruiter-demo.vercel.app/)
+- Dedicated synthetic-demo backend health:
+  [fwms-workload-system-1.onrender.com/api/health](https://fwms-workload-system-1.onrender.com/api/health)
+- Source repository:
+  [Nithish-kumar-git/fwms-workload-system](https://github.com/Nithish-kumar-git/fwms-workload-system)
+
+The dedicated backend is currently deployed from
+[`dcd403e`](https://github.com/Nithish-kumar-git/fwms-workload-system/commit/dcd403e5607a31b31ba6f8255d3d7eb12319395c)
+as Render deployment `dep-dbfn06dg1s2s73ajd4tg`. Read-only release checks
+confirmed `/api/health` reports `environment: synthetic-demo` and
+`/api/health/deep` reports a healthy database. `/docs`, `/redoc`, and
+`/openapi.json` return 404 in this public demo deployment.
+
+The associated startup-resilience change retries only a bounded set of
+transient PostgreSQL connection-reset failures during the first connection
+attempt. It does not retry authentication, database/role, marker, privilege,
+or other isolation failures. Every recovered connection still passes the same
+database identity, restricted-runtime-role, privilege, synthetic-marker, and
+search-path checkout validation before the application can use it.
+
 ## Verified workflow and release evidence
 
 The published demo uses a role-selected synthetic sign-in workflow; no
@@ -38,7 +61,18 @@ institutional Vercel and Render deployments were not changed by that release.
 
 ## Known limitations and follow-up
 
-As of the recorded release checks, the dedicated synthetic-demo backend exposed
-`/docs` and `/openapi.json` publicly without authentication. This is recorded
-for owner follow-up; this documentation-only change does not alter API routes,
-access control, CORS, credentials, databases, or deployment configuration.
+The database contains a synthetic-only marker and its checked-in fixtures define
+the intended synthetic records. Aggregate verification also matched the expected
+synthetic email domains and employee-code prefixes. The schema does **not** have
+a reliable per-row provenance field, however, so these checks cannot prove the
+origin of every historical row. No live records were reseeded, deleted, or
+changed to make that claim. A future provenance mechanism would need a separate,
+backward-compatible rollout plan.
+
+The release checks for `dcd403e` covered the three startup retry cases, 19 demo
+configuration/isolation checks, six frontend/deployment-boundary checks, and a
+backend syntax check. They do not represent a full application-suite, Docker,
+or broad browser-regression run.
+
+This documentation does not alter API routes, access control, CORS, credentials,
+databases, deployments, or the institutional service.
